@@ -866,22 +866,22 @@
     const width = playfieldWidth();
     const depth = LANE_LENGTH + 18; // lanes + base + zoo/parc
     const aspect = innerWidth / innerHeight;
-    // Frustum size : ajuste pour voir toute la map avec marges
-    const needH = depth * 0.62; // hauteur visible (projection tiltée)
-    const needW = (width + 8) / 2; // largeur minimale pour voir la map + décor
-    const frustumH = Math.max(needH, needW / aspect);
+    // En vraie iso 45°, la map apparaît comme un diamant : dimensions se combinent
+    // On calcule le rayon qui englobe le diamant pour fit sur écran
+    const diamondR = (width + depth) * 0.33; // approximation du rayon apparent
+    const frustumH = Math.max(diamondR, 18);
     camera.left = -frustumH * aspect;
     camera.right = frustumH * aspect;
     camera.top = frustumH;
     camera.bottom = -frustumH;
-    // Position : angle isométrique soft (garde les lanes alignées verticalement)
-    camera.position.set(0, 50, 35);
+    // Position isométrique 45° horizontal + ~40° elevation (style Clash Royale)
+    camera.position.set(35, 40, 35);
     camera.lookAt(0, 0, 5);
     camera.updateProjectionMatrix();
-    // Shadow bounds
-    const half = Math.max(width, depth) / 2 + 8;
-    sun.shadow.camera.left = -half; sun.shadow.camera.right = half;
-    sun.shadow.camera.top = half;   sun.shadow.camera.bottom = -half;
+    // Shadow bounds (plus large car map tournée)
+    const shadowHalf = Math.max(width, depth) * 0.9 + 10;
+    sun.shadow.camera.left = -shadowHalf; sun.shadow.camera.right = shadowHalf;
+    sun.shadow.camera.top = shadowHalf;   sun.shadow.camera.bottom = -shadowHalf;
     sun.shadow.camera.updateProjectionMatrix();
   }
 

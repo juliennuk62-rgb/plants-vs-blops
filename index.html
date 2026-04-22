@@ -854,6 +854,40 @@
   };
   const roadModels = {}; // conservé vide (racing kit retiré)
 
+  // --- DÉCORATIONS BAKÉES (exportées depuis l'éditeur) ---
+  // Ces tiles sont toujours chargés au démarrage pour tous les joueurs
+  const BAKED_DECORATIONS = [
+    { file: 'overheadRoundColored.glb', x: -7.28, y: 0.2, z: -11.08, rotY: 0, scale: 1.95 },
+    { file: 'overheadRoundColored.glb', x: -3.36, y: 0.2, z: -10.87, rotY: 0, scale: 1.95 },
+    { file: 'overheadRoundColored.glb', x: 0.58,  y: 0.2, z: -10.94, rotY: 0, scale: 1.95 },
+    { file: 'overheadRoundColored.glb', x: 4.49,  y: 0.2, z: -11.06, rotY: 0, scale: 1.95 },
+  ];
+
+  async function loadBakedDecorations() {
+    if (!window.THREE || !THREE.GLTFLoader || BAKED_DECORATIONS.length === 0) return;
+    const loader = new THREE.GLTFLoader();
+    const cache = {};
+    for (const d of BAKED_DECORATIONS) {
+      if (!cache[d.file]) {
+        try {
+          const gltf = await loader.loadAsync(`${MODELS_BASE}/decor/${d.file}`);
+          gltf.scene.traverse(obj => {
+            if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+          });
+          cache[d.file] = gltf.scene;
+        } catch (err) {
+          console.warn(`Decor load failed for ${d.file}:`, err.message);
+          continue;
+        }
+      }
+      const mesh = cache[d.file].clone(true);
+      mesh.position.set(d.x, d.y, d.z);
+      mesh.rotation.y = d.rotY || 0;
+      mesh.scale.setScalar(d.scale || 1);
+      scene.add(mesh);
+    }
+  }
+
   async function preloadModels() {
     if (!window.THREE || !THREE.GLTFLoader) return;
     const loader = new THREE.GLTFLoader();
@@ -3496,7 +3530,9 @@
     updateAccountBadge();
     initFirebase();
     initEditorUI();
-    // Charge la librairie puis les placements sauvegardés
+    // Charge les décorations bakées (pour tous les joueurs)
+    await loadBakedDecorations();
+    // Charge la librairie de l'éditeur + placements perso
     await loadLibraryFromStorage();
     await restoreEditorPlacements();
     animate();

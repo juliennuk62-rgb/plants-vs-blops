@@ -606,7 +606,45 @@
       <div class="btn gold" id="pdf-export" style="display:inline-block;">📄 Exporter en PDF</div>
       <div id="pdf-status" style="margin-top:8px; font-size:12px;"></div>
 
+      <h3>📜 Légal</h3>
+      <div class="btn" id="privacy-btn" style="display:inline-block; font-size:12px; padding:6px 12px;">Politique de confidentialité</div>
+
       <div class="modal-close"><div class="btn" id="settings-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="privacy-modal">
+    <div class="modal-content" style="max-width: 640px; font-size: 13px; line-height: 1.6;">
+      <div class="modal-title">Politique de confidentialité</div>
+      <div style="text-align:left; color:#ccc;">
+        <p><strong>Plants vs Blops</strong> est un jeu de navigateur gratuit. Dernière mise à jour : 2026.</p>
+
+        <h3 style="margin-top: 14px;">Données collectées</h3>
+        <ul style="padding-left: 20px;">
+          <li><strong>localStorage</strong> (stocké sur ton appareil) : ta progression, préférences audio, layout d'éditeur. Pas transmis à un serveur.</li>
+          <li><strong>Firebase Firestore</strong> (cloud) : si tu te connectes (Google ou anonyme), ta progression est sauvegardée dans le cloud (cash, plantes, Blops, niveau, stats). Rien d'autre.</li>
+          <li><strong>Firebase Auth</strong> : un identifiant unique (UID) est généré. Si connexion Google, ton email est associé à ton compte (visible uniquement par toi).</li>
+          <li><strong>Pas de tracking analytics</strong>, pas de cookies, pas de publicité tierce.</li>
+        </ul>
+
+        <h3 style="margin-top: 14px;">Tes droits (RGPD)</h3>
+        <ul style="padding-left: 20px;">
+          <li><strong>Accès / export</strong> : bouton "Exporter en PDF" dans les paramètres pour voir tes stats.</li>
+          <li><strong>Suppression</strong> : bouton "Reset" supprime toutes tes données (localStorage + cloud).</li>
+          <li><strong>Portabilité</strong> : te connecter avec Google sur un autre appareil → tu retrouves ta sauvegarde.</li>
+        </ul>
+
+        <h3 style="margin-top: 14px;">Tiers</h3>
+        <ul style="padding-left: 20px;">
+          <li><strong>Firebase (Google)</strong> : gère l'auth et le stockage cloud. <a href="https://firebase.google.com/support/privacy" style="color:#66ccff;" target="_blank">Politique Firebase</a></li>
+          <li><strong>Discord webhooks</strong> (optionnel, si tu actives) : tu configures toi-même l'URL d'envoi. Aucune donnée ne passe par nos serveurs.</li>
+          <li><strong>Assets 3D</strong> : licence CC0 (Kenney.nl), réutilisables librement.</li>
+        </ul>
+
+        <h3 style="margin-top: 14px;">Contact</h3>
+        <p>Projet open source, pas de contact commercial. Pour questions / suppression de compte : utiliser le bouton Reset ou supprimer le localStorage du navigateur.</p>
+      </div>
+      <div class="modal-close"><div class="btn" id="privacy-close">Fermer</div></div>
     </div>
   </div>
 
@@ -726,17 +764,43 @@
   };
 
   const PLANTS = {
+    // --- COMMUN (4) ---
     sunflower: { name: 'Tournesol', rarity: 'common',    cooldown: 1.2,  damage: 1,   price: 50,     ability: 'basic' },
     pea:       { name: 'Pois',      rarity: 'common',    cooldown: 0.7,  damage: 1,   price: 80,     ability: 'basic' },
+    clover:    { name: 'Trèfle',    rarity: 'common',    cooldown: 2.0,  damage: 0,   price: 60,     ability: 'coin-aura',  coinPerSec: 1.2 },
+    mint:      { name: 'Menthe',    rarity: 'common',    cooldown: 2.8,  damage: 4,   price: 75,     ability: 'dot-poison', dotDmg: 3, dotDur: 4 },
+
+    // --- RARE (5) ---
     cactus:    { name: 'Cactus',    rarity: 'rare',      cooldown: 0.35, damage: 3,   price: 250,    ability: 'rapid' },
     ice:       { name: 'Glace',     rarity: 'rare',      cooldown: 0.9,  damage: 2,   price: 300,    ability: 'slow',    slowFactor: 0.5, slowDuration: 2 },
+    bamboo:    { name: 'Bambou',    rarity: 'rare',      cooldown: 1.2,  damage: 14,  price: 280,    ability: 'splash',  splashRadius: 1.8 },
+    pumpkin:   { name: 'Citrouille',rarity: 'rare',      cooldown: 4.0,  damage: 8,   price: 320,    ability: 'basic' },
+    lime:      { name: 'Citron Vert',rarity: 'rare',     cooldown: 2.2,  damage: 18,  price: 270,    ability: 'pierce' },
+
+    // --- TRÈS RARE (5) ---
     strawberry:{ name: 'Fraise',    rarity: 'veryrare',  cooldown: 0.8,  damage: 6,   price: 1200,   ability: 'splash',  splashRadius: 2.5 },
     pepper:    { name: 'Poivron',   rarity: 'veryrare',  cooldown: 1.1,  damage: 4,   price: 1400,   ability: 'burst',   burstCount: 3 },
+    onion:     { name: 'Oignon',    rarity: 'veryrare',  cooldown: 6.0,  damage: 25,  price: 1300,   ability: 'slow',    slowFactor: 0.3, slowDuration: 2 },
+    blueberry: { name: 'Myrtille',  rarity: 'veryrare',  cooldown: 3.0,  damage: 22,  price: 1400,   ability: 'slow',    slowFactor: 0.4, slowDuration: 2.5 },
+    fig:       { name: 'Figue',     rarity: 'veryrare',  cooldown: 4.5,  damage: 30,  price: 1500,   ability: 'buff-aura', buffMult: 1.25, auraRadius: 2.5 },
+
+    // --- ULTRA RARE (4) ---
     watermelon:{ name: 'Pastèque',  rarity: 'ultrarare', cooldown: 1.3,  damage: 35,  price: 6000,   ability: 'cross-lane' },
     kiwi:      { name: 'Kiwi',      rarity: 'ultrarare', cooldown: 1.1,  damage: 25,  price: 5500,   ability: 'pierce' },
+    lychee:    { name: 'Litchi',    rarity: 'ultrarare', cooldown: 0.4,  damage: 30,  price: 6200,   ability: 'rapid' },
+    avocado:   { name: 'Avocat',    rarity: 'ultrarare', cooldown: 3.0,  damage: 0,   price: 6500,   ability: 'coin-aura',  coinPerSec: 8 },
+
+    // --- MYTHIQUE (4) ---
     mango:     { name: 'Mangue',    rarity: 'mythic',    cooldown: 0.7,  damage: 80,  price: 30000,  ability: 'slow',    slowFactor: 0.3, slowDuration: 3 },
     pineapple: { name: 'Ananas',    rarity: 'mythic',    cooldown: 1.4,  damage: 120, price: 35000,  ability: 'splash',  splashRadius: 4 },
+    starfruit: { name: 'Carambole', rarity: 'mythic',    cooldown: 1.8,  damage: 55,  price: 32000,  ability: 'burst',   burstCount: 5 },
+    coconut:   { name: 'Noix Coco', rarity: 'mythic',    cooldown: 3.0,  damage: 180, price: 38000,  ability: 'splash',  splashRadius: 3.5 },
+
+    // --- GOAT (4) ---
     dragon:    { name: 'Dragon Fruit', rarity: 'goat',   cooldown: 0.5,  damage: 200, price: 200000, ability: 'splash-pierce', splashRadius: 3 },
+    durian:    { name: 'Durian',    rarity: 'goat',      cooldown: 2.5,  damage: 300, price: 220000, ability: 'splash-pierce', splashRadius: 4 },
+    lotus:     { name: 'Lotus',     rarity: 'goat',      cooldown: 5.0,  damage: 0,   price: 240000, ability: 'buff-aura', buffMult: 1.5, auraRadius: 3 },
+    phoenix:   { name: 'Phénix',    rarity: 'goat',      cooldown: 1.0,  damage: 220, price: 260000, ability: 'rapid' },
   };
   const PLANT_IDS = Object.keys(PLANTS);
   const PLANTS_BY_RARITY = {};
@@ -746,12 +810,22 @@
   const ABILITY_LABELS = {
     'basic': 'Simple', 'rapid': 'Rapide', 'splash': 'Splash', 'slow': 'Ralentit',
     'burst': 'Burst ×3', 'pierce': 'Perce', 'cross-lane': 'Toutes lanes', 'splash-pierce': 'Splash + Perce',
+    'coin-aura': 'Cash passif', 'dot-poison': 'Poison (DoT)', 'buff-aura': 'Boost voisins',
   };
 
   const PLANT_ICONS = {
-    sunflower: '🌻', pea: '🟢', cactus: '🌵', ice: '❄️',
-    strawberry: '🍓', pepper: '🌶️', watermelon: '🍉', kiwi: '🥝',
-    mango: '🥭', pineapple: '🍍', dragon: '🐉',
+    // Commun
+    sunflower: '🌻', pea: '🟢', clover: '🍀', mint: '🌿',
+    // Rare
+    cactus: '🌵', ice: '❄️', bamboo: '🎋', pumpkin: '🎃', lime: '🟩',
+    // Très rare
+    strawberry: '🍓', pepper: '🌶️', onion: '🧅', blueberry: '🫐', fig: '🟣',
+    // Ultra rare
+    watermelon: '🍉', kiwi: '🥝', lychee: '🔴', avocado: '🥑',
+    // Mythique
+    mango: '🥭', pineapple: '🍍', starfruit: '⭐', coconut: '🥥',
+    // GOAT
+    dragon: '🐉', durian: '🌰', lotus: '🪷', phoenix: '🔥',
   };
   const BLOP_ICONS = {
     common: '🐸', rare: '🦎', veryrare: '🦀',
@@ -1524,6 +1598,14 @@
       enemy.userData.slowFactor = factor;
     }
   }
+  function applyDot(enemy, dps, duration, now) {
+    if (!enemy || !enemy.parent) return;
+    const until = now + duration;
+    if (until > (enemy.userData.poisonedUntil || 0) || dps > (enemy.userData.poisonDps || 0)) {
+      enemy.userData.poisonedUntil = until;
+      enemy.userData.poisonDps = dps;
+    }
+  }
 
   // --- PLANTES ---
   function makePlantHead(plantId, rarityHex) {
@@ -1730,6 +1812,7 @@
     bullet.userData = {
       target, speed: BULLET_SPEED, damage,
       splash: options.splash || 0, slow: options.slow || null,
+      dot: options.dot || null,
       pierce: !!options.pierce,
       piercedTargets: options.pierce ? new Set() : null,
       direction: options.pierce ? dir : null,
@@ -1738,32 +1821,53 @@
     scene.add(bullet);
     game.bullets.push(bullet);
   }
+  // Calcule un multiplicateur de dégâts depuis les plantes buff-aura voisines
+  function getBuffMultiplier(plantGroup) {
+    let mult = 1;
+    for (const other of game.plants) {
+      if (other === plantGroup) continue;
+      const otherPlant = PLANTS[other.userData.plantId];
+      if (otherPlant.ability !== 'buff-aura') continue;
+      const dist = plantGroup.position.distanceTo(other.position);
+      if (dist <= (otherPlant.auraRadius || 2.5)) {
+        mult *= (otherPlant.buffMult || 1.25);
+      }
+    }
+    return mult;
+  }
+
   function fireFrom(plantGroup, target, now) {
     const pd = plantGroup.userData;
     const plant = PLANTS[pd.plantId];
     const mut = MUTATIONS[pd.mutation] || MUTATIONS.none;
-    const damage = plant.damage * mut.damageMult;
+    const damage = plant.damage * mut.damageMult * getBuffMultiplier(plantGroup);
     const slow = mut.addSlow
       ? { factor: 0.5, duration: 1.5 }
       : (plant.ability === 'slow' ? { factor: plant.slowFactor, duration: plant.slowDuration } : null);
+    const dot = plant.ability === 'dot-poison'
+      ? { dps: plant.dotDmg || 3, duration: plant.dotDur || 4 }
+      : null;
     pd.flashUntil = now + 0.1;
     sfx('shot');
     switch (plant.ability) {
       case 'basic': case 'rapid': case 'cross-lane': case 'slow':
-        spawnBullet(plantGroup, target, damage, { slow }); break;
+        spawnBullet(plantGroup, target, damage, { slow, dot }); break;
+      case 'dot-poison':
+        spawnBullet(plantGroup, target, damage, { dot }); break;
       case 'splash':
-        spawnBullet(plantGroup, target, damage, { splash: plant.splashRadius, slow }); break;
+        spawnBullet(plantGroup, target, damage, { splash: plant.splashRadius, slow, dot }); break;
       case 'burst':
         for (let i = 0; i < plant.burstCount; i++) {
           setTimeout(() => {
-            if (plantGroup.parent && target.parent) spawnBullet(plantGroup, target, damage, { slow });
+            if (plantGroup.parent && target.parent) spawnBullet(plantGroup, target, damage, { slow, dot });
           }, i * 100);
         }
         break;
       case 'pierce':
-        spawnBullet(plantGroup, target, damage, { pierce: true, slow }); break;
+        spawnBullet(plantGroup, target, damage, { pierce: true, slow, dot }); break;
       case 'splash-pierce':
-        spawnBullet(plantGroup, target, damage, { pierce: true, splash: plant.splashRadius, slow }); break;
+        spawnBullet(plantGroup, target, damage, { pierce: true, splash: plant.splashRadius, slow, dot }); break;
+      // coin-aura et buff-aura ne tirent pas (passives)
     }
     pd.lastShot = now;
   }
@@ -1786,6 +1890,7 @@
           b.userData.piercedTargets.add(e);
           if (b.userData.splash > 0) applySplash(b, e);
           if (b.userData.slow) applySlow(e, b.userData.slow.factor, b.userData.slow.duration, now);
+          if (b.userData.dot) applyDot(e, b.userData.dot.dps, b.userData.dot.duration, now);
         }
       }
       const age = now - b.userData.spawnedAt;
@@ -1802,6 +1907,7 @@
       applyDamage(t, b.userData.damage);
       if (b.userData.splash > 0) applySplash(b, t);
       if (b.userData.slow && t.parent) applySlow(t, b.userData.slow.factor, b.userData.slow.duration, now);
+      if (b.userData.dot && t.parent) applyDot(t, b.userData.dot.dps, b.userData.dot.duration, now);
       scene.remove(b); game.bullets.splice(idx, 1);
     }
   }
@@ -2848,6 +2954,8 @@
     $('settings-modal').classList.remove('hidden');
   });
   btnClick('settings-close', () => $('settings-modal').classList.add('hidden'));
+  btnClick('privacy-btn', () => $('privacy-modal').classList.remove('hidden'));
+  btnClick('privacy-close', () => $('privacy-modal').classList.add('hidden'));
   $('webhook-save').onclick = () => {
     const url = $('webhook-url').value.trim();
     const enabled = $('webhook-enabled').checked;
@@ -3127,6 +3235,11 @@
         const grow = Math.min(1, e.scale.x + dt * 6);
         e.scale.set(grow, grow, grow);
       }
+      // DoT tick
+      if (e.userData.poisonedUntil && now < e.userData.poisonedUntil) {
+        e.userData.hp -= (e.userData.poisonDps || 0) * dt;
+        if (e.userData.hp <= 0) { killBrainrot(e); continue; }
+      }
       const slowed = now < e.userData.slowUntil;
       const speed = slowed ? e.userData.speed * e.userData.slowFactor : e.userData.speed;
       e.position.z += speed * dt;
@@ -3173,6 +3286,12 @@
         }
       }
       const plant = PLANTS[p.userData.plantId];
+      // Passives (ne tirent pas)
+      if (plant.ability === 'coin-aura') {
+        addCash((plant.coinPerSec || 0) * dt * totalPassiveMultiplier());
+        continue;
+      }
+      if (plant.ability === 'buff-aura') continue; // buff passif (appliqué dans fireFrom des voisins)
       if (now - p.userData.lastShot < plant.cooldown) continue;
       const target = pickTarget(p);
       if (target) fireFrom(p, target, now);

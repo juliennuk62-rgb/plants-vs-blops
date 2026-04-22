@@ -823,7 +823,8 @@
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87CEEB);
   scene.fog = new THREE.Fog(0x87CEEB, 40, 110);
-  const camera = new THREE.PerspectiveCamera(52, innerWidth/innerHeight, 0.1, 220);
+  // Caméra orthographique pour un look isométrique propre (style Clash Royale / Kenney)
+  const camera = new THREE.OrthographicCamera(-22, 22, 22, -22, 0.1, 300);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
@@ -863,13 +864,22 @@
 
   function setupCamera() {
     const width = playfieldWidth();
-    const depth = LANE_LENGTH + 8;
-    const camY = Math.max(28, 22 + width * 0.4);
-    const camZ = Math.max(27, 20 + depth * 0.3);
-    camera.position.set(0, camY, camZ);
+    const depth = LANE_LENGTH + 18; // lanes + base + zoo/parc
+    const aspect = innerWidth / innerHeight;
+    // Frustum size : ajuste pour voir toute la map avec marges
+    const needH = depth * 0.62; // hauteur visible (projection tiltée)
+    const needW = (width + 8) / 2; // largeur minimale pour voir la map + décor
+    const frustumH = Math.max(needH, needW / aspect);
+    camera.left = -frustumH * aspect;
+    camera.right = frustumH * aspect;
+    camera.top = frustumH;
+    camera.bottom = -frustumH;
+    // Position : angle isométrique soft (garde les lanes alignées verticalement)
+    camera.position.set(0, 50, 35);
     camera.lookAt(0, 0, 5);
-    // Shadow bounds based on playfield
-    const half = Math.max(width, depth) / 2 + 6;
+    camera.updateProjectionMatrix();
+    // Shadow bounds
+    const half = Math.max(width, depth) / 2 + 8;
     sun.shadow.camera.left = -half; sun.shadow.camera.right = half;
     sun.shadow.camera.top = half;   sun.shadow.camera.bottom = -half;
     sun.shadow.camera.updateProjectionMatrix();
@@ -3152,9 +3162,8 @@
   addEventListener('beforeunload', saveGame);
   addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
   addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
+    setupCamera();
   });
   </script>
 </body>

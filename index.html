@@ -773,6 +773,16 @@
     common: 'common.glb', rare: 'rare.glb', veryrare: 'veryrare.glb',
     ultrarare: 'ultrarare.glb', mythic: 'mythic.glb', goat: 'goat.glb',
   };
+  // Décor : routes + clôtures (Racing Kit Kenney)
+  const ROAD_GLB_FILE = {
+    straight: 'roadStraight.glb',
+    start: 'roadStart.glb',
+    end: 'roadEnd.glb',
+    flag: 'flagCheckers.glb',
+    fence: 'fenceStraight.glb',
+    tree: 'treeSmall.glb',
+  };
+  const roadModels = {};
 
   async function preloadModels() {
     if (!window.THREE || !THREE.GLTFLoader) return;
@@ -791,9 +801,21 @@
         console.warn(`GLB load failed for ${bucket}/${id}:`, err.message);
       }
     };
+    const loadRoad = async (id, filename) => {
+      try {
+        const gltf = await loader.loadAsync(`${MODELS_BASE}/roads/${filename}`);
+        gltf.scene.traverse(obj => {
+          if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+        });
+        roadModels[id] = gltf.scene;
+      } catch (err) {
+        console.warn(`Road GLB load failed for ${id}:`, err.message);
+      }
+    };
     const ps = [];
     for (const [id, file] of Object.entries(PLANT_GLB_FILE)) ps.push(loadOne('plants', id, file));
     for (const [id, file] of Object.entries(BLOP_GLB_FILE)) ps.push(loadOne('blops', id, file));
+    for (const [id, file] of Object.entries(ROAD_GLB_FILE)) ps.push(loadRoad(id, file));
     await Promise.all(ps);
   }
 
@@ -872,6 +894,62 @@
       lane.receiveShadow = true;
       scene.add(lane);
       terrainObjects.push(lane);
+    }
+    // Route GLB par-dessus chaque lane si dispo
+    if (roadModels.straight) {
+      const TILE_LEN = 4; // longueur supposée d'une tile Kenney
+      const tilesPerLane = Math.ceil(LANE_LENGTH / TILE_LEN);
+      const scaleFactor = LANE_WIDTH / 4; // adapte à LANE_WIDTH=4
+      for (let i = 0; i < laneCount; i++) {
+        const laneX = (i - (laneCount - 1) / 2) * LANE_WIDTH;
+        for (let t = 0; t < tilesPerLane; t++) {
+          const tile = roadModels.straight.clone(true);
+          tile.scale.setScalar(scaleFactor);
+          const z = -LANE_LENGTH / 2 + (t + 0.5) * TILE_LEN;
+          tile.position.set(laneX, 0.12, z);
+          tile.rotation.y = Math.PI / 2; // aligner la route le long de Z
+          scene.add(tile);
+          terrainObjects.push(tile);
+        }
+      }
+      // Clôtures entre lanes
+      if (roadModels.fence) {
+        for (let i = 0; i < laneCount - 1; i++) {
+          const x = (i - (laneCount - 1) / 2) * LANE_WIDTH + LANE_WIDTH / 2;
+          const fenceCount = Math.ceil(LANE_LENGTH / TILE_LEN);
+          for (let t = 0; t < fenceCount; t++) {
+            const fence = roadModels.fence.clone(true);
+            fence.scale.setScalar(scaleFactor);
+            fence.position.set(x, 0.15, -LANE_LENGTH / 2 + (t + 0.5) * TILE_LEN);
+            fence.rotation.y = Math.PI / 2;
+            scene.add(fence);
+            terrainObjects.push(fence);
+          }
+        }
+      }
+      // Drapeau arrivée au milieu de la base
+      if (roadModels.flag) {
+        const flag = roadModels.flag.clone(true);
+        flag.scale.setScalar(scaleFactor * 0.8);
+        flag.position.set(0, 0.15, LANE_LENGTH / 2 + 0.5);
+        scene.add(flag);
+        terrainObjects.push(flag);
+      }
+      // Quelques arbres sur les bords pour l'ambiance
+      if (roadModels.tree) {
+        const totalW = laneCount * LANE_WIDTH;
+        const edgeX = totalW / 2 + 2;
+        for (let s of [-1, 1]) {
+          for (let t = 0; t < 6; t++) {
+            const tree = roadModels.tree.clone(true);
+            tree.scale.setScalar(scaleFactor * (0.8 + Math.random() * 0.4));
+            tree.position.set(s * (edgeX + Math.random() * 2), 0.1, -LANE_LENGTH / 2 + t * (LANE_LENGTH / 5));
+            tree.rotation.y = Math.random() * Math.PI * 2;
+            scene.add(tree);
+            terrainObjects.push(tree);
+          }
+        }
+      }
     }
     const totalW = laneCount * LANE_WIDTH;
     const baseZone = new THREE.Mesh(

@@ -854,37 +854,55 @@
   };
   const roadModels = {}; // conservé vide (racing kit retiré)
 
-  // --- DÉCORATIONS BAKÉES (exportées depuis l'éditeur) ---
-  // Ces tiles sont toujours chargés au démarrage pour tous les joueurs
+  // --- DÉCORATIONS BAKÉES ---
+  // `perLane: true` → une copie par lane (x calculé auto selon laneCount)
+  // `perLane: false` (ou absent) → position x/y/z fixe
   const BAKED_DECORATIONS = [
-    { file: 'overheadRoundColored.glb', x: -7.28, y: 0.2, z: -11.08, rotY: 0, scale: 1.95 },
-    { file: 'overheadRoundColored.glb', x: -3.36, y: 0.2, z: -10.87, rotY: 0, scale: 1.95 },
-    { file: 'overheadRoundColored.glb', x: 0.58,  y: 0.2, z: -10.94, rotY: 0, scale: 1.95 },
-    { file: 'overheadRoundColored.glb', x: 4.49,  y: 0.2, z: -11.06, rotY: 0, scale: 1.95 },
+    { file: 'overheadRoundColored.glb', perLane: true, y: 0.2, z: -10.95, rotY: 0, scale: 1.95 },
   ];
+  const bakedDecorCache = {};
 
-  async function loadBakedDecorations() {
+  async function preloadBakedDecorations() {
     if (!window.THREE || !THREE.GLTFLoader || BAKED_DECORATIONS.length === 0) return;
     const loader = new THREE.GLTFLoader();
-    const cache = {};
-    for (const d of BAKED_DECORATIONS) {
-      if (!cache[d.file]) {
-        try {
-          const gltf = await loader.loadAsync(`${MODELS_BASE}/decor/${d.file}`);
-          gltf.scene.traverse(obj => {
-            if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
-          });
-          cache[d.file] = gltf.scene;
-        } catch (err) {
-          console.warn(`Decor load failed for ${d.file}:`, err.message);
-          continue;
-        }
+    const uniqueFiles = [...new Set(BAKED_DECORATIONS.map(d => d.file))];
+    for (const file of uniqueFiles) {
+      try {
+        const gltf = await loader.loadAsync(`${MODELS_BASE}/decor/${file}`);
+        gltf.scene.traverse(obj => {
+          if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+        });
+        bakedDecorCache[file] = gltf.scene;
+      } catch (err) {
+        console.warn(`Decor preload failed for ${file}:`, err.message);
       }
-      const mesh = cache[d.file].clone(true);
-      mesh.position.set(d.x, d.y, d.z);
-      mesh.rotation.y = d.rotY || 0;
-      mesh.scale.setScalar(d.scale || 1);
-      scene.add(mesh);
+    }
+  }
+
+  function spawnBakedDecorations() {
+    const laneCount = currentLaneCount();
+    for (const d of BAKED_DECORATIONS) {
+      const model = bakedDecorCache[d.file];
+      if (!model) continue;
+      if (d.perLane) {
+        // Une copie par lane, centrée sur chaque lane
+        for (let i = 0; i < laneCount; i++) {
+          const mesh = model.clone(true);
+          const x = (i - (laneCount - 1) / 2) * LANE_WIDTH;
+          mesh.position.set(x, d.y || 0.2, d.z || -11);
+          mesh.rotation.y = d.rotY || 0;
+          mesh.scale.setScalar(d.scale || 1);
+          scene.add(mesh);
+          terrainObjects.push(mesh);
+        }
+      } else {
+        const mesh = model.clone(true);
+        mesh.position.set(d.x, d.y, d.z);
+        mesh.rotation.y = d.rotY || 0;
+        mesh.scale.setScalar(d.scale || 1);
+        scene.add(mesh);
+        terrainObjects.push(mesh);
+      }
     }
   }
 
@@ -1039,6 +1057,8 @@
         slots.push({ laneIdx, slotIdx, x, z, mesh, plant: null });
       }
     }
+    // Décorations bakées (une par lane si perLane, sinon position fixe)
+    spawnBakedDecorations();
   }
 
   function rebuildTerrain() {
@@ -3512,6 +3532,7 @@
   // --- INIT (async pour preload des modèles GLB avant de placer les plantes/blops) ---
   (async () => {
     await preloadModels();
+    await preloadBakedDecorations();
     const savedData = loadGame();
     let offlineResult = null;
     if (savedData) {
@@ -3530,8 +3551,6 @@
     updateAccountBadge();
     initFirebase();
     initEditorUI();
-    // Charge les décorations bakées (pour tous les joueurs)
-    await loadBakedDecorations();
     // Charge la librairie de l'éditeur + placements perso
     await loadLibraryFromStorage();
     await restoreEditorPlacements();

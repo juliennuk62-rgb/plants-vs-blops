@@ -285,6 +285,48 @@
       to   { transform: translateX(-50%) scale(1); opacity: 1; }
     }
 
+    /* EDITEUR DE MAP */
+    #editor-ui { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; pointer-events: none; }
+    #editor-ui.hidden { display: none; }
+    #editor-topbar {
+      position: absolute; top: 0; left: 0; right: 0; height: 52px;
+      background: rgba(15, 20, 30, 0.95); border-bottom: 2px solid #4488cc;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 18px; pointer-events: auto;
+      font-size: 14px;
+    }
+    #editor-topbar strong { color: #ffcc00; }
+    #editor-mode-hint { color: #aaa; margin-left: 10px; font-size: 12px; }
+    #editor-sidebar {
+      position: absolute; top: 52px; left: 0; bottom: 0; width: 260px;
+      background: rgba(15, 20, 30, 0.95); border-right: 2px solid #4488cc;
+      padding: 14px; overflow-y: auto; pointer-events: auto;
+      font-size: 13px;
+    }
+    #editor-sidebar h4 { font-size: 13px; color: #66ccff; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    #editor-upload-zone {
+      border: 2px dashed #4488cc; border-radius: 6px; padding: 10px;
+      text-align: center; cursor: pointer; margin-bottom: 10px;
+      transition: background 0.15s;
+    }
+    #editor-upload-zone:hover, #editor-upload-zone.drag-over { background: rgba(68, 136, 204, 0.2); }
+    #editor-upload-btn { font-weight: bold; color: #fff; }
+    .upload-hint { font-size: 11px; color: #888; margin-top: 3px; }
+    #editor-library { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+    .editor-lib-item {
+      padding: 6px 10px; border-radius: 4px; background: #2a2a3a; cursor: pointer;
+      font-size: 12px; border-left: 3px solid #4488cc;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .editor-lib-item:hover { background: #3a3a4a; }
+    .editor-lib-item.selected { border-left-color: #ffcc00; background: #3a3020; }
+    .editor-lib-item .remove-lib { color: #ff6666; cursor: pointer; font-size: 14px; padding: 0 4px; }
+    #editor-selection-panel { background: #2a2a3a; padding: 8px 10px; border-radius: 4px; font-size: 12px; line-height: 1.7; }
+    #editor-selection-panel .val { color: #ffcc00; font-weight: bold; }
+    #editor-selection-panel .del-btn { margin-top: 6px; padding: 4px 10px; background: #cc4444; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
+    #editor-shortcuts { font-size: 11px; color: #bbb; line-height: 1.7; }
+    #editor-shortcuts kbd { background: #333; padding: 1px 5px; border-radius: 3px; border: 1px solid #555; color: #fff; font-family: monospace; font-size: 10px; }
+
     @media (max-width: 700px) {
       #hud { font-size: 13px; padding: 8px 10px; min-width: auto; }
       .btn { padding: 7px 10px; font-size: 12px; }
@@ -321,6 +363,7 @@
     <div class="btn" id="profile-btn">Profil</div>
     <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
     <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
+    <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
     <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
     <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
     <div class="btn icon" id="help-btn" title="Aide">?</div>
@@ -336,6 +379,42 @@
   <div id="hint"></div>
   <div id="toast"></div>
   <div id="save-indicator">Sauvegardé</div>
+
+  <!-- EDITEUR DE MAP -->
+  <div id="editor-ui" class="hidden">
+    <div id="editor-topbar">
+      <div><strong>🛠 Éditeur de map</strong> <span id="editor-mode-hint">— Clic sur un tile de la librairie, puis clic sur la map pour placer</span></div>
+      <div style="display: flex; gap: 8px;">
+        <div class="btn" id="editor-export">📋 Exporter JSON</div>
+        <div class="btn" id="editor-clear">🗑 Tout effacer</div>
+        <div class="btn danger" id="editor-exit">Quitter l'éditeur</div>
+      </div>
+    </div>
+    <div id="editor-sidebar">
+      <h4>📂 Librairie de tiles</h4>
+      <div id="editor-upload-zone">
+        <input type="file" id="editor-file-input" accept=".glb" multiple style="display:none;">
+        <div id="editor-upload-btn">+ Charger des GLB</div>
+        <div class="upload-hint">Drag &amp; drop aussi accepté</div>
+      </div>
+      <div id="editor-library"></div>
+
+      <h4 style="margin-top: 14px;">🎯 Sélection</h4>
+      <div id="editor-selection-panel">
+        <div style="color:#888; font-size:12px; font-style:italic;">Aucun tile sélectionné</div>
+      </div>
+
+      <h4 style="margin-top: 14px;">⌨ Raccourcis</h4>
+      <div id="editor-shortcuts">
+        <div><kbd>←↑→↓</kbd> nudge 0.5</div>
+        <div><kbd>Shift</kbd>+flèches : nudge 2</div>
+        <div><kbd>R</kbd> rotation +15°</div>
+        <div><kbd>+</kbd> / <kbd>-</kbd> scale ×1.1 / ÷1.1</div>
+        <div><kbd>Suppr</kbd> supprimer le tile</div>
+        <div><kbd>Esc</kbd> désélectionner</div>
+      </div>
+    </div>
+  </div>
 
   <div class="modal hidden" id="shop-modal">
     <div class="modal-content">
@@ -2625,6 +2704,8 @@
 
   function onLeftClick(e) {
     if (longPressTriggered) { longPressTriggered = false; return; }
+    // Mode éditeur : consomme le clic en premier
+    if (editor.active) { editorOnCanvasClick(e); return; }
     if (game.selectedSeedIdx !== null) {
       const slot = hitSlot(e);
       if (slot && !slot.plant) {
@@ -2662,6 +2743,8 @@
     }
   });
   document.addEventListener('keydown', e => {
+    // Mode éditeur : consomme en premier
+    if (editor.active && editorOnKeyDown(e)) return;
     if (e.key === 'Escape') { cancelPlacement(); cancelMoveMode(); hideTooltip(); }
   });
   const initOnce = () => {
@@ -3052,6 +3135,346 @@
     renderer.render(scene, camera);
   }
 
+  // --- MAP EDITOR ---
+  const editor = {
+    active: false,
+    library: [], // {id, name, fileData (ArrayBuffer), model}
+    placed: [], // {id, libName, x, y, z, rotY, scale, mesh}
+    selectedLibId: null,
+    selectedPlacedId: null,
+  };
+  const EDITOR_SAVE_KEY = 'pvb_editor_v1';
+  const EDITOR_LIB_KEY = 'pvb_editor_lib_v1';
+
+  function enterEditorMode() {
+    editor.active = true;
+    $('editor-ui').classList.remove('hidden');
+    showHint('Mode éditeur activé — Échap pour sortir', 2500);
+  }
+  function exitEditorMode() {
+    editor.active = false;
+    editor.selectedLibId = null;
+    editor.selectedPlacedId = null;
+    updateSelectionVisuals();
+    $('editor-ui').classList.add('hidden');
+  }
+  function toggleEditorMode() { editor.active ? exitEditorMode() : enterEditorMode(); }
+
+  async function loadEditorGlb(fileData, name) {
+    const loader = new THREE.GLTFLoader();
+    const blob = new Blob([fileData], { type: 'model/gltf-binary' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const gltf = await loader.loadAsync(url);
+      gltf.scene.traverse(obj => {
+        if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+      });
+      return gltf.scene;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async function addGlbToLibrary(file) {
+    const fileData = await file.arrayBuffer();
+    const model = await loadEditorGlb(fileData, file.name);
+    const id = 'lib_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    editor.library.push({ id, name: file.name, fileData, model });
+    // Persist en base64 (pour V1)
+    persistLibrary();
+    renderEditorLibrary();
+  }
+
+  function persistLibrary() {
+    try {
+      const serialized = editor.library.map(l => ({
+        id: l.id, name: l.name,
+        b64: btoa(String.fromCharCode.apply(null, new Uint8Array(l.fileData))),
+      }));
+      localStorage.setItem(EDITOR_LIB_KEY, JSON.stringify(serialized));
+    } catch (err) {
+      console.warn('Library too large for localStorage:', err);
+      showHint('⚠ Librairie trop volumineuse pour localStorage', 3000);
+    }
+  }
+
+  async function loadLibraryFromStorage() {
+    const raw = localStorage.getItem(EDITOR_LIB_KEY);
+    if (!raw) return;
+    try {
+      const serialized = JSON.parse(raw);
+      for (const s of serialized) {
+        const binary = atob(s.b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const fileData = bytes.buffer;
+        const model = await loadEditorGlb(fileData, s.name);
+        editor.library.push({ id: s.id, name: s.name, fileData, model });
+      }
+      renderEditorLibrary();
+    } catch (err) { console.warn('Library restore failed:', err); }
+  }
+
+  function renderEditorLibrary() {
+    const el = $('editor-library');
+    el.innerHTML = '';
+    if (editor.library.length === 0) {
+      el.innerHTML = '<div style="color:#888; font-size:11px; text-align:center; padding:10px;">Aucun GLB chargé</div>';
+      return;
+    }
+    editor.library.forEach(lib => {
+      const div = document.createElement('div');
+      div.className = 'editor-lib-item' + (editor.selectedLibId === lib.id ? ' selected' : '');
+      div.innerHTML = `<span>${lib.name}</span><span class="remove-lib" title="Retirer">✕</span>`;
+      div.onclick = (e) => {
+        if (e.target.classList.contains('remove-lib')) {
+          editor.library = editor.library.filter(l => l.id !== lib.id);
+          if (editor.selectedLibId === lib.id) editor.selectedLibId = null;
+          persistLibrary();
+          renderEditorLibrary();
+          return;
+        }
+        editor.selectedLibId = (editor.selectedLibId === lib.id) ? null : lib.id;
+        editor.selectedPlacedId = null;
+        renderEditorLibrary();
+        updateSelectionPanel();
+      };
+      el.appendChild(div);
+    });
+  }
+
+  function placeTileAt(libId, x, y, z) {
+    const lib = editor.library.find(l => l.id === libId);
+    if (!lib) return;
+    const mesh = lib.model.clone(true);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    const placed = {
+      id: 'placed_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      libName: lib.name, libId: lib.id,
+      x, y, z, rotY: 0, scale: 1, mesh,
+    };
+    editor.placed.push(placed);
+    saveEditorPlacements();
+    return placed;
+  }
+
+  function removePlaced(id) {
+    const idx = editor.placed.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    scene.remove(editor.placed[idx].mesh);
+    editor.placed.splice(idx, 1);
+    if (editor.selectedPlacedId === id) editor.selectedPlacedId = null;
+    saveEditorPlacements();
+    updateSelectionPanel();
+  }
+
+  function selectPlacedById(id) {
+    editor.selectedPlacedId = id;
+    editor.selectedLibId = null;
+    renderEditorLibrary();
+    updateSelectionVisuals();
+    updateSelectionPanel();
+  }
+
+  function updateSelectionVisuals() {
+    editor.placed.forEach(p => {
+      const selected = p.id === editor.selectedPlacedId;
+      p.mesh.traverse(o => {
+        if (o.isMesh && o.material) {
+          if (!o.userData.origEmissive) {
+            o.userData.origEmissive = o.material.emissive ? o.material.emissive.clone() : new THREE.Color(0x000000);
+            o.userData.origEmissiveIntensity = o.material.emissiveIntensity || 0;
+          }
+          if (selected) {
+            o.material.emissive = new THREE.Color(0xffcc00);
+            o.material.emissiveIntensity = 0.6;
+          } else {
+            o.material.emissive = o.userData.origEmissive.clone();
+            o.material.emissiveIntensity = o.userData.origEmissiveIntensity;
+          }
+        }
+      });
+    });
+  }
+
+  function updateSelectionPanel() {
+    const panel = $('editor-selection-panel');
+    const p = editor.placed.find(x => x.id === editor.selectedPlacedId);
+    if (!p) {
+      panel.innerHTML = '<div style="color:#888; font-size:12px; font-style:italic;">Aucun tile sélectionné</div>';
+      return;
+    }
+    panel.innerHTML = `
+      <div><strong>${p.libName}</strong></div>
+      <div>X: <span class="val">${p.x.toFixed(1)}</span> Y: <span class="val">${p.y.toFixed(1)}</span> Z: <span class="val">${p.z.toFixed(1)}</span></div>
+      <div>Rotation: <span class="val">${Math.round(p.rotY * 180 / Math.PI)}°</span></div>
+      <div>Scale: <span class="val">${p.scale.toFixed(2)}×</span></div>
+      <button class="del-btn">Supprimer</button>
+    `;
+    panel.querySelector('.del-btn').onclick = () => removePlaced(p.id);
+  }
+
+  function applyPlacedTransform(p) {
+    p.mesh.position.set(p.x, p.y, p.z);
+    p.mesh.rotation.y = p.rotY;
+    p.mesh.scale.setScalar(p.scale);
+  }
+
+  function saveEditorPlacements() {
+    const data = editor.placed.map(p => ({
+      libName: p.libName, libId: p.libId,
+      x: p.x, y: p.y, z: p.z, rotY: p.rotY, scale: p.scale,
+    }));
+    localStorage.setItem(EDITOR_SAVE_KEY, JSON.stringify(data));
+  }
+
+  async function restoreEditorPlacements() {
+    const raw = localStorage.getItem(EDITOR_SAVE_KEY);
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      for (const d of data) {
+        const lib = editor.library.find(l => l.id === d.libId) || editor.library.find(l => l.name === d.libName);
+        if (!lib) { console.warn('Lib not found for', d.libName); continue; }
+        const placed = placeTileAt(lib.id, d.x, d.y, d.z);
+        if (placed) {
+          placed.rotY = d.rotY || 0;
+          placed.scale = d.scale || 1;
+          applyPlacedTransform(placed);
+        }
+      }
+    } catch (err) { console.warn('Restore placements failed:', err); }
+  }
+
+  function exportEditorJSON() {
+    const data = editor.placed.map(p => ({
+      libName: p.libName,
+      x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2),
+      rotY: +p.rotY.toFixed(3), scale: +p.scale.toFixed(2),
+    }));
+    const json = JSON.stringify(data, null, 2);
+    navigator.clipboard.writeText(json).then(() => {
+      showHint(`✓ JSON copié dans le presse-papier (${data.length} tiles)`, 3000);
+    }).catch(() => {
+      prompt('Copie ce JSON :', json);
+    });
+  }
+
+  function clearAllEditorTiles() {
+    if (!confirm(`Supprimer les ${editor.placed.length} tiles placés ?`)) return;
+    editor.placed.forEach(p => scene.remove(p.mesh));
+    editor.placed = [];
+    editor.selectedPlacedId = null;
+    saveEditorPlacements();
+    updateSelectionPanel();
+  }
+
+  // Raycaster pour l'éditeur : détecte clics sur tiles placés ou sur le sol
+  function editorPickAt(e) {
+    mouse.x = (e.clientX / innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    // 1. Check tiles placés
+    const placedMeshes = [];
+    editor.placed.forEach(p => p.mesh.traverse(c => { if (c.isMesh) placedMeshes.push({ mesh: c, placed: p }); }));
+    const hits = raycaster.intersectObjects(placedMeshes.map(x => x.mesh));
+    if (hits.length > 0) {
+      const found = placedMeshes.find(x => x.mesh === hits[0].object);
+      if (found) return { type: 'placed', placed: found.placed, point: hits[0].point };
+    }
+    // 2. Check sol (plan Y=0.2)
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2);
+    const point = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(plane, point)) return { type: 'ground', point };
+    return null;
+  }
+
+  function editorOnCanvasClick(e) {
+    if (!editor.active) return false;
+    const hit = editorPickAt(e);
+    if (!hit) return true; // consume le clic mais rien à faire
+    if (editor.selectedLibId) {
+      // Place un nouveau tile
+      placeTileAt(editor.selectedLibId, hit.point.x, 0.2, hit.point.z);
+      // Garde le tile sélectionné pour placements multiples
+      return true;
+    }
+    if (hit.type === 'placed') {
+      selectPlacedById(hit.placed.id);
+    } else {
+      editor.selectedPlacedId = null;
+      updateSelectionVisuals();
+      updateSelectionPanel();
+    }
+    return true;
+  }
+
+  function editorOnKeyDown(e) {
+    if (!editor.active) return false;
+    if (e.key === 'Escape') {
+      if (editor.selectedPlacedId || editor.selectedLibId) {
+        editor.selectedLibId = null;
+        editor.selectedPlacedId = null;
+        updateSelectionVisuals();
+        updateSelectionPanel();
+        renderEditorLibrary();
+      } else {
+        exitEditorMode();
+      }
+      return true;
+    }
+    const p = editor.placed.find(x => x.id === editor.selectedPlacedId);
+    if (!p) return false;
+    const step = e.shiftKey ? 2 : 0.5;
+    let dirty = false;
+    switch (e.key) {
+      case 'ArrowLeft':  p.x -= step; dirty = true; break;
+      case 'ArrowRight': p.x += step; dirty = true; break;
+      case 'ArrowUp':    p.z -= step; dirty = true; break;
+      case 'ArrowDown':  p.z += step; dirty = true; break;
+      case 'r': case 'R': p.rotY += Math.PI / 12; dirty = true; break;
+      case '+': case '=': p.scale *= 1.1; dirty = true; break;
+      case '-': case '_': p.scale /= 1.1; dirty = true; break;
+      case 'Delete': case 'Backspace': removePlaced(p.id); return true;
+      default: return false;
+    }
+    if (dirty) {
+      applyPlacedTransform(p);
+      saveEditorPlacements();
+      updateSelectionPanel();
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  // Init editor UI handlers
+  function initEditorUI() {
+    $('editor-btn').onclick = toggleEditorMode;
+    $('editor-exit').onclick = exitEditorMode;
+    $('editor-export').onclick = exportEditorJSON;
+    $('editor-clear').onclick = clearAllEditorTiles;
+    const uploadZone = $('editor-upload-zone');
+    const fileInput = $('editor-file-input');
+    uploadZone.onclick = () => fileInput.click();
+    fileInput.onchange = async (e) => {
+      for (const f of e.target.files) await addGlbToLibrary(f);
+      fileInput.value = '';
+    };
+    uploadZone.ondragover = (e) => { e.preventDefault(); uploadZone.classList.add('drag-over'); };
+    uploadZone.ondragleave = () => uploadZone.classList.remove('drag-over');
+    uploadZone.ondrop = async (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('drag-over');
+      for (const f of e.dataTransfer.files) {
+        if (f.name.toLowerCase().endsWith('.glb')) await addGlbToLibrary(f);
+      }
+    };
+    renderEditorLibrary();
+    updateSelectionPanel();
+  }
+
   // --- INIT (async pour preload des modèles GLB avant de placer les plantes/blops) ---
   (async () => {
     await preloadModels();
@@ -3072,6 +3495,10 @@
     updateHud();
     updateAccountBadge();
     initFirebase();
+    initEditorUI();
+    // Charge la librairie puis les placements sauvegardés
+    await loadLibraryFromStorage();
+    await restoreEditorPlacements();
     animate();
     if (offlineResult && offlineResult.earned >= 1) {
       $('welcome-time').textContent = fmtDuration(offlineResult.elapsedSec);

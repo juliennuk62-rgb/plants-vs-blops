@@ -320,6 +320,7 @@
     <div class="btn" id="collection-btn">Collection</div>
     <div class="btn" id="profile-btn">Profil</div>
     <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
+    <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
     <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
     <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
     <div class="btn icon" id="help-btn" title="Aide">?</div>
@@ -460,6 +461,41 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="account-modal">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-title">Compte & Sauvegarde cloud</div>
+      <div id="account-not-configured" style="display:none;">
+        <div style="background:#2a1e1e; padding:14px; border-radius:8px; font-size:13px; line-height:1.6;">
+          ⚠ <strong>Firebase non configuré</strong>.<br>
+          Les sauvegardes cloud ne sont pas actives. Ouvre <code>index.html</code>, cherche <code>FIREBASE_CONFIG</code> et colle ta config Firebase pour activer.
+        </div>
+      </div>
+      <div id="account-info" style="display:none;">
+        <div style="background:#1e2a3a; padding:14px; border-radius:8px; margin-bottom:12px;">
+          <div style="font-size:13px; color:#aaa;">Statut</div>
+          <div id="account-mode" style="font-size:16px; font-weight:bold; margin-top:4px;">Chargement...</div>
+          <div id="account-email" style="font-size:13px; color:#66ff99; margin-top:4px;"></div>
+          <div id="account-uid" style="font-size:11px; color:#888; margin-top:4px; word-break:break-all; font-family:monospace;"></div>
+          <div id="account-sync" style="font-size:12px; color:#66ccff; margin-top:6px;"></div>
+        </div>
+        <div id="account-google-section">
+          <div style="font-size:13px; color:#ccc; margin-bottom:8px; line-height:1.5;">
+            Connecte-toi avec Google pour retrouver ta progression sur tous tes appareils.
+          </div>
+          <div class="btn gold" id="account-google-btn" style="display:inline-block;">🔐 Se connecter avec Google</div>
+        </div>
+        <div id="account-signedin-section" style="display:none;">
+          <div style="font-size:13px; color:#ccc; margin-bottom:8px; line-height:1.5;">
+            Tu es connecté. Ta progression se synchronise automatiquement à chaque action.
+          </div>
+          <div class="btn" id="account-signout-btn" style="display:inline-block;">Se déconnecter</div>
+        </div>
+        <div id="account-status-msg" style="margin-top:10px; font-size:12px;"></div>
+      </div>
+      <div class="modal-close"><div class="btn" id="account-close">Fermer</div></div>
+    </div>
+  </div>
+
   <div class="modal hidden" id="settings-modal">
     <div class="modal-content" style="max-width: 560px;">
       <div class="modal-title">Paramètres</div>
@@ -527,6 +563,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
   <script>
   // ============================================================
   // PLANTS VS BLOPS - Proto v0.7 (HP bars + dynamic lanes + parc/inventory)
@@ -690,6 +729,23 @@
   const PRESTIGE_LEVELS = [3, 6, 10, 15, 20, 30, 42, 55, 70, 88, 108, 130];
   const LEVEL_PASSIVE_BONUS = 0.01;
   const PRESTIGE_PASSIVE_BONUS = 0.10;
+
+  // --- FIREBASE (cloud saves) ---
+  // Pour activer les saves en ligne :
+  // 1. https://console.firebase.google.com/ → crée un projet
+  // 2. Authentication → Sign-in method → active Anonymous et Google
+  // 3. Firestore Database → crée la DB (mode production)
+  // 4. Firestore Rules : allow read/write only to owner (voir guide)
+  // 5. Project Settings → Your apps → Web → copie la config et colle ici
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDpr_cJ1B2OCDCRDjkVQY7QdUXKm6qIvNA",
+    authDomain: "plants-vs-blop.firebaseapp.com",
+    projectId: "plants-vs-blop",
+    storageBucket: "plants-vs-blop.firebasestorage.app",
+    messagingSenderId: "484744264430",
+    appId: "1:484744264430:web:0da1011a71e70d1b9f91ff",
+  };
+  const FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "PASTE_HERE";
 
   // --- SCENE ---
   const scene = new THREE.Scene();
@@ -1653,6 +1709,7 @@
       };
       localStorage.setItem(SAVE_KEY_V5, JSON.stringify(data));
       flashSaveIndicator();
+      debouncedCloudSave(data);
     } catch (err) { console.warn('Save failed:', err); }
   }
   function loadGame() {
@@ -1739,7 +1796,237 @@
     localStorage.removeItem('pvb_save_v3');
     localStorage.removeItem('pvb_save_v2');
     localStorage.removeItem(TUTORIAL_KEY);
+    // Delete cloud save too if signed in
+    if (cloudUser && firebaseDb) {
+      firebaseDb.collection('saves').doc(cloudUser.uid).delete().catch(() => {});
+    }
+    if (firebaseAuth && !cloudUser?.isAnonymous) {
+      firebaseAuth.signOut().catch(() => {});
+    }
     location.reload();
+  }
+
+  // --- FIREBASE CLOUD SAVES ---
+  let firebaseApp = null, firebaseAuth = null, firebaseDb = null;
+  let cloudUser = null;
+  let cloudReady = false;
+  let cloudLastSync = 0;
+  let cloudSaveDebounce = null;
+  let initialCloudCheckDone = false;
+
+  function initFirebase() {
+    if (!FIREBASE_ENABLED) { updateAccountBadge(); return; }
+    try {
+      firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+      firebaseAuth = firebase.auth();
+      firebaseDb = firebase.firestore();
+      firebaseAuth.onAuthStateChanged(onAuthChanged);
+      // Anonymous sign-in si pas déjà connecté
+      if (!firebaseAuth.currentUser) {
+        firebaseAuth.signInAnonymously().catch(err => console.warn('Anon sign-in failed:', err));
+      }
+    } catch (err) {
+      console.warn('Firebase init failed:', err);
+      FIREBASE_ENABLED_RUNTIME = false;
+    }
+  }
+
+  function onAuthChanged(user) {
+    cloudUser = user;
+    cloudReady = !!user;
+    updateAccountBadge();
+    if (user && !initialCloudCheckDone) {
+      initialCloudCheckDone = true;
+      checkCloudSaveOnFirstLogin();
+    }
+    if ($('account-modal') && !$('account-modal').classList.contains('hidden')) {
+      renderAccountModal();
+    }
+  }
+
+  async function checkCloudSaveOnFirstLogin() {
+    try {
+      const cloudData = await loadFromCloud();
+      if (!cloudData) {
+        // Pas de save cloud : pousse la locale si elle existe
+        const localRaw = localStorage.getItem(SAVE_KEY_V5);
+        if (localRaw) {
+          try { await saveToCloud(JSON.parse(localRaw)); } catch {}
+        }
+        return;
+      }
+      const localRaw = localStorage.getItem(SAVE_KEY_V5);
+      const localData = localRaw ? JSON.parse(localRaw) : null;
+      const cloudTime = cloudData.clientUpdatedAt || 0;
+      const localTime = localData?.lastSave || 0;
+      if (cloudTime > localTime + 5000) { // 5s marge
+        // Cloud plus récent : propose de charger
+        const elapsed = Math.floor((Date.now() - cloudTime) / 1000);
+        const proceed = confirm(`Une sauvegarde cloud plus récente existe (il y a ${fmtDuration(elapsed)}).\n\nCharger la sauvegarde cloud et rafraîchir la page ?\n(Ta progression locale sera écrasée)`);
+        if (proceed) {
+          localStorage.setItem(SAVE_KEY_V5, JSON.stringify(cloudData));
+          location.reload();
+        }
+      }
+    } catch (err) {
+      console.warn('Cloud check failed:', err);
+    }
+  }
+
+  async function saveToCloud(data) {
+    if (!cloudReady || !cloudUser || !firebaseDb) return false;
+    try {
+      await firebaseDb.collection('saves').doc(cloudUser.uid).set({
+        ...data,
+        clientUpdatedAt: Date.now(),
+      });
+      cloudLastSync = Date.now();
+      updateAccountBadge();
+      return true;
+    } catch (err) {
+      console.warn('Cloud save failed:', err);
+      return false;
+    }
+  }
+
+  async function loadFromCloud() {
+    if (!cloudReady || !cloudUser || !firebaseDb) return null;
+    try {
+      const doc = await firebaseDb.collection('saves').doc(cloudUser.uid).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (err) {
+      console.warn('Cloud load failed:', err);
+      return null;
+    }
+  }
+
+  function debouncedCloudSave(data) {
+    if (!cloudReady) return;
+    if (cloudSaveDebounce) clearTimeout(cloudSaveDebounce);
+    cloudSaveDebounce = setTimeout(() => saveToCloud(data), 2000);
+  }
+
+  async function linkOrSignInGoogle() {
+    if (!firebaseAuth) return;
+    const statusEl = $('account-status-msg');
+    statusEl.style.color = '#aaa';
+    statusEl.textContent = '⏳ Ouverture de la fenêtre Google...';
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+      if (cloudUser && cloudUser.isAnonymous) {
+        try {
+          await cloudUser.linkWithPopup(provider);
+          statusEl.style.color = '#66ff99';
+          statusEl.textContent = '✓ Compte lié à Google — ta progression est sauvegardée !';
+          renderAccountModal();
+          return;
+        } catch (err) {
+          if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+            const proceed = confirm('Ce compte Google a déjà une sauvegarde associée.\n\nCharger cette sauvegarde ? (ta progression actuelle en mode invité sera perdue)');
+            if (!proceed) {
+              statusEl.textContent = '';
+              return;
+            }
+            await firebaseAuth.signOut();
+            await firebaseAuth.signInWithPopup(provider);
+            statusEl.style.color = '#66ff99';
+            statusEl.textContent = '✓ Connecté — chargement de ta sauvegarde cloud...';
+            setTimeout(() => {
+              const localRaw = localStorage.getItem(SAVE_KEY_V5);
+              const loc = localRaw ? JSON.parse(localRaw) : null;
+              loadFromCloud().then(cloudData => {
+                if (cloudData) {
+                  localStorage.setItem(SAVE_KEY_V5, JSON.stringify(cloudData));
+                  location.reload();
+                }
+              });
+            }, 500);
+            return;
+          }
+          throw err;
+        }
+      } else {
+        await firebaseAuth.signInWithPopup(provider);
+        statusEl.style.color = '#66ff99';
+        statusEl.textContent = '✓ Connecté avec Google';
+      }
+    } catch (err) {
+      statusEl.style.color = '#ff6666';
+      statusEl.textContent = '✗ Erreur : ' + (err.message || err.code);
+    }
+    renderAccountModal();
+  }
+
+  async function signOutCloud() {
+    if (!firebaseAuth) return;
+    const proceed = confirm('Se déconnecter ?\n\nTu repasseras en mode invité local. Ta progression reste sur ton compte Google pour retrouver sur un autre appareil.');
+    if (!proceed) return;
+    try {
+      await firebaseAuth.signOut();
+      // Re-sign in anonymously pour continuer à avoir une save cloud locale
+      await firebaseAuth.signInAnonymously();
+      renderAccountModal();
+    } catch (err) { console.warn('Sign out failed:', err); }
+  }
+
+  function updateAccountBadge() {
+    const el = document.getElementById('account-status');
+    if (!el) return;
+    if (!FIREBASE_ENABLED) { el.textContent = '📱'; return; }
+    if (!cloudUser) { el.textContent = '⏳'; return; }
+    if (cloudUser.isAnonymous) { el.textContent = '☁'; return; }
+    el.textContent = '✓';
+  }
+
+  function renderAccountModal() {
+    const notConfigEl = document.getElementById('account-not-configured');
+    const infoEl = document.getElementById('account-info');
+    if (!FIREBASE_ENABLED) {
+      notConfigEl.style.display = 'block';
+      infoEl.style.display = 'none';
+      return;
+    }
+    notConfigEl.style.display = 'none';
+    infoEl.style.display = 'block';
+
+    const modeEl = document.getElementById('account-mode');
+    const emailEl = document.getElementById('account-email');
+    const uidEl = document.getElementById('account-uid');
+    const syncEl = document.getElementById('account-sync');
+    const googleSect = document.getElementById('account-google-section');
+    const signedSect = document.getElementById('account-signedin-section');
+    const statusMsg = document.getElementById('account-status-msg');
+    statusMsg.textContent = '';
+
+    if (!cloudUser) {
+      modeEl.textContent = 'Connexion en cours...';
+      emailEl.textContent = '';
+      uidEl.textContent = '';
+      syncEl.textContent = '';
+      googleSect.style.display = 'none';
+      signedSect.style.display = 'none';
+      return;
+    }
+    if (cloudUser.isAnonymous) {
+      modeEl.textContent = '☁ Mode invité (sync cloud active)';
+      emailEl.textContent = '';
+      uidEl.textContent = 'ID : ' + cloudUser.uid;
+      googleSect.style.display = 'block';
+      signedSect.style.display = 'none';
+    } else {
+      modeEl.textContent = '✓ Connecté avec Google';
+      emailEl.textContent = cloudUser.email || '';
+      uidEl.textContent = 'ID : ' + cloudUser.uid;
+      googleSect.style.display = 'none';
+      signedSect.style.display = 'block';
+    }
+    if (cloudLastSync > 0) {
+      const ago = Math.floor((Date.now() - cloudLastSync) / 1000);
+      syncEl.textContent = `Dernière sync : il y a ${fmtDuration(ago)}`;
+    } else {
+      syncEl.textContent = 'Synchronisation en attente...';
+    }
   }
 
   // --- UI refs ---
@@ -2318,6 +2605,12 @@
   btnClick('welcome-close', () => $('welcome-modal').classList.add('hidden'));
   btnClick('help-btn', () => { localStorage.removeItem(TUTORIAL_KEY); showTutorial(); });
 
+  // Account modal
+  btnClick('account-btn', () => { renderAccountModal(); $('account-modal').classList.remove('hidden'); });
+  btnClick('account-close', () => $('account-modal').classList.add('hidden'));
+  $('account-google-btn').onclick = () => linkOrSignInGoogle();
+  $('account-signout-btn').onclick = () => signOutCloud();
+
   // Settings modal
   btnClick('settings-btn', () => {
     $('webhook-url').value = localStorage.getItem(WEBHOOK_URL_KEY) || '';
@@ -2678,6 +2971,8 @@
   updatePrestigeButtonVisibility();
   checkAchievements();
   updateHud();
+  updateAccountBadge();
+  initFirebase();
   animate();
 
   if (offlineResult && offlineResult.earned >= 1) {

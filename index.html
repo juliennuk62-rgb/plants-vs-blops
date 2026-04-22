@@ -1,0 +1,2700 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Plants vs Blops - Proto v0.7</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; font-family: Arial, sans-serif; background: #000; color: #fff; user-select: none; -webkit-tap-highlight-color: transparent; }
+    canvas { display: block; }
+
+    #hud {
+      position: absolute; top: 10px; left: 10px;
+      background: rgba(0,0,0,0.7); padding: 12px 16px; border-radius: 8px;
+      z-index: 10; line-height: 1.7; font-size: 16px; min-width: 230px;
+    }
+    #hud .label { color: #aaa; }
+    #hud .rate { color: #66ff99; font-size: 13px; }
+    #cash { display: inline-block; font-weight: bold; }
+    .xp-bar { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+    .xp-fill { height: 100%; background: linear-gradient(90deg, #66ff99, #33aaff); border-radius: 3px; transition: width 0.3s; }
+    #xp-text { font-size: 11px; color: #888; margin-top: 2px; }
+    .prestige-badge {
+      display: inline-block; background: #ffdd00; color: #222;
+      padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: bold;
+      margin-left: 6px; vertical-align: middle;
+    }
+
+    @keyframes cashPulse {
+      0% { transform: scale(1); color: #fff; }
+      35% { transform: scale(1.3); color: #88ffaa; text-shadow: 0 0 12px #88ffaa; }
+      100% { transform: scale(1); color: #fff; }
+    }
+    .cash-pulse { animation: cashPulse 0.4s ease-out; }
+
+    #top-right {
+      position: absolute; top: 10px; right: 10px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 10;
+    }
+    .btn {
+      background: rgba(30, 60, 100, 0.9); border: 2px solid #4488cc;
+      padding: 10px 16px; border-radius: 6px; cursor: pointer;
+      font-size: 14px; color: #fff; text-align: center;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:hover { background: rgba(40, 80, 140, 0.95); }
+    .btn:active { transform: scale(0.96); }
+    .btn.danger { background: rgba(120, 30, 30, 0.9); border-color: #cc4444; }
+    .btn.danger:hover { background: rgba(160, 40, 40, 0.95); }
+    .btn.gold { background: rgba(140, 100, 20, 0.9); border-color: #ffcc44; color: #ffe88c; }
+    .btn.gold:hover { background: rgba(180, 130, 30, 0.95); }
+    .btn:disabled { background: #333; border-color: #555; color: #777; cursor: not-allowed; transform: none; }
+    .btn.icon { padding: 8px; font-size: 16px; min-width: 38px; }
+
+    #inventory {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px;
+      display: flex; gap: 6px; z-index: 10;
+      min-height: 100px; align-items: center; min-width: 240px; justify-content: center;
+      max-width: 96vw; overflow-x: auto;
+    }
+    #inventory .empty { color: #888; font-style: italic; padding: 0 20px; }
+    .seed-card {
+      width: 92px; height: 100px; padding: 6px; flex: 0 0 auto;
+      border-radius: 6px; cursor: pointer;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      text-align: center; font-size: 11px;
+      border: 2px solid transparent;
+      background: #222; position: relative;
+      transition: transform 0.1s;
+    }
+    .seed-card:hover { filter: brightness(1.3); }
+    .seed-card:active { transform: scale(0.96); }
+    .seed-card.selected { border-color: #fff; box-shadow: 0 0 14px #fff; }
+    .seed-card.mutated { box-shadow: 0 0 10px currentColor; }
+    .seed-icon { font-size: 26px; line-height: 1; margin-bottom: 2px; }
+    .seed-name { font-weight: bold; font-size: 12px; line-height: 1.1; }
+    .seed-rarity { font-size: 9px; margin-top: 2px; }
+    .seed-mutation { font-size: 9px; margin-top: 1px; font-weight: bold; }
+    .seed-count {
+      position: absolute; top: 2px; right: 4px;
+      background: rgba(0,0,0,0.7); color: #ffcc00; font-weight: bold;
+      padding: 1px 6px; border-radius: 10px; font-size: 11px;
+    }
+
+    .modal {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      animation: modalFadeIn 0.18s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    .modal.hidden { display: none; }
+    .modal-content {
+      background: #1e1e2e; padding: 24px; border-radius: 12px;
+      max-width: 820px; max-height: 88vh; overflow-y: auto;
+      border: 2px solid #4488cc;
+      width: 92%;
+      animation: modalPop 0.2s ease-out;
+    }
+    @keyframes modalPop {
+      from { transform: scale(0.92); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    .modal-title { font-size: 22px; margin-bottom: 16px; text-align: center; }
+    .modal-close { margin-top: 20px; text-align: center; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    h3 { margin: 18px 0 8px 0; font-size: 15px; color: #66ccff; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stats-grid > div { background: #2a2a3a; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
+    .stats-grid strong { color: #ffcc00; }
+
+    #shop-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+    .shop-slot {
+      padding: 12px 8px; border-radius: 6px;
+      text-align: center; background: #2a2a3a;
+      border-left: 6px solid #555;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .shop-slot.mutated { box-shadow: 0 0 12px currentColor; }
+    .shop-slot.unavailable { opacity: 0.4; filter: grayscale(0.6); }
+    .shop-slot .shop-icon { font-size: 30px; line-height: 1; margin: 2px 0 4px; }
+    .shop-slot .shop-rarity { font-size: 11px; font-weight: bold; }
+    .shop-slot .shop-name { font-size: 14px; margin: 4px 0; font-weight: bold; }
+    .shop-slot .shop-mutation { font-size: 11px; font-weight: bold; margin-bottom: 3px; }
+    .shop-slot .shop-stats { font-size: 11px; color: #aaa; }
+    .shop-slot .shop-ability { font-size: 10px; color: #66ccff; margin-top: 3px; font-style: italic; }
+    .shop-slot .shop-unavailable-msg { font-size: 11px; color: #aaa; font-style: italic; margin: 6px 0; }
+    .shop-slot .price { font-size: 15px; color: #ffcc00; margin: 8px 0; font-weight: bold; }
+    .shop-slot .buy-btn {
+      padding: 6px 12px; font-size: 12px;
+      background: #4488cc; border: none; color: #fff; cursor: pointer; border-radius: 4px;
+    }
+    .shop-slot .buy-btn:disabled { background: #444; cursor: not-allowed; color: #888; }
+    #shop-timer { text-align: center; color: #aaa; font-size: 13px; margin-bottom: 14px; }
+
+    .coll-section { margin-bottom: 18px; }
+    .coll-header { font-size: 13px; color: #aaa; margin-bottom: 8px; display: flex; justify-content: space-between; }
+    .coll-header strong { color: #fff; }
+    #parc-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
+    .parc-slot {
+      aspect-ratio: 1; background: #2a2a3a; border-radius: 6px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 26px; border-left: 3px solid transparent;
+      position: relative;
+    }
+    .parc-slot.empty { opacity: 0.3; background: #1a1a1a; }
+    .parc-slot .parc-rate {
+      position: absolute; bottom: 2px; right: 4px;
+      font-size: 9px; color: #66ff99; font-weight: bold;
+    }
+    #inventory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .inv-entry {
+      padding: 10px; border-radius: 6px; background: #2a2a3a;
+      text-align: center; border-left: 4px solid #555;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .inv-entry .icon { font-size: 32px; line-height: 1; }
+    .inv-entry .count { font-size: 20px; font-weight: bold; }
+    .inv-entry .value { font-size: 10px; color: #aaa; }
+
+    #mixer-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .mixer-item {
+      padding: 14px; border-radius: 8px; background: #2a2a3a;
+      border-left: 4px solid #555;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .mixer-item .mixer-icon { font-size: 42px; line-height: 1; flex-shrink: 0; }
+    .mixer-item .mixer-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+    .mixer-item .mixer-name { font-weight: bold; font-size: 15px; }
+    .mixer-item .mixer-rarity { font-size: 11px; }
+    .mixer-item .mixer-count { font-size: 13px; color: #ffcc00; font-weight: bold; }
+    .mixer-item .mixer-arrow { font-size: 14px; color: #66ccff; }
+    .mixer-item button {
+      padding: 8px 14px; font-size: 12px; background: #4488cc;
+      border: none; color: #fff; cursor: pointer; border-radius: 4px;
+      white-space: nowrap;
+    }
+    .mixer-item button:hover { background: #55a0e0; }
+    .mixer-item button:disabled { background: #444; cursor: not-allowed; color: #888; }
+
+    #achievements-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .achievement { background: #2a2a3a; padding: 8px 12px; border-radius: 4px; font-size: 12px; opacity: 0.45; border-left: 3px solid #444; }
+    .achievement.unlocked { opacity: 1; background: #243324; border-left-color: #66ff99; }
+    .achievement .ach-title { font-weight: bold; }
+    .achievement .ach-desc { font-size: 11px; color: #aaa; margin-top: 2px; }
+    .achievement .ach-reward { color: #ffcc00; font-size: 11px; margin-top: 2px; }
+
+    #prestige-info {
+      background: #1a2030; padding: 16px; border-radius: 8px;
+      border: 1px solid #4488cc; margin-bottom: 16px;
+    }
+    #prestige-info .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+    #prestige-info .row .val { color: #ffcc00; font-weight: bold; }
+    .prestige-reset-list { background: #2a1e1e; padding: 10px 14px; border-radius: 6px; margin: 10px 0; font-size: 13px; line-height: 1.7; }
+    .prestige-gain-list { background: #1e2a1e; padding: 10px 14px; border-radius: 6px; margin: 10px 0; font-size: 13px; line-height: 1.7; }
+
+    #tut-body { font-size: 14px; }
+    #tut-body b { color: #ffcc00; }
+
+    /* Plant tooltip (long-press) */
+    #plant-tooltip {
+      position: absolute;
+      background: rgba(15, 20, 30, 0.97);
+      border: 2px solid #4488cc;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.55;
+      z-index: 500;
+      display: none;
+      min-width: 230px;
+      max-width: 300px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+      pointer-events: auto;
+    }
+    #plant-tooltip .tt-header {
+      font-size: 16px; font-weight: bold;
+      margin-bottom: 8px; padding-bottom: 6px;
+      border-bottom: 1px solid #333;
+      display: flex; align-items: center; gap: 8px;
+    }
+    #plant-tooltip .tt-icon { font-size: 24px; }
+    #plant-tooltip .tt-row { display: flex; justify-content: space-between; padding: 2px 0; gap: 12px; }
+    #plant-tooltip .tt-row .label { color: #aaa; }
+    #plant-tooltip .tt-row .val { color: #fff; font-weight: bold; text-align: right; }
+    #plant-tooltip .tt-footer {
+      margin-top: 10px; padding-top: 6px; border-top: 1px solid #333;
+      font-size: 11px; color: #888; font-style: italic; text-align: center;
+    }
+
+    /* HP bars overlay */
+    #hp-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 5;
+    }
+    .hp-bar {
+      position: absolute;
+      width: 46px; height: 5px;
+      background: rgba(0,0,0,0.75);
+      border-radius: 3px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .hp-fill {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, #66ff66, #44cc44);
+      transition: width 0.15s;
+    }
+    .hp-fill.mid { background: linear-gradient(90deg, #ffcc00, #ff9900); }
+    .hp-fill.low { background: linear-gradient(90deg, #ff6666, #cc3333); }
+
+    #hint {
+      position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.85); padding: 10px 16px; border-radius: 6px;
+      font-size: 13px; color: #ffcc00;
+      z-index: 10; display: none; max-width: 90vw; text-align: center;
+    }
+
+    #welcome-time { color: #ffcc00; font-weight: bold; }
+    #welcome-earned { color: #66ff99; }
+
+    #save-indicator {
+      position: absolute; bottom: 10px; right: 10px;
+      color: #66ff99; font-size: 11px; opacity: 0;
+      transition: opacity 0.3s; z-index: 10;
+    }
+    #save-indicator.show { opacity: 0.7; }
+
+    #toast {
+      position: absolute; top: 30%; left: 50%; transform: translateX(-50%);
+      background: rgba(20, 40, 20, 0.95); border: 2px solid #66ff99;
+      padding: 14px 24px; border-radius: 10px;
+      font-size: 16px; font-weight: bold; color: #66ff99;
+      z-index: 200; display: none; text-align: center;
+      box-shadow: 0 0 25px rgba(102, 255, 153, 0.5);
+      animation: toastPop 0.3s ease-out;
+    }
+    @keyframes toastPop {
+      from { transform: translateX(-50%) scale(0.8); opacity: 0; }
+      to   { transform: translateX(-50%) scale(1); opacity: 1; }
+    }
+
+    @media (max-width: 700px) {
+      #hud { font-size: 13px; padding: 8px 10px; min-width: auto; }
+      .btn { padding: 7px 10px; font-size: 12px; }
+      #inventory { padding: 6px; min-height: 80px; }
+      .seed-card { width: 78px; height: 92px; font-size: 10px; }
+      .seed-name { font-size: 11px; }
+      .modal-content { padding: 16px; }
+      .stats-grid { grid-template-columns: 1fr; }
+      #shop-slots { grid-template-columns: repeat(2, 1fr); }
+      #parc-grid { grid-template-columns: repeat(5, 1fr); }
+      #inventory-grid { grid-template-columns: repeat(2, 1fr); }
+      #mixer-list, #achievements-list { grid-template-columns: 1fr; }
+      #top-right { gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div><span class="label">Cash :</span> <span id="cash">500</span>$ <span class="rate" id="cash-rate"></span></div>
+    <div>
+      <span class="label">Niveau :</span> <span id="level">1</span>
+      <span class="prestige-badge" id="prestige-badge" style="display:none;"></span>
+      <div class="xp-bar"><div class="xp-fill" id="xp-fill" style="width:0%"></div></div>
+      <div id="xp-text">0 / 100 XP</div>
+    </div>
+    <div><span class="label">Plantes :</span> <span id="plant-count">0</span>/<span id="plant-cap">15</span></div>
+    <div><span class="label">Blops tués :</span> <span id="kills">0</span></div>
+  </div>
+
+  <div id="top-right">
+    <div class="btn" id="shop-btn">Boutique (<span id="shop-timer-short">5:00</span>)</div>
+    <div class="btn" id="mixer-btn">Mixer</div>
+    <div class="btn" id="collection-btn">Collection</div>
+    <div class="btn" id="profile-btn">Profil</div>
+    <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
+    <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
+    <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
+    <div class="btn icon" id="help-btn" title="Aide">?</div>
+    <div class="btn danger" id="reset-btn">Reset</div>
+  </div>
+
+  <div id="inventory">
+    <div class="empty" id="inventory-empty">Inventaire vide — achète des graines dans la boutique</div>
+  </div>
+
+  <div id="hp-overlay"></div>
+  <div id="plant-tooltip"></div>
+  <div id="hint"></div>
+  <div id="toast"></div>
+  <div id="save-indicator">Sauvegardé</div>
+
+  <div class="modal hidden" id="shop-modal">
+    <div class="modal-content">
+      <div class="modal-title">Boutique de graines</div>
+      <div id="shop-timer">Refresh dans <span id="shop-timer-full">5:00</span></div>
+      <div id="shop-slots"></div>
+      <div class="modal-close"><div class="btn" id="shop-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="collection-modal">
+    <div class="modal-content">
+      <div class="modal-title">Collection de Blops</div>
+      <div class="coll-section">
+        <div class="coll-header">
+          <span><strong>Parc</strong> (actifs, génèrent du cash)</span>
+          <span><span id="parc-count">0</span>/<span id="parc-cap">15</span></span>
+        </div>
+        <div style="text-align:center; color:#66ff99; margin: 6px 0; font-size: 14px;">
+          Revenu passif : <strong id="total-income">0</strong>$/sec
+        </div>
+        <div id="parc-grid"></div>
+      </div>
+      <div class="coll-section">
+        <div class="coll-header">
+          <span><strong>Inventaire</strong> (stockés, auto-vente au-delà)</span>
+          <span><span id="inv-count">0</span>/<span id="inv-cap">100</span></span>
+        </div>
+        <div id="inventory-grid"></div>
+      </div>
+      <div class="coll-section">
+        <div class="coll-header"><span><strong>Statistiques à vie</strong></span></div>
+        <div class="stats-grid" id="lifetime-stats"></div>
+      </div>
+      <div class="modal-close"><div class="btn" id="collection-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="mixer-modal">
+    <div class="modal-content">
+      <div class="modal-title">Mixer de graines</div>
+      <div style="text-align:center; color:#ccc; margin-bottom: 14px; font-size: 13px;">
+        3 plantes identiques → 1 plante aléatoire de la rareté supérieure (+ mutation aléatoire)
+      </div>
+      <div id="mixer-list"></div>
+      <div class="modal-close"><div class="btn" id="mixer-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="profile-modal">
+    <div class="modal-content">
+      <div class="modal-title">Profil</div>
+      <h3>Progression</h3>
+      <div class="stats-grid">
+        <div>Niveau : <strong id="pf-level">1</strong></div>
+        <div>Prestige : <strong id="pf-prestige">0</strong></div>
+        <div>XP : <strong id="pf-xp">0</strong> / <span id="pf-xp-next">100</span></div>
+        <div>Temps de jeu : <strong id="pf-time">0s</strong></div>
+      </div>
+      <h3>Performance</h3>
+      <div class="stats-grid">
+        <div>Revenu passif : <strong id="pf-passive">0</strong>$/sec</div>
+        <div>DPS plantes actives : <strong id="pf-dps">0</strong></div>
+        <div>Bonus niveau : <strong id="pf-level-bonus">+0%</strong></div>
+        <div>Bonus prestige : <strong id="pf-prestige-bonus">+0%</strong></div>
+      </div>
+      <h3>Statistiques</h3>
+      <div class="stats-grid">
+        <div>Plantes placées : <strong id="pf-placed">0</strong></div>
+        <div>Plantes mixées : <strong id="pf-mixed">0</strong></div>
+        <div>Cash total gagné : <strong id="pf-earned">0</strong>$</div>
+        <div>Cash total dépensé : <strong id="pf-spent">0</strong>$</div>
+      </div>
+      <h3>Achievements (<span id="pf-ach-count">0</span>/<span id="pf-ach-total">0</span>)</h3>
+      <div id="achievements-list"></div>
+      <div class="modal-close"><div class="btn" id="profile-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="prestige-modal">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-title" style="color:#ffdd00;">✨ Prestige</div>
+      <div id="prestige-info">
+        <div class="row"><span>Prestige actuel</span><span class="val" id="pr-current">0</span></div>
+        <div class="row"><span>Niveau requis</span><span class="val" id="pr-cost">Niveau 3</span></div>
+        <div class="row"><span>Ton niveau</span><span class="val" id="pr-cash">Niveau 1</span></div>
+      </div>
+      <div class="prestige-reset-list">
+        <strong>⚠ Ce qui est reset :</strong><br>
+        — Cash (retour à 500$)<br>
+        — Inventaire de graines<br>
+        — Plantes placées<br>
+        — Boutique
+      </div>
+      <div class="prestige-gain-list">
+        <strong>✅ Ce qui est gardé / gagné :</strong><br>
+        — Collection, parc, inventaire Blops<br>
+        — Niveau et XP<br>
+        — <strong>+1 lane</strong> sur le terrain<br>
+        — <strong>+1 slot de plantes</strong><br>
+        — <strong>+10% revenu passif permanent</strong>
+      </div>
+      <div class="modal-close">
+        <div class="btn" id="prestige-cancel">Annuler</div>
+        <div class="btn gold" id="prestige-confirm">Prestiger</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="welcome-modal">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-title">Bon retour !</div>
+      <div style="text-align:center;">
+        <div>Absence de <span id="welcome-time"></span></div>
+        <div style="font-size: 32px; margin: 24px 0; color: #ffcc00;">
+          +<span id="welcome-earned">0</span>$
+        </div>
+        <div style="font-size: 12px; color: #aaa;">
+          Ton parc a continué à produire pendant ton absence
+        </div>
+      </div>
+      <div class="modal-close"><div class="btn" id="welcome-close">Récupérer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="settings-modal">
+    <div class="modal-content" style="max-width: 560px;">
+      <div class="modal-title">Paramètres</div>
+
+      <h3>🔔 Notifications Discord (refresh boutique)</h3>
+      <div style="margin-bottom: 10px; font-size: 12px; color: #aaa; line-height: 1.6;">
+        Crée un webhook sur ton serveur Discord (Paramètres → Intégrations → Webhooks → Nouveau webhook), copie l'URL et colle-la ici.
+        À chaque refresh de boutique, le contenu sera envoyé automatiquement.
+      </div>
+      <label style="display: block; margin-bottom: 8px;">
+        <input type="checkbox" id="webhook-enabled" style="margin-right: 6px;"> Activer les notifications
+      </label>
+      <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/..."
+             style="width:100%; padding:8px 10px; background:#222; color:#fff; border:1px solid #555; border-radius:4px; font-size:12px;">
+      <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <div class="btn" id="webhook-save" style="font-size:12px; padding:8px 12px;">Enregistrer</div>
+        <div class="btn" id="webhook-test" style="font-size:12px; padding:8px 12px;">Tester (ping simple)</div>
+        <div class="btn" id="webhook-send-shop" style="font-size:12px; padding:8px 12px;">Envoyer boutique actuelle</div>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: #888; line-height: 1.5;">
+        ℹ Les notifications auto se déclenchent à chaque refresh de la boutique (toutes les 5 min), mais <strong>uniquement quand l'onglet est actif</strong> (le timer gèle si l'onglet est en arrière-plan).
+      </div>
+      <div id="webhook-status" style="margin-top:8px; font-size:12px;"></div>
+
+      <h3>📄 Export des data</h3>
+      <div style="font-size: 12px; color: #aaa; margin-bottom: 10px;">
+        Génère un PDF complet avec toutes les stats du jeu : raretés, plantes, Blops, mutations, variantes, économie.
+      </div>
+      <div class="btn gold" id="pdf-export" style="display:inline-block;">📄 Exporter en PDF</div>
+      <div id="pdf-status" style="margin-top:8px; font-size:12px;"></div>
+
+      <div class="modal-close"><div class="btn" id="settings-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="reset-modal">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-title">Effacer la sauvegarde ?</div>
+      <div style="text-align:center; color:#ccc;">
+        Cette action est <strong style="color:#ff6666;">irréversible</strong>.<br>
+        Tu perdras tout : cash, plantes, collection, niveau, prestige, achievements.
+      </div>
+      <div class="modal-close">
+        <div class="btn" id="reset-cancel">Annuler</div>
+        <div class="btn danger" id="reset-confirm">Effacer tout</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="tutorial-modal">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-title" id="tut-title">Bienvenue</div>
+      <div id="tut-body" style="text-align:center; min-height:130px; line-height:1.7;"></div>
+      <div style="text-align:center; margin-top: 14px; color:#888; font-size: 11px;">
+        Étape <span id="tut-step">1</span> / <span id="tut-total">4</span>
+      </div>
+      <div class="modal-close">
+        <div class="btn" id="tut-skip">Passer</div>
+        <div class="btn" id="tut-prev" style="display:none;">Précédent</div>
+        <div class="btn" id="tut-next">Suivant</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script>
+  // ============================================================
+  // PLANTS VS BLOPS - Proto v0.7 (HP bars + dynamic lanes + parc/inventory)
+  // ============================================================
+
+  // --- AUDIO ---
+  let audioCtx = null;
+  let audioEnabled = true;
+  function initAudio() {
+    if (audioCtx) return;
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { console.warn('Audio init failed:', e); }
+  }
+  function playTone(freq, duration, volume = 0.08, type = 'sine', delay = 0) {
+    if (!audioEnabled || !audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t0 = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(volume, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration);
+  }
+  const SFX = {
+    shot: () => playTone(850, 0.05, 0.03, 'square'),
+    kill: () => { playTone(400, 0.08, 0.06, 'triangle'); playTone(200, 0.12, 0.05, 'sine', 0.03); },
+    buy:  () => { playTone(660, 0.1, 0.08); playTone(990, 0.1, 0.08, 'sine', 0.08); },
+    levelUp: () => { [523, 659, 784, 1047].forEach((f, i) => playTone(f, 0.18, 0.1, 'sine', i * 0.08)); },
+    achievement: () => { [440, 554, 659, 880].forEach((f, i) => playTone(f, 0.2, 0.1, 'triangle', i * 0.1)); },
+    click: () => playTone(1400, 0.03, 0.03, 'square'),
+    mix: () => { [500, 700, 900, 1100].forEach((f, i) => playTone(f, 0.1, 0.06, 'sine', i * 0.05)); },
+    prestige: () => { [262, 330, 392, 523, 659, 784, 1047].forEach((f, i) => playTone(f, 0.3, 0.12, 'sine', i * 0.12)); },
+    sell: () => { playTone(300, 0.06, 0.04, 'sine'); },
+  };
+  function sfx(name) { if (audioEnabled && SFX[name]) SFX[name](); }
+
+  // --- RARETES ---
+  const RARITIES = {
+    common:    { label: 'Commun',     weight: 55,  color: '#cccccc', hex: 0xcccccc },
+    rare:      { label: 'Rare',       weight: 27,  color: '#4488ff', hex: 0x4488ff },
+    veryrare:  { label: 'Très rare',  weight: 12,  color: '#33cc33', hex: 0x33cc33 },
+    ultrarare: { label: 'Ultra rare', weight: 4.5, color: '#aa33cc', hex: 0xaa33cc },
+    mythic:    { label: 'Mythique',   weight: 1.2, color: '#ff6600', hex: 0xff6600 },
+    goat:      { label: 'GOAT',       weight: 0.3, color: '#ffdd00', hex: 0xffdd00 },
+  };
+  const RARITY_KEYS = Object.keys(RARITIES);
+
+  const MUTATIONS = {
+    none:    { label: null,       weight: 85,  color: '#ffffff', hex: 0xffffff, damageMult: 1   },
+    gold:    { label: 'Gold',     weight: 10,  color: '#ffd700', hex: 0xffd700, damageMult: 2   },
+    diamond: { label: 'Diamond',  weight: 3.5, color: '#00eeff', hex: 0x00eeff, damageMult: 3   },
+    neon:    { label: 'Neon',     weight: 1.2, color: '#ff33ee', hex: 0xff33ee, damageMult: 4.5 },
+    frozen:  { label: 'Frozen',   weight: 0.3, color: '#99eeff', hex: 0x99eeff, damageMult: 4, addSlow: true },
+  };
+  const MUTATION_KEYS = Object.keys(MUTATIONS);
+
+  // Variantes de Blops : bonus sur HP et valeur de kill/passif
+  const VARIANTS = {
+    none:    { label: null,      weight: 85,   color: '#ffffff', hex: 0xffffff, mult: 1 },
+    bronze:  { label: 'Bronze',  weight: 10,   color: '#cd7f32', hex: 0xcd7f32, mult: 2 },
+    silver:  { label: 'Argent',  weight: 3.5,  color: '#c0c0c0', hex: 0xc0c0c0, mult: 3 },
+    gold:    { label: 'Or',      weight: 1.2,  color: '#ffcc00', hex: 0xffcc00, mult: 4 },
+    diamond: { label: 'Diamant', weight: 0.3,  color: '#66ddff', hex: 0x66ddff, mult: 5 },
+  };
+  const VARIANT_KEYS = Object.keys(VARIANTS);
+
+  const BRAINROTS = {
+    common:    { name: 'Patapim',         hp: 3,    size: 1.0,  value: 10 },
+    rare:      { name: 'Tralalero',       hp: 15,   size: 1.15, value: 60 },
+    veryrare:  { name: 'Bombardiro',      hp: 50,   size: 1.3,  value: 300 },
+    ultrarare: { name: 'Tung Tung Sahur', hp: 200,  size: 1.55, value: 1500 },
+    mythic:    { name: 'Lirilì Larilà',   hp: 800,  size: 1.85, value: 8000 },
+    goat:      { name: 'Bombombini',      hp: 3000, size: 2.2,  value: 50000 },
+  };
+
+  const PLANTS = {
+    sunflower: { name: 'Tournesol', rarity: 'common',    cooldown: 1.2,  damage: 1,   price: 50,     ability: 'basic' },
+    pea:       { name: 'Pois',      rarity: 'common',    cooldown: 0.7,  damage: 1,   price: 80,     ability: 'basic' },
+    cactus:    { name: 'Cactus',    rarity: 'rare',      cooldown: 0.35, damage: 3,   price: 250,    ability: 'rapid' },
+    ice:       { name: 'Glace',     rarity: 'rare',      cooldown: 0.9,  damage: 2,   price: 300,    ability: 'slow',    slowFactor: 0.5, slowDuration: 2 },
+    strawberry:{ name: 'Fraise',    rarity: 'veryrare',  cooldown: 0.8,  damage: 6,   price: 1200,   ability: 'splash',  splashRadius: 2.5 },
+    pepper:    { name: 'Poivron',   rarity: 'veryrare',  cooldown: 1.1,  damage: 4,   price: 1400,   ability: 'burst',   burstCount: 3 },
+    watermelon:{ name: 'Pastèque',  rarity: 'ultrarare', cooldown: 1.3,  damage: 35,  price: 6000,   ability: 'cross-lane' },
+    kiwi:      { name: 'Kiwi',      rarity: 'ultrarare', cooldown: 1.1,  damage: 25,  price: 5500,   ability: 'pierce' },
+    mango:     { name: 'Mangue',    rarity: 'mythic',    cooldown: 0.7,  damage: 80,  price: 30000,  ability: 'slow',    slowFactor: 0.3, slowDuration: 3 },
+    pineapple: { name: 'Ananas',    rarity: 'mythic',    cooldown: 1.4,  damage: 120, price: 35000,  ability: 'splash',  splashRadius: 4 },
+    dragon:    { name: 'Dragon Fruit', rarity: 'goat',   cooldown: 0.5,  damage: 200, price: 200000, ability: 'splash-pierce', splashRadius: 3 },
+  };
+  const PLANT_IDS = Object.keys(PLANTS);
+  const PLANTS_BY_RARITY = {};
+  RARITY_KEYS.forEach(k => PLANTS_BY_RARITY[k] = []);
+  PLANT_IDS.forEach(id => PLANTS_BY_RARITY[PLANTS[id].rarity].push(id));
+
+  const ABILITY_LABELS = {
+    'basic': 'Simple', 'rapid': 'Rapide', 'splash': 'Splash', 'slow': 'Ralentit',
+    'burst': 'Burst ×3', 'pierce': 'Perce', 'cross-lane': 'Toutes lanes', 'splash-pierce': 'Splash + Perce',
+  };
+
+  const PLANT_ICONS = {
+    sunflower: '🌻', pea: '🟢', cactus: '🌵', ice: '❄️',
+    strawberry: '🍓', pepper: '🌶️', watermelon: '🍉', kiwi: '🥝',
+    mango: '🥭', pineapple: '🍍', dragon: '🐉',
+  };
+  const BLOP_ICONS = {
+    common: '🐸', rare: '🦎', veryrare: '🦀',
+    ultrarare: '🦖', mythic: '👾', goat: '🐙',
+  };
+
+  const ACHIEVEMENTS = {
+    first_kill:     { name: 'Premier sang',      desc: 'Tuer ton premier Blop',                reward: 100,   check: () => game.kills >= 1 },
+    kill_100:       { name: 'Tueur en série',    desc: 'Tuer 100 Blops',                       reward: 500,   check: () => game.kills >= 100 },
+    kill_1000:      { name: 'Massacreur',        desc: 'Tuer 1 000 Blops',                     reward: 5000,  check: () => game.kills >= 1000 },
+    kill_10k:       { name: 'Légende',           desc: 'Tuer 10 000 Blops',                    reward: 50000, check: () => game.kills >= 10000 },
+    first_rare:     { name: 'Pépite',            desc: 'Tuer ton premier Blop Rare',           reward: 200,   check: () => game.collection.rare >= 1 },
+    first_mythic:   { name: 'Mythologie',        desc: 'Tuer ton premier Mythique',            reward: 5000,  check: () => game.collection.mythic >= 1 },
+    first_goat:     { name: 'GOAT chasseur',     desc: 'Tuer ton premier GOAT',                reward: 25000, check: () => game.collection.goat >= 1 },
+    collection_1:   { name: 'Zoophile débutant', desc: 'Au moins 1 de chaque rareté',          reward: 2000,  check: () => RARITY_KEYS.every(k => (game.collection[k]||0) >= 1) },
+    collection_10:  { name: 'Zoologue',          desc: 'Au moins 10 de chaque rareté',         reward: 20000, check: () => RARITY_KEYS.every(k => (game.collection[k]||0) >= 10) },
+    first_mutation: { name: 'Mutant',            desc: 'Obtenir ta première graine mutée',     reward: 500,   check: () => game.stats.gotMutation },
+    first_neon:     { name: 'Fluorescent',       desc: 'Obtenir une graine Neon',              reward: 5000,  check: () => game.stats.gotNeon },
+    first_frozen:   { name: 'Glacial',           desc: 'Obtenir une graine Frozen',            reward: 20000, check: () => game.stats.gotFrozen },
+    first_mix:      { name: 'Alchimiste',        desc: 'Fusionner 3 plantes',                  reward: 200,   check: () => game.stats.plantsMixed >= 1 },
+    plant_100:      { name: 'Jardinier',         desc: 'Placer 100 plantes au total',          reward: 1000,  check: () => game.stats.plantsPlaced >= 100 },
+    level_5:        { name: 'Apprenti',          desc: 'Atteindre le niveau 5',                reward: 500,   check: () => game.level >= 5 },
+    level_10:       { name: 'Vétéran',           desc: 'Atteindre le niveau 10',               reward: 2000,  check: () => game.level >= 10 },
+    level_25:       { name: 'Expert',            desc: 'Atteindre le niveau 25',               reward: 20000, check: () => game.level >= 25 },
+    first_prestige: { name: 'Renaissance',       desc: 'Faire ton premier prestige',           reward: 10000, check: () => game.prestige >= 1 },
+    prestige_5:     { name: 'Cinquième éveil',   desc: 'Atteindre le prestige 5',              reward: 250000,check: () => game.prestige >= 5 },
+  };
+  const ACHIEVEMENT_KEYS = Object.keys(ACHIEVEMENTS);
+
+  // --- CONFIG ---
+  const BASE_LANE_COUNT = 3;
+  const LANE_WIDTH = 4;
+  const LANE_LENGTH = 24;
+  const SLOTS_PER_LANE = 8;
+  const SLOT_DEPTH = LANE_LENGTH / SLOTS_PER_LANE;
+  const BRAINROT_SPEED = 1.5;
+  const BRAINROT_SPAWN_INTERVAL = 2.5;
+  const SHOP_REFRESH = 300;
+  const SHOP_SIZE = 5;
+  const BASE_MAX_PLANTS = 15;
+  const BULLET_SPEED = 18;
+  const STARTING_CASH = 500;
+  const PASSIVE_RATE = 0.001;
+  const MAX_OFFLINE_SECONDS = 8 * 3600;
+
+  // Parc (visible) + Inventory (held)
+  const PARC_CAPACITY = 15;
+  const INVENTORY_CAPACITY = 100;
+
+  const SAVE_KEY = 'pvb_save_v4';
+  const TUTORIAL_KEY = 'pvb_tutorial_v1';
+  const AUDIO_KEY = 'pvb_audio';
+  const AUTOSAVE_INTERVAL = 5;
+  const XP_PER_KILL_DIVISOR = 10;
+  const PRESTIGE_LEVELS = [3, 6, 10, 15, 20, 30, 42, 55, 70, 88, 108, 130];
+  const LEVEL_PASSIVE_BONUS = 0.01;
+  const PRESTIGE_PASSIVE_BONUS = 0.10;
+
+  // --- SCENE ---
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.Fog(0x87CEEB, 40, 110);
+  const camera = new THREE.PerspectiveCamera(52, innerWidth/innerHeight, 0.1, 220);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(15, 35, 15); sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  scene.add(sun);
+
+  // --- ETAT ---
+  const game = {
+    cash: STARTING_CASH, kills: 0, level: 1, xp: 0, prestige: 0,
+    brainrots: [], plants: [], bullets: [], particles: [],
+    inventory: [], shop: [], shopTimer: SHOP_REFRESH,
+    collection: {},  // lifetime counts for stats/achievements
+    blops: [],       // held Blops [{rarity}], sorted by value desc, max 100
+    parcMeshes: [],  // visual meshes for the 15 parc Blops
+    achievements: {},
+    stats: {
+      totalPlayTimeMs: 0, totalEarned: 0, totalSpent: 0, totalAutoSold: 0,
+      plantsPlaced: 0, plantsMixed: 0,
+      gotMutation: false, gotNeon: false, gotFrozen: false,
+    },
+    selectedSeedIdx: null, moveMode: null, saveTimer: 0,
+  };
+  RARITY_KEYS.forEach(k => game.collection[k] = 0);
+
+  // --- DYNAMIC TERRAIN ---
+  let terrainObjects = []; // lane meshes, base, spawn, parc floor
+  const slots = [];
+
+  function currentLaneCount() { return BASE_LANE_COUNT + game.prestige; }
+  function playfieldWidth() { return currentLaneCount() * LANE_WIDTH; }
+
+  function setupCamera() {
+    const width = playfieldWidth();
+    const depth = LANE_LENGTH + 8;
+    const camY = Math.max(28, 22 + width * 0.4);
+    const camZ = Math.max(27, 20 + depth * 0.3);
+    camera.position.set(0, camY, camZ);
+    camera.lookAt(0, 0, 5);
+    // Shadow bounds based on playfield
+    const half = Math.max(width, depth) / 2 + 6;
+    sun.shadow.camera.left = -half; sun.shadow.camera.right = half;
+    sun.shadow.camera.top = half;   sun.shadow.camera.bottom = -half;
+    sun.shadow.camera.updateProjectionMatrix();
+  }
+
+  function clearTerrain() {
+    terrainObjects.forEach(m => scene.remove(m));
+    terrainObjects = [];
+    slots.forEach(s => scene.remove(s.mesh));
+    slots.length = 0;
+  }
+
+  function buildTerrain() {
+    const laneCount = currentLaneCount();
+    const laneColors = [0x6abf4e, 0x5aaf3e];
+    for (let i = 0; i < laneCount; i++) {
+      const lane = new THREE.Mesh(
+        new THREE.BoxGeometry(LANE_WIDTH, 0.2, LANE_LENGTH),
+        new THREE.MeshStandardMaterial({ color: laneColors[i % 2] })
+      );
+      lane.position.x = (i - (laneCount - 1) / 2) * LANE_WIDTH;
+      lane.receiveShadow = true;
+      scene.add(lane);
+      terrainObjects.push(lane);
+    }
+    const totalW = laneCount * LANE_WIDTH;
+    const baseZone = new THREE.Mesh(
+      new THREE.BoxGeometry(totalW, 0.3, 1.5),
+      new THREE.MeshStandardMaterial({ color: 0x2d5016 })
+    );
+    baseZone.position.set(0, 0.05, LANE_LENGTH / 2 + 0.75);
+    scene.add(baseZone);
+    terrainObjects.push(baseZone);
+    const spawnZone = new THREE.Mesh(
+      new THREE.BoxGeometry(totalW, 0.3, 1.5),
+      new THREE.MeshStandardMaterial({ color: 0x8B0000 })
+    );
+    spawnZone.position.set(0, 0.05, -LANE_LENGTH / 2 - 0.75);
+    scene.add(spawnZone);
+    terrainObjects.push(spawnZone);
+    // Parc floor (15 slots, 5 cols × 3 rows)
+    const parcFloor = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 0.15, 6),
+      new THREE.MeshStandardMaterial({ color: 0x7a5c3a })
+    );
+    parcFloor.position.set(0, 0.02, LANE_LENGTH / 2 + 5.5);
+    parcFloor.receiveShadow = true;
+    scene.add(parcFloor);
+    terrainObjects.push(parcFloor);
+    // Slots
+    for (let laneIdx = 0; laneIdx < laneCount; laneIdx++) {
+      for (let slotIdx = 0; slotIdx < SLOTS_PER_LANE; slotIdx++) {
+        const x = (laneIdx - (laneCount - 1) / 2) * LANE_WIDTH;
+        const z = -LANE_LENGTH / 2 + (slotIdx + 0.5) * SLOT_DEPTH;
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(LANE_WIDTH * 0.85, 0.05, SLOT_DEPTH * 0.85),
+          new THREE.MeshStandardMaterial({
+            color: 0x00ff00, transparent: true, opacity: 0,
+            emissive: 0x00ff00, emissiveIntensity: 0.4,
+          })
+        );
+        mesh.position.set(x, 0.17, z);
+        mesh.userData = { type: 'slot', laneIdx, slotIdx };
+        scene.add(mesh);
+        slots.push({ laneIdx, slotIdx, x, z, mesh, plant: null });
+      }
+    }
+  }
+
+  function rebuildTerrain() {
+    clearTerrain();
+    buildTerrain();
+    setupCamera();
+  }
+
+  function setSlotsVisible(visible) {
+    for (const s of slots) s.mesh.material.opacity = (visible && !s.plant) ? 0.35 : 0;
+  }
+
+  // --- HELPERS ---
+  function weightedPick(table) {
+    const keys = Object.keys(table);
+    const total = keys.reduce((s, k) => s + table[k].weight, 0);
+    let r = Math.random() * total;
+    for (const k of keys) { r -= table[k].weight; if (r <= 0) return k; }
+    return keys[0];
+  }
+  const pickRarity = () => weightedPick(RARITIES);
+  const pickMutation = () => weightedPick(MUTATIONS);
+  const pickVariant = () => weightedPick(VARIANTS);
+  function blopValue(b) { return BRAINROTS[b.rarity].value * (VARIANTS[b.variant]?.mult || 1); }
+  function pickPlantForRarity(rarity) {
+    const pool = PLANTS_BY_RARITY[rarity];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  function fmtTime(sec) {
+    sec = Math.max(0, sec);
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+  function fmtDuration(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}h ${m}min`;
+    if (m > 0) return `${m}min ${s}s`;
+    return `${s}s`;
+  }
+  function fmtNumber(n) { return Math.floor(n).toLocaleString('fr-FR'); }
+
+  // --- XP & LEVELS ---
+  function totalXpForLevel(lvl) { return 100 * lvl * (lvl - 1) / 2; }
+  function getLevelFromXp(xp) {
+    let lvl = 1;
+    while (totalXpForLevel(lvl + 1) <= xp) lvl++;
+    return lvl;
+  }
+  function xpProgressInLevel(xp, lvl) {
+    const base = totalXpForLevel(lvl);
+    const next = totalXpForLevel(lvl + 1);
+    return { inLevel: xp - base, forNext: next - base };
+  }
+  function addXp(amount) {
+    game.xp += amount;
+    const newLevel = getLevelFromXp(game.xp);
+    if (newLevel > game.level) {
+      game.level = newLevel;
+      showToast(`🎉 NIVEAU ${newLevel} !`, 3000);
+      sfx('levelUp');
+      updatePrestigeButtonVisibility();
+      checkAchievements();
+    }
+  }
+  function getMaxPlants() { return BASE_MAX_PLANTS + game.prestige; }
+  function levelBonus() { return (game.level - 1) * LEVEL_PASSIVE_BONUS; }
+  function prestigeBonus() { return game.prestige * PRESTIGE_PASSIVE_BONUS; }
+  function totalPassiveMultiplier() { return 1 + levelBonus() + prestigeBonus(); }
+
+  function parcBaseIncome() {
+    let total = 0;
+    const n = Math.min(PARC_CAPACITY, game.blops.length);
+    for (let i = 0; i < n; i++) {
+      total += blopValue(game.blops[i]) * PASSIVE_RATE;
+    }
+    return total;
+  }
+  function passiveIncomePerSec() { return parcBaseIncome() * totalPassiveMultiplier(); }
+
+  function totalDps() {
+    let total = 0;
+    for (const p of game.plants) {
+      const plant = PLANTS[p.userData.plantId];
+      const mut = MUTATIONS[p.userData.mutation] || MUTATIONS.none;
+      total += (plant.damage * mut.damageMult) / plant.cooldown;
+    }
+    return total;
+  }
+  function addCash(amount) {
+    game.cash += amount;
+    if (amount > 0) {
+      game.stats.totalEarned += amount;
+      if (amount >= 5) flashCash();
+    }
+  }
+  function spendCash(amount) { game.cash -= amount; game.stats.totalSpent += amount; }
+
+  // --- PARTICLES ---
+  function spawnDeathBurst(position, colorHex, scale = 1) {
+    for (let i = 0; i < 8; i++) {
+      const p = new THREE.Mesh(
+        new THREE.BoxGeometry(0.15 * scale, 0.15 * scale, 0.15 * scale),
+        new THREE.MeshStandardMaterial({
+          color: colorHex, emissive: colorHex, emissiveIntensity: 0.9,
+          transparent: true, opacity: 1,
+        })
+      );
+      p.position.copy(position);
+      p.userData = {
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 5 * scale,
+          Math.random() * 3.5 + 1.5,
+          (Math.random() - 0.5) * 5 * scale
+        ),
+        life: 0.55, maxLife: 0.55,
+      };
+      scene.add(p);
+      game.particles.push(p);
+    }
+  }
+  function updateParticles(dt) {
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+      const p = game.particles[i];
+      p.userData.life -= dt;
+      p.position.addScaledVector(p.userData.velocity, dt);
+      p.userData.velocity.y -= 12 * dt;
+      if (p.material) p.material.opacity = Math.max(0, p.userData.life / p.userData.maxLife);
+      if (p.userData.life <= 0) {
+        scene.remove(p);
+        game.particles.splice(i, 1);
+      }
+    }
+  }
+
+  // --- HP BARS (DOM overlay) ---
+  const hpOverlay = document.getElementById('hp-overlay');
+  function createHpBar() {
+    const el = document.createElement('div');
+    el.className = 'hp-bar';
+    el.innerHTML = '<div class="hp-fill"></div>';
+    hpOverlay.appendChild(el);
+    return el;
+  }
+  function updateHpBar(body) {
+    const el = body.userData.hpBarEl;
+    if (!el) return;
+    const pos = body.position.clone();
+    pos.y += body.userData.size * 1.3 + 0.4;
+    pos.project(camera);
+    if (pos.z > 1 || pos.z < -1) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    const x = (pos.x + 1) / 2 * innerWidth;
+    const y = (-pos.y + 1) / 2 * innerHeight;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    const pct = Math.max(0, body.userData.hp / body.userData.maxHp);
+    const fill = el.firstChild;
+    fill.style.width = (pct * 100) + '%';
+    fill.className = 'hp-fill' + (pct < 0.25 ? ' low' : pct < 0.5 ? ' mid' : '');
+  }
+  function removeHpBar(body) {
+    const el = body.userData.hpBarEl;
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    body.userData.hpBarEl = null;
+  }
+
+  // --- BLOPS (held : parc + inventory) ---
+  function sortBlops() {
+    game.blops.sort((a, b) => blopValue(b) - blopValue(a));
+  }
+  function addBlopToHolding(rarity, variant) {
+    game.blops.push({ rarity, variant: variant || 'none' });
+    sortBlops();
+    // Auto-sell overflow
+    while (game.blops.length > INVENTORY_CAPACITY) {
+      const sold = game.blops.pop();
+      const val = blopValue(sold);
+      addCash(val);
+      game.stats.totalAutoSold += val;
+      sfx('sell');
+    }
+    rebuildParcVisual();
+  }
+  function rebuildParcVisual() {
+    game.parcMeshes.forEach(m => scene.remove(m));
+    game.parcMeshes = [];
+    const COLS = 5, ROWS = 3;
+    const CELL_W = 1.8, CELL_D = 1.8;
+    const originX = -(COLS - 1) / 2 * CELL_W;
+    const originZ = LANE_LENGTH / 2 + 3.2;
+    const toRender = Math.min(PARC_CAPACITY, game.blops.length);
+    for (let i = 0; i < toRender; i++) {
+      const b = game.blops[i];
+      const br = BRAINROTS[b.rarity];
+      const miniGroup = createBlopMesh(b.rarity, 0.5);
+      const colIdx = i % COLS;
+      const rowIdx = Math.floor(i / COLS);
+      miniGroup.position.set(originX + colIdx * CELL_W, 0.1, originZ + rowIdx * CELL_D);
+      addVariantRing(miniGroup, b.variant || 'none', br.size * 0.5);
+      scene.add(miniGroup);
+      game.parcMeshes.push(miniGroup);
+    }
+  }
+
+  // --- BRAINROTS (Blops sur le terrain) ---
+  function addBlopEyes(parent, sz, opts) {
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.4 });
+    const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    for (const ex of [-opts.spread * sz, opts.spread * sz]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(opts.size * sz, 8, 6), eyeMat);
+      eye.position.set(ex, opts.y * sz, opts.z * sz);
+      parent.add(eye);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(opts.size * sz * 0.55, 6, 4), pupilMat);
+      pupil.position.set(ex, opts.y * sz, (opts.z + 0.08) * sz);
+      parent.add(pupil);
+    }
+  }
+
+  // Crée un Blop distinctif selon sa rareté (matche l'emoji : grenouille/lézard/crabe/dino/alien/pieuvre)
+  function createBlopMesh(rarityKey, scaleMult = 1) {
+    const br = BRAINROTS[rarityKey];
+    const rcol = RARITIES[rarityKey];
+    const sz = br.size * scaleMult;
+    const bodyMat = () => new THREE.MeshStandardMaterial({ color: rcol.hex, emissive: rcol.hex, emissiveIntensity: 0.18 });
+    const group = new THREE.Group();
+    let body;
+
+    switch (rarityKey) {
+      case 'common': { // 🐸 Patapim (grenouille)
+        body = new THREE.Mesh(new THREE.SphereGeometry(0.7 * sz, 10, 8), bodyMat());
+        body.scale.set(1.1, 0.85, 1.1);
+        body.position.y = 0.6 * sz;
+        body.castShadow = true;
+        group.add(body);
+        for (const x of [-0.42 * sz, 0.42 * sz]) {
+          for (const z of [0.28 * sz, -0.28 * sz]) {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18*sz, 0.3*sz, 0.2*sz), bodyMat());
+            leg.position.set(x, 0.15*sz, z);
+            group.add(leg);
+          }
+        }
+        addBlopEyes(body, sz, { y: 0.3, z: 0.58, spread: 0.3, size: 0.22 });
+        break;
+      }
+      case 'rare': { // 🦎 Tralalero (lézard)
+        body = new THREE.Mesh(new THREE.BoxGeometry(0.85 * sz, 0.55 * sz, 1.3 * sz), bodyMat());
+        body.position.y = 0.45 * sz;
+        body.castShadow = true;
+        group.add(body);
+        const tail = new THREE.Mesh(new THREE.ConeGeometry(0.25*sz, 0.95*sz, 6), bodyMat());
+        tail.rotation.x = -Math.PI / 2;
+        tail.position.set(0, 0.45*sz, -1.05*sz);
+        group.add(tail);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.75*sz, 0.55*sz, 0.55*sz), bodyMat());
+        head.position.set(0, 0.5*sz, 0.9*sz);
+        group.add(head);
+        addBlopEyes(head, sz, { y: 0.12, z: 0.3, spread: 0.22, size: 0.16 });
+        for (const x of [-0.5*sz, 0.5*sz]) {
+          for (const z of [-0.35*sz, 0.35*sz]) {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1*sz, 0.25*sz, 0.1*sz), bodyMat());
+            leg.position.set(x, 0.13*sz, z);
+            group.add(leg);
+          }
+        }
+        break;
+      }
+      case 'veryrare': { // 🦀 Bombardiro (crabe)
+        body = new THREE.Mesh(new THREE.BoxGeometry(1.4 * sz, 0.55 * sz, 1.0 * sz), bodyMat());
+        body.position.y = 0.45 * sz;
+        body.castShadow = true;
+        group.add(body);
+        // Claws
+        for (const sign of [-1, 1]) {
+          const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.08*sz, 0.08*sz, 0.45*sz, 6), bodyMat());
+          arm.rotation.z = sign * Math.PI / 3;
+          arm.position.set(sign * 0.85*sz, 0.55*sz, 0.3*sz);
+          group.add(arm);
+          const claw = new THREE.Mesh(new THREE.ConeGeometry(0.22*sz, 0.5*sz, 5), bodyMat());
+          claw.rotation.z = sign * Math.PI / 3;
+          claw.position.set(sign * 1.05*sz, 0.85*sz, 0.3*sz);
+          group.add(claw);
+        }
+        for (const x of [-0.7*sz, 0.7*sz]) {
+          for (const zi of [-1, 0, 1]) {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1*sz, 0.22*sz, 0.08*sz), bodyMat());
+            leg.position.set(x, 0.11*sz, zi * 0.32*sz);
+            group.add(leg);
+          }
+        }
+        addBlopEyes(body, sz, { y: 0.35, z: 0.5, spread: 0.28, size: 0.18 });
+        break;
+      }
+      case 'ultrarare': { // 🦖 Tung Tung Sahur (dino)
+        body = new THREE.Mesh(new THREE.BoxGeometry(1.0 * sz, 1.2 * sz, 1.0 * sz), bodyMat());
+        body.position.y = 0.9 * sz;
+        body.castShadow = true;
+        group.add(body);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.0*sz, 0.8*sz, 0.95*sz), bodyMat());
+        head.position.set(0, 1.9*sz, 0.3*sz);
+        group.add(head);
+        const tail = new THREE.Mesh(new THREE.ConeGeometry(0.3*sz, 1.15*sz, 6), bodyMat());
+        tail.rotation.x = -1.2;
+        tail.position.set(0, 1.0*sz, -0.95*sz);
+        group.add(tail);
+        for (const x of [-0.6*sz, 0.6*sz]) {
+          const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16*sz, 0.38*sz, 0.16*sz), bodyMat());
+          arm.position.set(x, 1.15*sz, 0.35*sz);
+          group.add(arm);
+        }
+        for (const x of [-0.25*sz, 0.25*sz]) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25*sz, 0.55*sz, 0.35*sz), bodyMat());
+          leg.position.set(x, 0.28*sz, 0);
+          group.add(leg);
+        }
+        addBlopEyes(head, sz, { y: 0.18, z: 0.48, spread: 0.3, size: 0.2 });
+        break;
+      }
+      case 'mythic': { // 👾 Lirilì Larilà (alien)
+        body = new THREE.Mesh(new THREE.BoxGeometry(1.2 * sz, 1.0 * sz, 1.2 * sz), bodyMat());
+        body.position.y = 0.7 * sz;
+        body.castShadow = true;
+        group.add(body);
+        const antMat = new THREE.MeshStandardMaterial({ color: 0xff66ff, emissive: 0xff66ff, emissiveIntensity: 1.0 });
+        for (const x of [-0.35 * sz, 0.35 * sz]) {
+          const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.05*sz, 0.05*sz, 0.5*sz, 6), bodyMat());
+          stick.position.set(x, 1.45*sz, 0);
+          group.add(stick);
+          const tip = new THREE.Mesh(new THREE.SphereGeometry(0.13*sz, 8, 6), antMat);
+          tip.position.set(x, 1.75*sz, 0);
+          group.add(tip);
+        }
+        for (const x of [-0.4*sz, 0.4*sz]) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22*sz, 0.3*sz, 0.22*sz), bodyMat());
+          leg.position.set(x, 0.15*sz, 0);
+          group.add(leg);
+        }
+        addBlopEyes(body, sz, { y: 0.15, z: 0.62, spread: 0.32, size: 0.22 });
+        break;
+      }
+      case 'goat': { // 🐙 Bombombini (pieuvre)
+        body = new THREE.Mesh(new THREE.SphereGeometry(0.95 * sz, 14, 10), bodyMat());
+        body.scale.set(1, 1.15, 1);
+        body.position.y = 1.3 * sz;
+        body.castShadow = true;
+        group.add(body);
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const tent = new THREE.Mesh(new THREE.CylinderGeometry(0.13*sz, 0.05*sz, 0.9*sz, 6), bodyMat());
+          tent.position.set(Math.cos(a) * 0.7*sz, 0.55*sz, Math.sin(a) * 0.7*sz);
+          tent.rotation.z = Math.cos(a) * 0.4;
+          tent.rotation.x = -Math.sin(a) * 0.4;
+          group.add(tent);
+        }
+        addBlopEyes(body, sz, { y: 0.05, z: 0.78, spread: 0.35, size: 0.26 });
+        break;
+      }
+      default:
+        body = new THREE.Mesh(new THREE.BoxGeometry(1.2*sz, 1.6*sz, 1.2*sz), bodyMat());
+        body.position.y = 0.8*sz;
+        body.castShadow = true;
+        group.add(body);
+    }
+    group.userData.bodyMesh = body;
+    return group;
+  }
+
+  function addVariantRing(group, variantKey, size) {
+    const v = VARIANTS[variantKey];
+    if (!v || !v.label) return;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.95 * size, 0.08 * size, 8, 28),
+      new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: 1.0 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.08;
+    group.add(ring);
+    group.userData.variantRing = ring;
+    // Halo au-dessus pour Or et Diamant
+    if (variantKey === 'gold' || variantKey === 'diamond') {
+      const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18 * size, 10, 8),
+        new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: 1.5, transparent: true, opacity: 0.7 })
+      );
+      halo.position.y = 2.4 * size;
+      group.add(halo);
+      group.userData.variantHalo = halo;
+    }
+  }
+
+  function spawnBrainrot(laneIdx, rarityKey) {
+    const br = BRAINROTS[rarityKey];
+    const variantKey = pickVariant();
+    const variant = VARIANTS[variantKey];
+    const laneCount = currentLaneCount();
+    const group = createBlopMesh(rarityKey, 1);
+    group.position.set((laneIdx - (laneCount - 1) / 2) * LANE_WIDTH, 0.1, -LANE_LENGTH / 2);
+    const effectiveHp = br.hp * variant.mult;
+    const effectiveValue = br.value * variant.mult;
+    Object.assign(group.userData, {
+      type: 'brainrot',
+      hp: effectiveHp, maxHp: effectiveHp, speed: BRAINROT_SPEED,
+      lane: laneIdx, rarity: rarityKey, variant: variantKey,
+      value: effectiveValue, size: br.size,
+      slowUntil: 0, slowFactor: 1,
+      wigglePhase: Math.random() * Math.PI * 2,
+      hpBarEl: createHpBar(),
+    });
+    addVariantRing(group, variantKey, br.size);
+    group.scale.set(0.1, 0.1, 0.1);
+    scene.add(group);
+    game.brainrots.push(group);
+  }
+
+  function killBrainrot(enemy) {
+    const ud = enemy.userData;
+    spawnDeathBurst(enemy.position, RARITIES[ud.rarity].hex, ud.size);
+    sfx('kill');
+    addCash(ud.value);
+    game.kills++;
+    game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
+    addBlopToHolding(ud.rarity, ud.variant || 'none');
+    addXp(ud.value / XP_PER_KILL_DIVISOR);
+    removeHpBar(enemy);
+    scene.remove(enemy);
+    const idx = game.brainrots.indexOf(enemy);
+    if (idx !== -1) game.brainrots.splice(idx, 1);
+    updateHud();
+    checkAchievements();
+  }
+  function applyDamage(enemy, damage) {
+    if (!enemy || !enemy.parent) return;
+    enemy.userData.hp -= damage;
+    if (enemy.userData.hp <= 0) killBrainrot(enemy);
+  }
+  function applySlow(enemy, factor, duration, now) {
+    if (!enemy || !enemy.parent) return;
+    const slowUntil = now + duration;
+    if (slowUntil > enemy.userData.slowUntil || factor < enemy.userData.slowFactor) {
+      enemy.userData.slowUntil = slowUntil;
+      enemy.userData.slowFactor = factor;
+    }
+  }
+
+  // --- PLANTES ---
+  function makePlantHead(plantId, rarityHex) {
+    const g = new THREE.Group();
+    const mat = (c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.2 });
+    switch (plantId) {
+      case 'sunflower': {
+        const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 12), mat(0xffaa00));
+        disk.castShadow = true; g.add(disk);
+        for (let i = 0; i < 10; i++) {
+          const petal = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.1), mat(0xffdd44));
+          const a = (i / 10) * Math.PI * 2;
+          petal.position.set(Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42);
+          petal.rotation.y = -a; g.add(petal);
+        }
+        break;
+      }
+      case 'pea': {
+        const pod = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 8), mat(0x66cc66));
+        pod.castShadow = true; g.add(pod);
+        for (let i = 0; i < 3; i++) {
+          const pea = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), mat(0x88ee88));
+          pea.position.set((i - 1) * 0.18, 0.1, 0.2); g.add(pea);
+        }
+        break;
+      }
+      case 'cactus': {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.9, 10), mat(0x4a7a3a));
+        body.castShadow = true; g.add(body);
+        for (let i = 0; i < 10; i++) {
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.15, 4), mat(0xeeeeaa));
+          const a = (i / 5) * Math.PI;
+          const y = (i % 5 - 2) * 0.18;
+          spike.position.set(Math.cos(a) * 0.32, y, Math.sin(a) * 0.32);
+          spike.rotation.z = -Math.PI / 2; spike.rotation.y = -a; g.add(spike);
+        }
+        break;
+      }
+      case 'ice':
+        g.add(Object.assign(new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), mat(0x99ddff)), { castShadow: true }));
+        break;
+      case 'strawberry': {
+        const berry = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.8, 12), mat(0xff3344));
+        berry.castShadow = true; berry.position.y = -0.1; g.add(berry);
+        for (let i = 0; i < 5; i++) {
+          const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 4), mat(0x33aa33));
+          leaf.position.y = 0.35;
+          const a = (i / 5) * Math.PI * 2;
+          leaf.position.x = Math.cos(a) * 0.1; leaf.position.z = Math.sin(a) * 0.1;
+          leaf.rotation.z = Math.cos(a) * 0.4; g.add(leaf);
+        }
+        break;
+      }
+      case 'pepper': {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 0.7, 10), mat(0x66cc33));
+        body.castShadow = true; g.add(body);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.15, 6), mat(0x4a7a3a));
+        stem.position.y = 0.42; g.add(stem);
+        break;
+      }
+      case 'watermelon': {
+        const melon = new THREE.Mesh(new THREE.SphereGeometry(0.48, 14, 10), mat(0x2a8a3a));
+        melon.castShadow = true; g.add(melon);
+        for (let i = 0; i < 5; i++) {
+          const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.03, 6, 16, Math.PI), mat(0x1a5a2a));
+          stripe.rotation.y = i * Math.PI / 5; stripe.rotation.x = Math.PI / 2; g.add(stripe);
+        }
+        break;
+      }
+      case 'kiwi': {
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), mat(0x8a7a4a));
+        body.castShadow = true; body.scale.set(1, 0.85, 1); g.add(body);
+        break;
+      }
+      case 'mango': {
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), mat(0xff9933));
+        body.castShadow = true; body.scale.set(0.85, 1.2, 0.85); g.add(body);
+        break;
+      }
+      case 'pineapple': {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.28, 0.8, 10), mat(0xdda033));
+        body.castShadow = true; g.add(body);
+        for (let i = 0; i < 7; i++) {
+          const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.45, 4), mat(0x33aa33));
+          leaf.position.y = 0.6;
+          const a = (i / 7) * Math.PI * 2;
+          leaf.position.x = Math.cos(a) * 0.08; leaf.position.z = Math.sin(a) * 0.08;
+          leaf.rotation.z = Math.cos(a) * 0.25; leaf.rotation.x = Math.sin(a) * 0.25; g.add(leaf);
+        }
+        break;
+      }
+      case 'dragon': {
+        const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), mat(0xff3388));
+        core.castShadow = true; g.add(core);
+        for (let i = 0; i < 4; i++) {
+          const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 4), mat(0x33dd66));
+          const a = (i / 4) * Math.PI * 2;
+          leaf.position.set(Math.cos(a) * 0.35, 0.15, Math.sin(a) * 0.35);
+          leaf.rotation.z = Math.cos(a) * 1.5; leaf.rotation.x = Math.sin(a) * 1.5; g.add(leaf);
+        }
+        break;
+      }
+      default:
+        g.add(new THREE.Mesh(new THREE.ConeGeometry(0.5, 1, 8), mat(rarityHex)));
+    }
+    return g;
+  }
+
+  function placePlant(seed, slot) {
+    const p = PLANTS[seed.plantId];
+    const col = RARITIES[p.rarity].hex;
+    const mut = MUTATIONS[seed.mutation] || MUTATIONS.none;
+    const group = new THREE.Group();
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.15, 0.7, 8),
+      new THREE.MeshStandardMaterial({ color: 0x3c8c3c })
+    );
+    stem.position.y = 0.35; stem.castShadow = true; group.add(stem);
+    const head = makePlantHead(seed.plantId, col);
+    head.position.y = 1.15; group.add(head);
+    group.userData = {
+      type: 'plant',
+      plantId: seed.plantId, mutation: seed.mutation,
+      lane: slot.laneIdx, slot: slot,
+      lastShot: 0, bobPhase: Math.random() * Math.PI * 2,
+      headRef: head, flashUntil: 0,
+    };
+    if (mut.label) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.65, 0.05, 8, 16),
+        new THREE.MeshStandardMaterial({ color: mut.hex, emissive: mut.hex, emissiveIntensity: 0.9 })
+      );
+      ring.rotation.x = Math.PI / 2; ring.position.y = 1.5;
+      group.add(ring);
+      group.userData.mutationRing = ring;
+    }
+    group.position.set(slot.x, 0.2, slot.z);
+    group.scale.set(0.1, 0.1, 0.1);
+    scene.add(group);
+    slot.plant = group;
+    game.plants.push(group);
+    game.stats.plantsPlaced++;
+    checkAchievements();
+  }
+
+  function removePlant(plantGroup) {
+    const idx = game.plants.indexOf(plantGroup);
+    if (idx === -1) return;
+    game.plants.splice(idx, 1);
+    scene.remove(plantGroup);
+    if (plantGroup.userData.slot) plantGroup.userData.slot.plant = null;
+    game.inventory.push({
+      plantId: plantGroup.userData.plantId,
+      mutation: plantGroup.userData.mutation,
+    });
+    renderInventory();
+    updateHud();
+    showHint("Plante retirée — graine rendue à l'inventaire", 2000);
+    saveGame();
+  }
+
+  function pickTarget(plantGroup) {
+    const plantData = plantGroup.userData;
+    const plant = PLANTS[plantData.plantId];
+    if (plant.ability === 'cross-lane') {
+      let best = null, bestDist = Infinity;
+      for (const e of game.brainrots) {
+        const d = plantGroup.position.distanceToSquared(e.position);
+        if (d < bestDist) { bestDist = d; best = e; }
+      }
+      return best;
+    }
+    // Toute la lane, priorité à l'ennemi le plus proche de la base
+    let best = null, bestZ = -Infinity;
+    for (const e of game.brainrots) {
+      if (e.userData.lane !== plantData.lane) continue;
+      if (e.position.z > bestZ) { bestZ = e.position.z; best = e; }
+    }
+    return best;
+  }
+
+  // --- BULLETS ---
+  function spawnBullet(plantGroup, target, damage, options) {
+    const mut = MUTATIONS[plantGroup.userData.mutation] || MUTATIONS.none;
+    const color = mut.label ? mut.hex : 0xffee00;
+    const bullet = new THREE.Mesh(
+      new THREE.SphereGeometry(options.pierce ? 0.22 : 0.18, 8, 8),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9 })
+    );
+    bullet.position.copy(plantGroup.position);
+    bullet.position.y = 1.3;
+    const dir = new THREE.Vector3().subVectors(target.position, bullet.position).normalize();
+    bullet.userData = {
+      target, speed: BULLET_SPEED, damage,
+      splash: options.splash || 0, slow: options.slow || null,
+      pierce: !!options.pierce,
+      piercedTargets: options.pierce ? new Set() : null,
+      direction: options.pierce ? dir : null,
+      spawnedAt: performance.now() / 1000,
+    };
+    scene.add(bullet);
+    game.bullets.push(bullet);
+  }
+  function fireFrom(plantGroup, target, now) {
+    const pd = plantGroup.userData;
+    const plant = PLANTS[pd.plantId];
+    const mut = MUTATIONS[pd.mutation] || MUTATIONS.none;
+    const damage = plant.damage * mut.damageMult;
+    const slow = mut.addSlow
+      ? { factor: 0.5, duration: 1.5 }
+      : (plant.ability === 'slow' ? { factor: plant.slowFactor, duration: plant.slowDuration } : null);
+    pd.flashUntil = now + 0.1;
+    sfx('shot');
+    switch (plant.ability) {
+      case 'basic': case 'rapid': case 'cross-lane': case 'slow':
+        spawnBullet(plantGroup, target, damage, { slow }); break;
+      case 'splash':
+        spawnBullet(plantGroup, target, damage, { splash: plant.splashRadius, slow }); break;
+      case 'burst':
+        for (let i = 0; i < plant.burstCount; i++) {
+          setTimeout(() => {
+            if (plantGroup.parent && target.parent) spawnBullet(plantGroup, target, damage, { slow });
+          }, i * 100);
+        }
+        break;
+      case 'pierce':
+        spawnBullet(plantGroup, target, damage, { pierce: true, slow }); break;
+      case 'splash-pierce':
+        spawnBullet(plantGroup, target, damage, { pierce: true, splash: plant.splashRadius, slow }); break;
+    }
+    pd.lastShot = now;
+  }
+  function applySplash(bullet, hitTarget) {
+    const radius = bullet.userData.splash;
+    for (const e of game.brainrots) {
+      if (e === hitTarget) continue;
+      if (e.position.distanceTo(bullet.position) < radius) {
+        applyDamage(e, bullet.userData.damage * 0.5);
+      }
+    }
+  }
+  function updateBullet(b, dt, now, idx) {
+    if (b.userData.pierce) {
+      b.position.addScaledVector(b.userData.direction, b.userData.speed * dt);
+      for (const e of game.brainrots) {
+        if (b.userData.piercedTargets.has(e)) continue;
+        if (b.position.distanceTo(e.position) < 0.9 * e.userData.size) {
+          applyDamage(e, b.userData.damage);
+          b.userData.piercedTargets.add(e);
+          if (b.userData.splash > 0) applySplash(b, e);
+          if (b.userData.slow) applySlow(e, b.userData.slow.factor, b.userData.slow.duration, now);
+        }
+      }
+      const age = now - b.userData.spawnedAt;
+      if (age > 3 || Math.abs(b.position.z) > LANE_LENGTH || Math.abs(b.position.x) > 30) {
+        scene.remove(b); game.bullets.splice(idx, 1);
+      }
+      return;
+    }
+    const t = b.userData.target;
+    if (!t || !t.parent) { scene.remove(b); game.bullets.splice(idx, 1); return; }
+    const dir = new THREE.Vector3().subVectors(t.position, b.position).normalize();
+    b.position.addScaledVector(dir, b.userData.speed * dt);
+    if (b.position.distanceTo(t.position) < 0.9 * t.userData.size) {
+      applyDamage(t, b.userData.damage);
+      if (b.userData.splash > 0) applySplash(b, t);
+      if (b.userData.slow && t.parent) applySlow(t, b.userData.slow.factor, b.userData.slow.duration, now);
+      scene.remove(b); game.bullets.splice(idx, 1);
+    }
+  }
+
+  // --- SHOP ---
+  function rollShopSlot() {
+    return { plantId: pickPlantForRarity(pickRarity()), mutation: pickMutation(), bought: false };
+  }
+  function rollShop() {
+    game.shop = [];
+    for (let i = 0; i < SHOP_SIZE; i++) game.shop.push(rollShopSlot());
+    game.shopTimer = SHOP_REFRESH;
+    renderShop();
+    saveGame();
+  }
+  function trackMutationAcquired(mutation) {
+    if (mutation && mutation !== 'none') game.stats.gotMutation = true;
+    if (mutation === 'neon') game.stats.gotNeon = true;
+    if (mutation === 'frozen') game.stats.gotFrozen = true;
+  }
+  function buySeed(slotIdx) {
+    const slot = game.shop[slotIdx];
+    if (!slot || slot.bought) return;
+    const plant = PLANTS[slot.plantId];
+    if (game.cash < plant.price) return;
+    spendCash(plant.price);
+    slot.bought = true;
+    game.inventory.push({ plantId: slot.plantId, mutation: slot.mutation });
+    trackMutationAcquired(slot.mutation);
+    sfx('buy');
+    updateHud(); renderShop(); renderInventory();
+    checkAchievements(); saveGame();
+  }
+
+  // --- MIXER ---
+  function mixPlants(plantId) {
+    const indices = [];
+    for (let i = 0; i < game.inventory.length && indices.length < 3; i++) {
+      if (game.inventory[i].plantId === plantId) indices.push(i);
+    }
+    if (indices.length < 3) return;
+    const rarity = PLANTS[plantId].rarity;
+    const nextIdx = RARITY_KEYS.indexOf(rarity) + 1;
+    if (nextIdx >= RARITY_KEYS.length) return;
+    const nextRarity = RARITY_KEYS[nextIdx];
+    const newPlantId = pickPlantForRarity(nextRarity);
+    const newMutation = pickMutation();
+    indices.sort((a, b) => b - a).forEach(i => game.inventory.splice(i, 1));
+    game.inventory.push({ plantId: newPlantId, mutation: newMutation });
+    trackMutationAcquired(newMutation);
+    game.stats.plantsMixed++;
+    sfx('mix');
+    renderInventory(); renderMixer();
+    checkAchievements(); saveGame();
+    const np = PLANTS[newPlantId];
+    const mut = MUTATIONS[newMutation];
+    const r = RARITIES[np.rarity];
+    showHint(`✨ Obtenu : ${np.name}${mut.label ? ' ' + mut.label : ''} (${r.label})`, 3500);
+  }
+
+  // --- PRESTIGE ---
+  function levelRequiredForPrestige(targetP) {
+    if (targetP <= 0) return 1;
+    if (targetP <= PRESTIGE_LEVELS.length) return PRESTIGE_LEVELS[targetP - 1];
+    const last = PRESTIGE_LEVELS[PRESTIGE_LEVELS.length - 1];
+    return last + (targetP - PRESTIGE_LEVELS.length) * 20;
+  }
+  function nextPrestigeLevel() { return levelRequiredForPrestige(game.prestige + 1); }
+  function canPrestige() { return game.level >= nextPrestigeLevel(); }
+  function doPrestige() {
+    if (!canPrestige()) return;
+    sfx('prestige');
+    game.prestige++;
+    game.cash = STARTING_CASH;
+    game.inventory = [];
+    // Remove plants + brainrots
+    game.plants.forEach(p => scene.remove(p));
+    game.plants = [];
+    game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
+    game.brainrots = [];
+    cancelPlacement(); cancelMoveMode();
+    // Rebuild terrain with new lane count
+    rebuildTerrain();
+    rollShop();
+    showToast(`✨ PRESTIGE ${game.prestige} — +1 lane !`, 4000);
+    checkAchievements();
+    updatePrestigeButtonVisibility();
+    updateHud();
+    renderInventory();
+    saveGame();
+  }
+
+  // --- ACHIEVEMENTS ---
+  function unlockAchievement(id) {
+    if (game.achievements[id]) return;
+    const ach = ACHIEVEMENTS[id];
+    if (!ach || !ach.check()) return;
+    game.achievements[id] = Date.now();
+    addCash(ach.reward);
+    showHint(`🏆 ${ach.name} débloqué ! +${fmtNumber(ach.reward)}$`, 4000);
+    sfx('achievement');
+    updateHud();
+  }
+  function checkAchievements() {
+    for (const id of ACHIEVEMENT_KEYS) {
+      if (!game.achievements[id] && ACHIEVEMENTS[id].check()) unlockAchievement(id);
+    }
+  }
+
+  // --- SAVE / LOAD ---
+  const SAVE_KEY_V5 = 'pvb_save_v5';
+  function saveGame() {
+    try {
+      const data = {
+        v: 5, cash: game.cash, kills: game.kills,
+        level: game.level, xp: game.xp, prestige: game.prestige,
+        inventory: game.inventory.slice(),
+        plants: game.plants.map(p => ({
+          plantId: p.userData.plantId, mutation: p.userData.mutation,
+          laneIdx: p.userData.slot.laneIdx, slotIdx: p.userData.slot.slotIdx,
+        })),
+        shop: game.shop.map(s => ({ plantId: s.plantId, mutation: s.mutation, bought: s.bought })),
+        shopTimer: game.shopTimer,
+        collection: { ...game.collection },
+        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none' })),
+        achievements: { ...game.achievements },
+        stats: { ...game.stats },
+        lastSave: Date.now(),
+      };
+      localStorage.setItem(SAVE_KEY_V5, JSON.stringify(data));
+      flashSaveIndicator();
+    } catch (err) { console.warn('Save failed:', err); }
+  }
+  function loadGame() {
+    // v5
+    let raw = localStorage.getItem(SAVE_KEY_V5);
+    if (raw) {
+      try {
+        const d = JSON.parse(raw);
+        if (d.v === 5) {
+          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none' }));
+          return d;
+        }
+      } catch {}
+    }
+    // Migrate v4 (blops: array of rarity strings)
+    raw = localStorage.getItem('pvb_save_v4') || localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      try {
+        const d = JSON.parse(raw);
+        if (d.v === 4) {
+          d.blops = (d.blops || []).map(r => ({ rarity: typeof r === 'string' ? r : r.rarity, variant: 'none' }));
+          d.v = 5;
+          return d;
+        }
+      } catch {}
+    }
+    // Migrate v3
+    raw = localStorage.getItem('pvb_save_v3');
+    if (raw) {
+      try {
+        const d = JSON.parse(raw);
+        if (d.v === 3) {
+          const rarities = (d.zoo || []).slice();
+          rarities.sort((a, b) => (BRAINROTS[b]?.value || 0) - (BRAINROTS[a]?.value || 0));
+          d.blops = rarities.slice(0, INVENTORY_CAPACITY).map(r => ({ rarity: r, variant: 'none' }));
+          delete d.zoo;
+          d.v = 5;
+          return d;
+        }
+      } catch {}
+    }
+    return null;
+  }
+  function applyLoad(data) {
+    if (!data) return null;
+    game.cash = data.cash ?? STARTING_CASH;
+    game.kills = data.kills ?? 0;
+    game.level = data.level ?? 1;
+    game.xp = data.xp ?? 0;
+    game.prestige = data.prestige ?? 0;
+    game.inventory = (data.inventory || []).filter(s => PLANTS[s.plantId]);
+    game.shop = (data.shop || []).filter(s => PLANTS[s.plantId]);
+    game.shopTimer = data.shopTimer ?? SHOP_REFRESH;
+    game.collection = data.collection || {};
+    RARITY_KEYS.forEach(k => { if (!(k in game.collection)) game.collection[k] = 0; });
+    game.achievements = data.achievements || {};
+    game.stats = Object.assign(game.stats, data.stats || {});
+    // Blops (format v5: [{rarity, variant}])
+    game.blops = (data.blops || [])
+      .map(b => typeof b === 'string' ? { rarity: b, variant: 'none' } : { rarity: b.rarity, variant: b.variant || 'none' })
+      .filter(b => RARITIES[b.rarity]);
+    sortBlops();
+    // Lanes depend on prestige — rebuild BEFORE restoring plants
+    rebuildTerrain();
+    rebuildParcVisual();
+    // Plants
+    (data.plants || []).forEach(p => {
+      if (!PLANTS[p.plantId]) return;
+      const slot = slots.find(s => s.laneIdx === p.laneIdx && s.slotIdx === p.slotIdx);
+      if (slot && !slot.plant) placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
+    });
+    game.stats.plantsPlaced = data.stats?.plantsPlaced ?? game.stats.plantsPlaced;
+    // Offline earnings
+    const now = Date.now();
+    const elapsedSec = Math.min((now - (data.lastSave || now)) / 1000, MAX_OFFLINE_SECONDS);
+    const earned = elapsedSec * passiveIncomePerSec();
+    addCash(earned);
+    return { elapsedSec, earned };
+  }
+  function resetGame() {
+    localStorage.removeItem(SAVE_KEY_V5);
+    localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem('pvb_save_v4');
+    localStorage.removeItem('pvb_save_v3');
+    localStorage.removeItem('pvb_save_v2');
+    localStorage.removeItem(TUTORIAL_KEY);
+    location.reload();
+  }
+
+  // --- UI refs ---
+  const $ = id => document.getElementById(id);
+  const cashEl = $('cash'), cashRateEl = $('cash-rate'), killsEl = $('kills');
+  const levelEl = $('level'), prestigeBadge = $('prestige-badge');
+  const xpFill = $('xp-fill'), xpText = $('xp-text');
+  const plantCountEl = $('plant-count'), plantCapEl = $('plant-cap');
+  const shopTimerShort = $('shop-timer-short'), shopTimerFull = $('shop-timer-full');
+  const shopSlotsEl = $('shop-slots');
+  const inventoryEl = $('inventory'), inventoryEmpty = $('inventory-empty');
+  const parcGridEl = $('parc-grid'), inventoryGridEl = $('inventory-grid'), totalIncomeEl = $('total-income');
+  const lifetimeStatsEl = $('lifetime-stats');
+  const mixerListEl = $('mixer-list');
+  const hintEl = $('hint'), toastEl = $('toast'), saveIndicator = $('save-indicator');
+
+  let hintTimer = null;
+  function showHint(text, duration = 0) {
+    hintEl.textContent = text;
+    hintEl.style.display = 'block';
+    if (hintTimer) clearTimeout(hintTimer);
+    if (duration > 0) hintTimer = setTimeout(() => hintEl.style.display = 'none', duration);
+  }
+  function hideHint() { hintEl.style.display = 'none'; if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; } }
+  let toastTimer = null;
+  function showToast(text, duration = 2500) {
+    toastEl.textContent = text;
+    toastEl.style.display = 'block';
+    toastEl.style.animation = 'none'; void toastEl.offsetWidth; toastEl.style.animation = '';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.style.display = 'none', duration);
+  }
+  let saveIndicatorTimer = null;
+  function flashSaveIndicator() {
+    saveIndicator.classList.add('show');
+    if (saveIndicatorTimer) clearTimeout(saveIndicatorTimer);
+    saveIndicatorTimer = setTimeout(() => saveIndicator.classList.remove('show'), 800);
+  }
+  function flashCash() {
+    cashEl.classList.remove('cash-pulse');
+    void cashEl.offsetWidth;
+    cashEl.classList.add('cash-pulse');
+  }
+  function updatePrestigeButtonVisibility() {
+    const unlockLvl = levelRequiredForPrestige(1);
+    $('prestige-btn').style.display = (game.level >= unlockLvl || game.prestige >= 1) ? 'block' : 'none';
+  }
+
+  function updateHud() {
+    cashEl.textContent = fmtNumber(game.cash);
+    killsEl.textContent = fmtNumber(game.kills);
+    plantCountEl.textContent = game.plants.length;
+    plantCapEl.textContent = getMaxPlants();
+    const rate = passiveIncomePerSec();
+    cashRateEl.textContent = rate >= 0.01 ? `(+${rate.toFixed(2)}/sec)` : '';
+    levelEl.textContent = game.level;
+    const prog = xpProgressInLevel(game.xp, game.level);
+    const pct = (prog.inLevel / prog.forNext) * 100;
+    xpFill.style.width = Math.min(100, pct) + '%';
+    xpText.textContent = `${fmtNumber(prog.inLevel)} / ${fmtNumber(prog.forNext)} XP`;
+    if (game.prestige > 0) {
+      prestigeBadge.textContent = 'P' + game.prestige;
+      prestigeBadge.style.display = 'inline-block';
+    } else {
+      prestigeBadge.style.display = 'none';
+    }
+  }
+
+  function renderShop() {
+    shopSlotsEl.innerHTML = '';
+    const slotsByPlant = {};
+    game.shop.forEach((slot, i) => {
+      if (slot.bought) return;
+      if (!slotsByPlant[slot.plantId]) slotsByPlant[slot.plantId] = [];
+      slotsByPlant[slot.plantId].push({ ...slot, idx: i });
+    });
+    const sortedIds = [...PLANT_IDS].sort((a, b) => {
+      const ra = RARITY_KEYS.indexOf(PLANTS[a].rarity);
+      const rb = RARITY_KEYS.indexOf(PLANTS[b].rarity);
+      if (ra !== rb) return ra - rb;
+      return PLANTS[a].price - PLANTS[b].price;
+    });
+    sortedIds.forEach(plantId => {
+      const p = PLANTS[plantId];
+      const r = RARITIES[p.rarity];
+      const variants = slotsByPlant[plantId] || [];
+      const available = variants.length > 0;
+      const variant = available
+        ? variants.slice().sort((a, b) => MUTATION_KEYS.indexOf(b.mutation) - MUTATION_KEYS.indexOf(a.mutation))[0]
+        : null;
+      const mut = variant ? (MUTATIONS[variant.mutation] || MUTATIONS.none) : MUTATIONS.none;
+      const div = document.createElement('div');
+      div.className = 'shop-slot' + (mut.label ? ' mutated' : '') + (available ? '' : ' unavailable');
+      div.style.borderLeftColor = r.color;
+      if (mut.label) div.style.color = mut.color;
+      const canBuy = available && game.cash >= p.price;
+      const countBadge = variants.length > 1 ? ` ×${variants.length}` : '';
+      div.innerHTML = `
+        <div class="shop-icon">${PLANT_ICONS[plantId] || '🌱'}</div>
+        <div class="shop-rarity" style="color:${r.color};">${r.label}</div>
+        <div class="shop-name">${p.name}${countBadge}</div>
+        ${mut.label ? `<div class="shop-mutation" style="color:${mut.color};">✨ ${mut.label} ×${mut.damageMult}</div>` : ''}
+        <div class="shop-stats">DMG ${(p.damage * mut.damageMult).toFixed(0)} • ${p.cooldown}s</div>
+        <div class="shop-ability">${ABILITY_LABELS[p.ability] || p.ability}</div>
+        <div class="price">${fmtNumber(p.price)}$</div>
+        ${available
+          ? `<button class="buy-btn" ${canBuy ? '' : 'disabled'}>Acheter</button>`
+          : `<div class="shop-unavailable-msg">Pas en stock</div>`}
+      `;
+      if (available) div.querySelector('button').onclick = () => buySeed(variant.idx);
+      shopSlotsEl.appendChild(div);
+    });
+  }
+
+  function renderInventory() {
+    [...inventoryEl.querySelectorAll('.seed-card')].forEach(c => c.remove());
+    inventoryEmpty.style.display = game.inventory.length === 0 ? 'block' : 'none';
+    const groupMap = new Map();
+    const groups = [];
+    game.inventory.forEach((seed, i) => {
+      const key = `${seed.plantId}|${seed.mutation}`;
+      let g = groupMap.get(key);
+      if (!g) {
+        g = { plantId: seed.plantId, mutation: seed.mutation, count: 0, indices: [] };
+        groupMap.set(key, g); groups.push(g);
+      }
+      g.count++; g.indices.push(i);
+    });
+    groups.sort((a, b) => {
+      const ra = RARITY_KEYS.indexOf(PLANTS[a.plantId].rarity);
+      const rb = RARITY_KEYS.indexOf(PLANTS[b.plantId].rarity);
+      if (ra !== rb) return rb - ra;
+      const ma = MUTATION_KEYS.indexOf(a.mutation);
+      const mb = MUTATION_KEYS.indexOf(b.mutation);
+      return mb - ma;
+    });
+    const selSeed = game.selectedSeedIdx !== null ? game.inventory[game.selectedSeedIdx] : null;
+    groups.forEach(g => {
+      const p = PLANTS[g.plantId];
+      const r = RARITIES[p.rarity];
+      const mut = MUTATIONS[g.mutation] || MUTATIONS.none;
+      const isSelected = selSeed && selSeed.plantId === g.plantId && selSeed.mutation === g.mutation;
+      const div = document.createElement('div');
+      div.className = 'seed-card' + (isSelected ? ' selected' : '') + (mut.label ? ' mutated' : '');
+      div.style.background = `linear-gradient(135deg, ${r.color}55, #222 70%)`;
+      if (mut.label) div.style.color = mut.color;
+      div.innerHTML = `
+        <div class="seed-count">×${g.count}</div>
+        <div class="seed-icon">${PLANT_ICONS[g.plantId] || '🌱'}</div>
+        <div class="seed-name">${p.name}</div>
+        <div class="seed-rarity" style="color:${r.color};">${r.label}</div>
+        ${mut.label ? `<div class="seed-mutation" style="color:${mut.color};">${mut.label}</div>` : ''}
+      `;
+      div.onclick = () => { sfx('click'); selectSeed(g.indices[0]); };
+      inventoryEl.appendChild(div);
+    });
+  }
+
+  function renderCollection() {
+    // Parc grid (top 15)
+    parcGridEl.innerHTML = '';
+    for (let i = 0; i < PARC_CAPACITY; i++) {
+      const b = game.blops[i];
+      const div = document.createElement('div');
+      if (b) {
+        const r = RARITIES[b.rarity];
+        const br = BRAINROTS[b.rarity];
+        const v = VARIANTS[b.variant] || VARIANTS.none;
+        const rate = blopValue(b) * PASSIVE_RATE * totalPassiveMultiplier();
+        div.className = 'parc-slot';
+        div.style.borderLeftColor = r.color;
+        div.style.color = r.color;
+        if (v.label) {
+          div.style.border = `2px solid ${v.color}`;
+          div.style.boxShadow = `0 0 10px ${v.color}`;
+        }
+        div.innerHTML = `${BLOP_ICONS[b.rarity] || '👾'}
+          ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color};">${v.label}</div>` : ''}
+          <div class="parc-rate">+${rate.toFixed(2)}</div>`;
+        div.title = `${br.name} (${r.label}${v.label ? ' ' + v.label + ' ×' + v.mult : ''}) — +${rate.toFixed(2)}$/sec`;
+      } else {
+        div.className = 'parc-slot empty';
+        div.innerHTML = '—';
+      }
+      parcGridEl.appendChild(div);
+    }
+    $('parc-count').textContent = Math.min(PARC_CAPACITY, game.blops.length);
+    $('parc-cap').textContent = PARC_CAPACITY;
+    totalIncomeEl.textContent = passiveIncomePerSec().toFixed(2);
+    // Inventory section: count per (rarity, variant) in inventory (blops[15..100])
+    const invBlops = game.blops.slice(PARC_CAPACITY);
+    const invKeys = {};
+    invBlops.forEach(b => {
+      const k = `${b.rarity}|${b.variant}`;
+      invKeys[k] = (invKeys[k] || 0) + 1;
+    });
+    inventoryGridEl.innerHTML = '';
+    // Sort entries by rarity desc then variant desc
+    const sortedKeys = Object.keys(invKeys).sort((a, b) => {
+      const [ra, va] = a.split('|'); const [rb, vb] = b.split('|');
+      const rd = RARITY_KEYS.indexOf(rb) - RARITY_KEYS.indexOf(ra);
+      if (rd !== 0) return rd;
+      return VARIANT_KEYS.indexOf(vb) - VARIANT_KEYS.indexOf(va);
+    });
+    sortedKeys.forEach(k => {
+      const [rk, vk] = k.split('|');
+      const r = RARITIES[rk];
+      const br = BRAINROTS[rk];
+      const v = VARIANTS[vk] || VARIANTS.none;
+      const c = invKeys[k];
+      const div = document.createElement('div');
+      div.className = 'inv-entry';
+      div.style.borderLeftColor = r.color;
+      if (v.label) div.style.boxShadow = `inset 0 0 0 2px ${v.color}`;
+      div.innerHTML = `
+        <div class="icon">${BLOP_ICONS[rk] || '👾'}</div>
+        <div style="color:${r.color}; font-weight:bold; font-size:12px;">${r.label}</div>
+        ${v.label ? `<div style="color:${v.color}; font-size:11px; font-weight:bold;">${v.label} ×${v.mult}</div>` : ''}
+        <div class="count">${c}</div>
+        <div class="value">${br.name}</div>
+      `;
+      inventoryGridEl.appendChild(div);
+    });
+    $('inv-count').textContent = game.blops.length;
+    $('inv-cap').textContent = INVENTORY_CAPACITY;
+    if (inventoryGridEl.children.length === 0) {
+      inventoryGridEl.innerHTML = '<div style="grid-column: 1/-1; color:#888; text-align:center; padding:12px;">Aucun Blop en inventaire (les 15 meilleurs sont dans le parc)</div>';
+    }
+    // Lifetime stats
+    lifetimeStatsEl.innerHTML = '';
+    RARITY_KEYS.forEach(k => {
+      const r = RARITIES[k];
+      const count = game.collection[k] || 0;
+      const div = document.createElement('div');
+      div.innerHTML = `${BLOP_ICONS[k]} <span style="color:${r.color};">${r.label}</span> : <strong>${fmtNumber(count)}</strong>`;
+      lifetimeStatsEl.appendChild(div);
+    });
+  }
+
+  function renderMixer() {
+    mixerListEl.innerHTML = '';
+    const counts = {};
+    game.inventory.forEach(s => { counts[s.plantId] = (counts[s.plantId] || 0) + 1; });
+    const eligibles = Object.keys(counts).filter(id => counts[id] >= 3);
+    if (eligibles.length === 0) {
+      mixerListEl.innerHTML = '<div style="color:#888; text-align:center; padding:30px; grid-column: 1/-1;">Aucune plante avec 3 copies identiques dans ton inventaire</div>';
+      return;
+    }
+    eligibles.sort((a, b) => RARITY_KEYS.indexOf(PLANTS[b].rarity) - RARITY_KEYS.indexOf(PLANTS[a].rarity));
+    eligibles.forEach(plantId => {
+      const p = PLANTS[plantId];
+      const r = RARITIES[p.rarity];
+      const nextIdx = RARITY_KEYS.indexOf(p.rarity) + 1;
+      const canMix = nextIdx < RARITY_KEYS.length;
+      const nextR = canMix ? RARITIES[RARITY_KEYS[nextIdx]] : null;
+      const div = document.createElement('div');
+      div.className = 'mixer-item';
+      div.style.borderLeftColor = r.color;
+      div.innerHTML = `
+        <div class="mixer-icon">${PLANT_ICONS[plantId] || '🌱'}</div>
+        <div class="mixer-info">
+          <div class="mixer-name">${p.name}</div>
+          <div class="mixer-rarity" style="color:${r.color};">${r.label}</div>
+          <div class="mixer-count">×${counts[plantId]}</div>
+          ${canMix ? `<div class="mixer-arrow">→ ${nextR.label} aléatoire</div>` : ''}
+        </div>
+        <button ${canMix ? '' : 'disabled'}>${canMix ? 'Mixer 3→1' : 'Rareté max'}</button>
+      `;
+      if (canMix) div.querySelector('button').onclick = () => mixPlants(plantId);
+      mixerListEl.appendChild(div);
+    });
+  }
+
+  function renderProfile() {
+    $('pf-level').textContent = game.level;
+    $('pf-prestige').textContent = game.prestige;
+    const prog = xpProgressInLevel(game.xp, game.level);
+    $('pf-xp').textContent = fmtNumber(prog.inLevel);
+    $('pf-xp-next').textContent = fmtNumber(prog.forNext);
+    $('pf-time').textContent = fmtDuration(game.stats.totalPlayTimeMs / 1000);
+    $('pf-passive').textContent = passiveIncomePerSec().toFixed(2);
+    $('pf-dps').textContent = totalDps().toFixed(1);
+    $('pf-level-bonus').textContent = `+${(levelBonus() * 100).toFixed(0)}%`;
+    $('pf-prestige-bonus').textContent = `+${(prestigeBonus() * 100).toFixed(0)}%`;
+    $('pf-placed').textContent = fmtNumber(game.stats.plantsPlaced);
+    $('pf-mixed').textContent = fmtNumber(game.stats.plantsMixed);
+    $('pf-earned').textContent = fmtNumber(game.stats.totalEarned);
+    $('pf-spent').textContent = fmtNumber(game.stats.totalSpent);
+    const achList = $('achievements-list');
+    achList.innerHTML = '';
+    let unlockedCount = 0;
+    ACHIEVEMENT_KEYS.forEach(id => {
+      const ach = ACHIEVEMENTS[id];
+      const unlocked = !!game.achievements[id];
+      if (unlocked) unlockedCount++;
+      const div = document.createElement('div');
+      div.className = 'achievement' + (unlocked ? ' unlocked' : '');
+      div.innerHTML = `
+        <div class="ach-title">${unlocked ? '🏆' : '🔒'} ${ach.name}</div>
+        <div class="ach-desc">${ach.desc}</div>
+        <div class="ach-reward">+${fmtNumber(ach.reward)}$</div>
+      `;
+      achList.appendChild(div);
+    });
+    $('pf-ach-count').textContent = unlockedCount;
+    $('pf-ach-total').textContent = ACHIEVEMENT_KEYS.length;
+  }
+
+  function renderPrestigeModal() {
+    const nextLvl = nextPrestigeLevel();
+    $('pr-current').textContent = game.prestige;
+    $('pr-cost').textContent = `Niveau ${nextLvl}`;
+    $('pr-cash').textContent = `Niveau ${game.level}`;
+    const btn = $('prestige-confirm');
+    btn.disabled = !canPrestige();
+    if (!canPrestige()) {
+      btn.textContent = `Niveau ${nextLvl} requis (encore ${nextLvl - game.level})`;
+    } else {
+      btn.textContent = `Prestiger → P${game.prestige + 1}`;
+    }
+  }
+
+  function selectSeed(idx) {
+    if (game.moveMode) cancelMoveMode();
+    if (game.plants.length >= getMaxPlants()) {
+      showHint(`Limite de ${getMaxPlants()} plantes atteinte — retire-en une ou prestige`, 3000);
+      return;
+    }
+    if (game.selectedSeedIdx === idx) {
+      cancelPlacement();
+    } else {
+      game.selectedSeedIdx = idx;
+      showHint("Clique une case verte pour placer — ESC pour annuler — Clic droit sur une plante pour la retirer");
+      setSlotsVisible(true);
+      renderInventory();
+    }
+  }
+  function cancelPlacement() {
+    game.selectedSeedIdx = null;
+    hideHint();
+    setSlotsVisible(false);
+    renderInventory();
+  }
+
+  function enterMoveMode(plant) {
+    cancelPlacement();
+    game.moveMode = { plant };
+    plant.traverse(c => { if (c.material) { c.material.transparent = true; c.material.opacity = 0.5; } });
+    setSlotsVisible(true);
+    showHint("Clique une case verte pour déplacer — ESC pour annuler");
+  }
+  function cancelMoveMode() {
+    if (!game.moveMode) return;
+    game.moveMode.plant.traverse(c => { if (c.material) { c.material.opacity = 1; c.material.transparent = false; } });
+    setSlotsVisible(false);
+    hideHint();
+    game.moveMode = null;
+  }
+  function executeMove(newSlot) {
+    if (!game.moveMode) return;
+    const plant = game.moveMode.plant;
+    const oldSlot = plant.userData.slot;
+    if (oldSlot) oldSlot.plant = null;
+    plant.position.set(newSlot.x, 0.2, newSlot.z);
+    plant.userData.slot = newSlot;
+    plant.userData.lane = newSlot.laneIdx;
+    newSlot.plant = plant;
+    plant.traverse(c => { if (c.material) { c.material.opacity = 1; c.material.transparent = false; } });
+    game.moveMode = null;
+    setSlotsVisible(false);
+    hideHint();
+    saveGame();
+  }
+
+  // --- TUTORIAL ---
+  const TUTORIAL = [
+    { title: 'Bienvenue !',
+      body: `<b>Plants vs Blops</b> — un tower defense de farming.<br><br>
+             Les <b>Blops</b> marchent vers ta base en 3 lanes (au début).<br>
+             Tes <b>plantes</b> les tuent, tu les collectionnes, tu gagnes du cash.` },
+    { title: '1. Achète des graines',
+      body: `Clique le bouton <b>Boutique</b> en haut à droite.<br>
+             Toutes les plantes sont visibles ; celles en stock sont achetables.<br><br>
+             <b>Refresh toutes les 5 minutes</b> — ne loupe pas les rares.` },
+    { title: '2. Place tes plantes',
+      body: `Clique une graine dans l'inventaire en bas.<br>
+             Des cases vertes apparaissent — clique pour placer.<br><br>
+             <b>Clic droit</b> sur une plante = la retirer.<br>
+             <b>Clic gauche</b> sur une plante = la déplacer.` },
+    { title: '3. Farm et collectionne',
+      body: `Chaque Blop tué → cash + XP + arrive dans ton <b>parc</b>.<br>
+             Le <b>parc (15 meilleurs)</b> génère du revenu passif visible sur la map.<br>
+             L'<b>inventaire (100 max)</b> stocke le reste ; au-delà ils se vendent auto.<br><br>
+             <b>Prestige</b> : reset mais gagne +1 lane, +1 slot plante, +10% passif permanents.` },
+  ];
+  let tutStep = 0;
+  function showTutorial() {
+    if (localStorage.getItem(TUTORIAL_KEY)) return;
+    tutStep = 0;
+    renderTutorial();
+    $('tutorial-modal').classList.remove('hidden');
+  }
+  function renderTutorial() {
+    const s = TUTORIAL[tutStep];
+    $('tut-title').textContent = s.title;
+    $('tut-body').innerHTML = s.body;
+    $('tut-step').textContent = tutStep + 1;
+    $('tut-total').textContent = TUTORIAL.length;
+    $('tut-prev').style.display = tutStep > 0 ? 'block' : 'none';
+    $('tut-next').textContent = tutStep === TUTORIAL.length - 1 ? 'Commencer' : 'Suivant';
+  }
+  function finishTutorial() {
+    localStorage.setItem(TUTORIAL_KEY, '1');
+    $('tutorial-modal').classList.add('hidden');
+  }
+
+  // --- RAYCASTER ---
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  function hitPlant(e) {
+    mouse.x = (e.clientX / innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const plantMeshes = [];
+    game.plants.forEach(p => p.traverse(c => { if (c.isMesh) plantMeshes.push(c); }));
+    const hits = raycaster.intersectObjects(plantMeshes);
+    if (hits.length === 0) return null;
+    let obj = hits[0].object;
+    while (obj && !game.plants.includes(obj)) obj = obj.parent;
+    return obj || null;
+  }
+  function hitSlot(e) {
+    mouse.x = (e.clientX / innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const slotMeshes = slots.filter(s => !s.plant).map(s => s.mesh);
+    const hits = raycaster.intersectObjects(slotMeshes);
+    if (hits.length === 0) return null;
+    return slots.find(s => s.mesh === hits[0].object) || null;
+  }
+
+  // --- LONG PRESS + TOOLTIP ---
+  const LONG_PRESS_MS = 400;
+  let longPressTimer = null;
+  let longPressTriggered = false;
+  const tooltipEl = $('plant-tooltip');
+
+  function showPlantTooltip(plantGroup, x, y) {
+    const pd = plantGroup.userData;
+    const plant = PLANTS[pd.plantId];
+    const mut = MUTATIONS[pd.mutation] || MUTATIONS.none;
+    const r = RARITIES[plant.rarity];
+    const dmg = plant.damage * mut.damageMult;
+    const dps = dmg / plant.cooldown;
+    const rows = [];
+    rows.push(['Rareté', `<span style="color:${r.color};">${r.label}</span>`]);
+    if (mut.label) rows.push(['Mutation', `<span style="color:${mut.color};">${mut.label} ×${mut.damageMult}</span>`]);
+    rows.push(['Ability', ABILITY_LABELS[plant.ability] || plant.ability]);
+    rows.push(['Damage base', plant.damage.toString()]);
+    rows.push(['Damage total', dmg.toFixed(1)]);
+    rows.push(['Cooldown', plant.cooldown + 's']);
+    rows.push(['DPS', dps.toFixed(2)]);
+    if (plant.splashRadius) rows.push(['Splash radius', plant.splashRadius + 'm']);
+    if (plant.slowFactor) rows.push(['Slow', `×${plant.slowFactor} / ${plant.slowDuration}s`]);
+    if (plant.burstCount) rows.push(['Burst count', plant.burstCount.toString()]);
+    if (mut.addSlow) rows.push(['Bonus mutation', 'Ajoute slow ×0.5 / 1.5s']);
+    rows.push(['Prix base', fmtNumber(plant.price) + '$']);
+    rows.push(['Lane', `${pd.slot.laneIdx + 1} / ${currentLaneCount()}`]);
+    rows.push(['Slot', `${pd.slot.slotIdx + 1} / ${SLOTS_PER_LANE}`]);
+    rows.push(['Plant ID', `<code>${pd.plantId}</code>`]);
+    rows.push(['Mutation ID', `<code>${pd.mutation}</code>`]);
+    tooltipEl.innerHTML = `
+      <div class="tt-header" style="color:${r.color};">
+        <span class="tt-icon">${PLANT_ICONS[pd.plantId] || '🌱'}</span>
+        <span>${plant.name}</span>
+      </div>
+      ${rows.map(([l, v]) => `<div class="tt-row"><span class="label">${l}</span><span class="val">${v}</span></div>`).join('')}
+      <div class="tt-footer">Clic ailleurs pour fermer</div>
+    `;
+    const maxX = innerWidth - 320;
+    const maxY = innerHeight - tooltipEl.offsetHeight - 20;
+    tooltipEl.style.left = Math.min(x + 14, maxX) + 'px';
+    tooltipEl.style.top = Math.min(y + 14, Math.max(10, maxY)) + 'px';
+    tooltipEl.style.display = 'block';
+  }
+  function hideTooltip() { tooltipEl.style.display = 'none'; }
+
+  function onCanvasMouseDown(e) {
+    longPressTriggered = false;
+    const plant = hitPlant(e);
+    if (!plant) return;
+    if (longPressTimer) clearTimeout(longPressTimer);
+    const cx = e.clientX, cy = e.clientY;
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      showPlantTooltip(plant, cx, cy);
+    }, LONG_PRESS_MS);
+  }
+  function onCanvasMouseUp() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
+  function onCanvasMouseLeave() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
+
+  function onLeftClick(e) {
+    if (longPressTriggered) { longPressTriggered = false; return; }
+    if (game.selectedSeedIdx !== null) {
+      const slot = hitSlot(e);
+      if (slot && !slot.plant) {
+        const seed = game.inventory[game.selectedSeedIdx];
+        game.inventory.splice(game.selectedSeedIdx, 1);
+        placePlant(seed, slot);
+        sfx('click'); cancelPlacement(); updateHud(); saveGame();
+      }
+      return;
+    }
+    if (game.moveMode) {
+      const slot = hitSlot(e);
+      if (slot && !slot.plant) { executeMove(slot); sfx('click'); }
+      return;
+    }
+    const plant = hitPlant(e);
+    if (plant) enterMoveMode(plant);
+  }
+  function onRightClick(e) {
+    e.preventDefault();
+    if (longPressTriggered) { longPressTriggered = false; return; }
+    const plant = hitPlant(e);
+    if (plant) removePlant(plant);
+  }
+  renderer.domElement.addEventListener('mousedown', onCanvasMouseDown);
+  renderer.domElement.addEventListener('mouseup', onCanvasMouseUp);
+  renderer.domElement.addEventListener('mouseleave', onCanvasMouseLeave);
+  renderer.domElement.addEventListener('click', onLeftClick);
+  renderer.domElement.addEventListener('contextmenu', onRightClick);
+
+  // Close tooltip when clicking outside
+  document.addEventListener('mousedown', (e) => {
+    if (tooltipEl.style.display === 'block' && !tooltipEl.contains(e.target)) {
+      hideTooltip();
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { cancelPlacement(); cancelMoveMode(); hideTooltip(); }
+  });
+  const initOnce = () => {
+    initAudio();
+    document.removeEventListener('click', initOnce);
+    document.removeEventListener('keydown', initOnce);
+    document.removeEventListener('touchstart', initOnce);
+  };
+  document.addEventListener('click', initOnce);
+  document.addEventListener('keydown', initOnce);
+  document.addEventListener('touchstart', initOnce);
+
+  const btnClick = (id, fn) => { $(id).onclick = () => { sfx('click'); fn(); }; };
+  btnClick('shop-btn', () => { renderShop(); $('shop-modal').classList.remove('hidden'); });
+  btnClick('shop-close', () => $('shop-modal').classList.add('hidden'));
+  btnClick('collection-btn', () => { renderCollection(); $('collection-modal').classList.remove('hidden'); });
+  btnClick('collection-close', () => $('collection-modal').classList.add('hidden'));
+  btnClick('mixer-btn', () => { renderMixer(); $('mixer-modal').classList.remove('hidden'); });
+  btnClick('mixer-close', () => $('mixer-modal').classList.add('hidden'));
+  btnClick('profile-btn', () => { renderProfile(); $('profile-modal').classList.remove('hidden'); });
+  btnClick('profile-close', () => $('profile-modal').classList.add('hidden'));
+  btnClick('prestige-btn', () => { renderPrestigeModal(); $('prestige-modal').classList.remove('hidden'); });
+  btnClick('prestige-cancel', () => $('prestige-modal').classList.add('hidden'));
+  btnClick('prestige-confirm', () => {
+    if (!canPrestige()) return;
+    $('prestige-modal').classList.add('hidden');
+    doPrestige();
+  });
+  btnClick('reset-btn', () => $('reset-modal').classList.remove('hidden'));
+  btnClick('reset-cancel', () => $('reset-modal').classList.add('hidden'));
+  btnClick('reset-confirm', () => resetGame());
+  btnClick('welcome-close', () => $('welcome-modal').classList.add('hidden'));
+  btnClick('help-btn', () => { localStorage.removeItem(TUTORIAL_KEY); showTutorial(); });
+
+  // Settings modal
+  btnClick('settings-btn', () => {
+    $('webhook-url').value = localStorage.getItem(WEBHOOK_URL_KEY) || '';
+    $('webhook-enabled').checked = localStorage.getItem(WEBHOOK_ENABLED_KEY) === '1';
+    $('webhook-status').textContent = '';
+    $('pdf-status').textContent = '';
+    $('settings-modal').classList.remove('hidden');
+  });
+  btnClick('settings-close', () => $('settings-modal').classList.add('hidden'));
+  $('webhook-save').onclick = () => {
+    const url = $('webhook-url').value.trim();
+    const enabled = $('webhook-enabled').checked;
+    if (enabled && !url.startsWith('https://discord.com/api/webhooks/') && !url.startsWith('https://discordapp.com/api/webhooks/')) {
+      $('webhook-status').style.color = '#ff6666';
+      $('webhook-status').textContent = '⚠ URL webhook Discord invalide';
+      return;
+    }
+    localStorage.setItem(WEBHOOK_URL_KEY, url);
+    localStorage.setItem(WEBHOOK_ENABLED_KEY, enabled ? '1' : '0');
+    $('webhook-status').style.color = '#66ff99';
+    $('webhook-status').textContent = '✓ Enregistré';
+    sfx('click');
+  };
+  $('webhook-test').onclick = async () => {
+    const url = $('webhook-url').value.trim();
+    if (!url) { $('webhook-status').style.color = '#ff6666'; $('webhook-status').textContent = '⚠ URL vide'; return; }
+    $('webhook-status').style.color = '#aaa';
+    $('webhook-status').textContent = '⏳ Test en cours...';
+    try {
+      const res = await postWebhook(url, {
+        username: 'Plants vs Blops',
+        embeds: [{
+          title: '🧪 Test webhook',
+          description: 'Si tu vois ce message, la liaison fonctionne !',
+          color: 0x66ff99,
+        }],
+      });
+      if (res.ok) {
+        $('webhook-status').style.color = '#66ff99';
+        $('webhook-status').textContent = '✓ Webhook OK — message envoyé';
+      } else {
+        const body = await res.text().catch(() => '');
+        $('webhook-status').style.color = '#ff6666';
+        $('webhook-status').textContent = `✗ Erreur ${res.status} : ${body.slice(0, 100)}`;
+      }
+    } catch (err) {
+      $('webhook-status').style.color = '#ff6666';
+      $('webhook-status').textContent = '✗ Erreur réseau : ' + err.message;
+    }
+  };
+  $('webhook-send-shop').onclick = async () => {
+    const url = $('webhook-url').value.trim();
+    if (!url) { $('webhook-status').style.color = '#ff6666'; $('webhook-status').textContent = '⚠ URL vide'; return; }
+    $('webhook-status').style.color = '#aaa';
+    $('webhook-status').textContent = '⏳ Envoi boutique actuelle...';
+    try {
+      const fields = game.shop.map(slot => {
+        const p = PLANTS[slot.plantId];
+        const r = RARITIES[p.rarity];
+        const mut = MUTATIONS[slot.mutation] || MUTATIONS.none;
+        return {
+          name: `${PLANT_ICONS[slot.plantId] || '🌱'} ${p.name} — ${r.label}${mut.label ? ' ✨' + mut.label : ''}${slot.bought ? ' (acheté)' : ''}`,
+          value: `DMG **${(p.damage * mut.damageMult).toFixed(0)}** • CD ${p.cooldown}s • **${fmtNumber(p.price)}$**`,
+          inline: false,
+        };
+      });
+      const res = await postWebhook(url, {
+        username: 'Plants vs Blops',
+        embeds: [{
+          title: '🔄 Boutique actuelle (envoi manuel)',
+          description: `Refresh auto dans ${fmtTime(game.shopTimer)}`,
+          color: 0x4488cc,
+          fields: fields,
+          timestamp: new Date().toISOString(),
+        }],
+      });
+      if (res.ok) {
+        $('webhook-status').style.color = '#66ff99';
+        $('webhook-status').textContent = '✓ Boutique envoyée sur Discord';
+      } else {
+        const body = await res.text().catch(() => '');
+        $('webhook-status').style.color = '#ff6666';
+        $('webhook-status').textContent = `✗ Erreur ${res.status} : ${body.slice(0, 100)}`;
+      }
+    } catch (err) {
+      $('webhook-status').style.color = '#ff6666';
+      $('webhook-status').textContent = '✗ Erreur réseau : ' + err.message;
+    }
+  };
+
+  $('pdf-export').onclick = () => {
+    try {
+      $('pdf-status').style.color = '#aaa';
+      $('pdf-status').textContent = '⏳ Génération...';
+      generateDataPDF();
+      $('pdf-status').style.color = '#66ff99';
+      $('pdf-status').textContent = '✓ PDF téléchargé';
+    } catch (err) {
+      $('pdf-status').style.color = '#ff6666';
+      $('pdf-status').textContent = '✗ Erreur : ' + err.message;
+      console.error(err);
+    }
+  };
+
+  // --- DISCORD WEBHOOK ---
+  const WEBHOOK_URL_KEY = 'pvb_webhook_url';
+  const WEBHOOK_ENABLED_KEY = 'pvb_webhook_enabled';
+  // Utilise FormData (multipart) au lieu de JSON pour bypass le preflight CORS depuis file://
+  function postWebhook(url, payload) {
+    const fd = new FormData();
+    fd.append('payload_json', JSON.stringify(payload));
+    return fetch(url, { method: 'POST', body: fd });
+  }
+  function notifyShopRefresh() {
+    const url = localStorage.getItem(WEBHOOK_URL_KEY);
+    const enabled = localStorage.getItem(WEBHOOK_ENABLED_KEY) === '1';
+    if (!enabled || !url) return;
+    const fields = game.shop.map(slot => {
+      const p = PLANTS[slot.plantId];
+      const r = RARITIES[p.rarity];
+      const mut = MUTATIONS[slot.mutation] || MUTATIONS.none;
+      return {
+        name: `${PLANT_ICONS[slot.plantId] || '🌱'} ${p.name} — ${r.label}${mut.label ? ' ✨' + mut.label : ''}`,
+        value: `DMG **${(p.damage * mut.damageMult).toFixed(0)}** • CD ${p.cooldown}s • **${fmtNumber(p.price)}$**`,
+        inline: false,
+      };
+    });
+    postWebhook(url, {
+      username: 'Plants vs Blops',
+      embeds: [{
+        title: '🔄 Boutique refresh !',
+        description: 'Nouvelle rotation de graines disponibles',
+        color: 0x4488cc,
+        fields: fields,
+        footer: { text: `Prochain refresh dans ${Math.floor(SHOP_REFRESH / 60)} min` },
+        timestamp: new Date().toISOString(),
+      }],
+    }).catch(err => console.warn('Webhook failed:', err));
+  }
+
+  // --- PDF EXPORT ---
+  function generateDataPDF() {
+    if (!window.jspdf) { alert('jsPDF non chargé.'); return; }
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    const W = pdf.internal.pageSize.getWidth();
+    let y = 18;
+
+    pdf.setFontSize(18);
+    pdf.text('Plants vs Blops — Data Sheet', W / 2, y, { align: 'center' });
+    y += 8;
+    pdf.setFontSize(10);
+    pdf.text('Généré le ' + new Date().toLocaleString('fr-FR'), W / 2, y, { align: 'center' });
+    y += 10;
+
+    const section = (title) => {
+      if (y > 260) { pdf.addPage(); y = 20; }
+      pdf.setFontSize(13); pdf.setTextColor(40, 80, 150);
+      pdf.text(title, 14, y); y += 6;
+      pdf.setTextColor(0, 0, 0);
+    };
+
+    section('Raretés des Blops et plantes');
+    pdf.autoTable({ startY: y, styles: { fontSize: 9 },
+      head: [['Rareté', 'Poids %', 'Couleur']],
+      body: RARITY_KEYS.map(k => [RARITIES[k].label, RARITIES[k].weight + '%', RARITIES[k].color]),
+    });
+    y = pdf.lastAutoTable.finalY + 8;
+
+    section('Blops (ennemis) — stats de base');
+    pdf.autoTable({ startY: y, styles: { fontSize: 9 },
+      head: [['Rareté', 'Nom', 'HP', 'Taille', 'Valeur', 'Picto']],
+      body: RARITY_KEYS.map(k => {
+        const br = BRAINROTS[k];
+        return [RARITIES[k].label, br.name, br.hp, br.size.toFixed(2), br.value + '$', BLOP_ICONS[k]];
+      }),
+    });
+    y = pdf.lastAutoTable.finalY + 8;
+
+    section('Variantes de Blops (multiplicateur HP et valeur)');
+    pdf.autoTable({ startY: y, styles: { fontSize: 9 },
+      head: [['Variante', 'Poids %', 'Multiplicateur']],
+      body: VARIANT_KEYS.map(k => {
+        const v = VARIANTS[k];
+        return [v.label || 'Aucune', v.weight + '%', '×' + v.mult];
+      }),
+    });
+    y = pdf.lastAutoTable.finalY + 8;
+
+    section('Plantes (alliées)');
+    pdf.autoTable({ startY: y, styles: { fontSize: 9 },
+      head: [['Nom', 'Rareté', 'DMG', 'CD', 'DPS', 'Prix', 'Ability', 'Picto']],
+      body: PLANT_IDS.map(id => {
+        const p = PLANTS[id];
+        return [p.name, RARITIES[p.rarity].label, p.damage, p.cooldown + 's',
+          (p.damage / p.cooldown).toFixed(2), fmtNumber(p.price) + '$',
+          ABILITY_LABELS[p.ability], PLANT_ICONS[id]];
+      }),
+    });
+    y = pdf.lastAutoTable.finalY + 8;
+
+    section('Mutations (bonus damage sur plantes)');
+    pdf.autoTable({ startY: y, styles: { fontSize: 9 },
+      head: [['Mutation', 'Poids %', 'Multiplicateur dmg', 'Effet bonus']],
+      body: MUTATION_KEYS.map(k => {
+        const m = MUTATIONS[k];
+        return [m.label || 'Aucune', m.weight + '%', '×' + m.damageMult, m.addSlow ? 'Ajoute slow ×0.5 / 1.5s' : '—'];
+      }),
+    });
+    y = pdf.lastAutoTable.finalY + 8;
+
+    section('Économie & formules');
+    pdf.setFontSize(10);
+    const lines = [
+      `• Cash de départ : ${STARTING_CASH}$`,
+      `• Revenu passif : 0.1% de la valeur des ${PARC_CAPACITY} Blops du parc / sec`,
+      `• Bonus niveau : +1% revenu passif par niveau`,
+      `• Bonus prestige : +10% revenu passif par prestige + 1 lane + 1 slot plante`,
+      `• XP par kill : valeur du Blop / 10`,
+      `• Niveau N : requiert 100 × N × (N-1) / 2 XP cumulé`,
+      `• Niveaux requis pour prestige : ${PRESTIGE_LEVELS.slice(0, 6).join(', ')}...`,
+      `• Parc capacity : ${PARC_CAPACITY} Blops (génèrent cash passif)`,
+      `• Inventaire max : ${INVENTORY_CAPACITY} Blops (auto-sell au-delà)`,
+      `• Boutique : ${SHOP_SIZE} slots, refresh toutes les ${Math.floor(SHOP_REFRESH / 60)} min`,
+      `• Cap offline earnings : ${Math.floor(MAX_OFFLINE_SECONDS / 3600)}h`,
+      `• Mixer : 3 plantes identiques → 1 aléatoire de rareté supérieure`,
+      `• Spawn Blop toutes les ${BRAINROT_SPAWN_INTERVAL}s sur lane aléatoire`,
+      `• Vitesse Blops (constante) : ${BRAINROT_SPEED}/sec`,
+    ];
+    lines.forEach(l => {
+      if (y > 280) { pdf.addPage(); y = 20; }
+      pdf.text(l, 14, y); y += 6;
+    });
+    y += 4;
+
+    section('Achievements (récompenses)');
+    pdf.autoTable({ startY: y, styles: { fontSize: 8 },
+      head: [['Nom', 'Description', 'Récompense']],
+      body: ACHIEVEMENT_KEYS.map(id => {
+        const a = ACHIEVEMENTS[id];
+        return [a.name, a.desc, fmtNumber(a.reward) + '$'];
+      }),
+    });
+
+    pdf.save('plants-vs-blops-data.pdf');
+  }
+
+  const savedAudio = localStorage.getItem(AUDIO_KEY);
+  if (savedAudio === 'off') audioEnabled = false;
+  $('audio-btn').textContent = audioEnabled ? '🔊' : '🔇';
+  $('audio-btn').onclick = () => {
+    audioEnabled = !audioEnabled;
+    localStorage.setItem(AUDIO_KEY, audioEnabled ? 'on' : 'off');
+    $('audio-btn').textContent = audioEnabled ? '🔊' : '🔇';
+    if (audioEnabled) sfx('click');
+  };
+  $('tut-skip').onclick = () => finishTutorial();
+  $('tut-prev').onclick = () => { if (tutStep > 0) { tutStep--; renderTutorial(); } };
+  $('tut-next').onclick = () => {
+    if (tutStep < TUTORIAL.length - 1) { tutStep++; renderTutorial(); }
+    else finishTutorial();
+  };
+
+  // --- GAME LOOP ---
+  const clock = new THREE.Clock();
+  let brSpawnTimer = 0;
+  function update(dt, now) {
+    game.stats.totalPlayTimeMs += dt * 1000;
+    brSpawnTimer += dt;
+    if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
+      brSpawnTimer = 0;
+      const lane = Math.floor(Math.random() * currentLaneCount());
+      spawnBrainrot(lane, pickRarity());
+    }
+    game.shopTimer -= dt;
+    if (game.shopTimer <= 0) { rollShop(); notifyShopRefresh(); }
+    shopTimerShort.textContent = fmtTime(game.shopTimer);
+    shopTimerFull.textContent = fmtTime(game.shopTimer);
+    addCash(passiveIncomePerSec() * dt);
+    game.saveTimer += dt;
+    if (game.saveTimer >= AUTOSAVE_INTERVAL) { game.saveTimer = 0; saveGame(); }
+
+    for (let i = game.brainrots.length - 1; i >= 0; i--) {
+      const e = game.brainrots[i];
+      if (e.scale.x < 1) {
+        const grow = Math.min(1, e.scale.x + dt * 6);
+        e.scale.set(grow, grow, grow);
+      }
+      const slowed = now < e.userData.slowUntil;
+      const speed = slowed ? e.userData.speed * e.userData.slowFactor : e.userData.speed;
+      e.position.z += speed * dt;
+      const wiggle = Math.sin((now + e.userData.wigglePhase) * 8) * (slowed ? 0.04 : 0.1);
+      e.rotation.z = wiggle;
+      e.position.y = 0.1 + Math.abs(Math.sin((now + e.userData.wigglePhase) * 8)) * 0.08;
+      const bodyMesh = e.userData.bodyMesh;
+      if (bodyMesh && bodyMesh.material) {
+        bodyMesh.material.emissiveIntensity = slowed ? 0.55 : 0.18;
+      }
+      if (e.userData.variantRing) e.userData.variantRing.rotation.z = now * 1.5;
+      if (e.userData.variantHalo) {
+        e.userData.variantHalo.position.y = 2.4 * e.userData.size + Math.sin(now * 3) * 0.1;
+      }
+      updateHpBar(e);
+      if (e.position.z > LANE_LENGTH / 2 + 1.5) {
+        removeHpBar(e);
+        scene.remove(e);
+        game.brainrots.splice(i, 1);
+      }
+    }
+
+    for (const p of game.plants) {
+      if (p.scale.x < 1) {
+        const grow = Math.min(1, p.scale.x + dt * 5);
+        p.scale.set(grow, grow, grow);
+      }
+      const bob = Math.sin((now + p.userData.bobPhase) * 2.5) * 0.05;
+      p.position.y = 0.2 + bob;
+      if (p.userData.mutationRing) p.userData.mutationRing.rotation.z = now * 2;
+      if (p.userData.headRef) {
+        const flashT = p.userData.flashUntil - now;
+        if (flashT > 0) {
+          const s = 1 + flashT * 3;
+          p.userData.headRef.scale.set(s, s, s);
+        } else {
+          p.userData.headRef.scale.set(1, 1, 1);
+        }
+      }
+      const plant = PLANTS[p.userData.plantId];
+      if (now - p.userData.lastShot < plant.cooldown) continue;
+      const target = pickTarget(p);
+      if (target) fireFrom(p, target, now);
+    }
+    for (let i = game.bullets.length - 1; i >= 0; i--) updateBullet(game.bullets[i], dt, now, i);
+    updateParticles(dt);
+    updateHud();
+  }
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    const now = clock.getElapsedTime();
+    update(dt, now);
+    renderer.render(scene, camera);
+  }
+
+  // --- INIT ---
+  const savedData = loadGame();
+  let offlineResult = null;
+  if (savedData) {
+    offlineResult = applyLoad(savedData);
+    if (game.shop.length === 0) rollShop();
+    else renderShop();
+  } else {
+    rebuildTerrain();
+    rebuildParcVisual();
+    rollShop();
+  }
+  renderInventory();
+  updatePrestigeButtonVisibility();
+  checkAchievements();
+  updateHud();
+  animate();
+
+  if (offlineResult && offlineResult.earned >= 1) {
+    $('welcome-time').textContent = fmtDuration(offlineResult.elapsedSec);
+    $('welcome-earned').textContent = fmtNumber(offlineResult.earned);
+    $('welcome-modal').classList.remove('hidden');
+  } else if (!savedData) {
+    showTutorial();
+  }
+
+  addEventListener('beforeunload', saveGame);
+  addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+  </script>
+</body>
+</html>

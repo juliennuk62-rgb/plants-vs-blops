@@ -566,6 +566,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script>
   // ============================================================
   // PLANTS VS BLOPS - Proto v0.7 (HP bars + dynamic lanes + parc/inventory)
@@ -746,6 +747,55 @@
     appId: "1:484744264430:web:0da1011a71e70d1b9f91ff",
   };
   const FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "PASTE_HERE";
+
+  // --- 3D MODELS (GLB via Kenney + fallback primitives) ---
+  const MODELS_BASE = 'models';
+  const loadedModels = { plants: {}, blops: {} };
+  // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
+  const PLANT_GLB_SCALE = {
+    sunflower: 3.2, cactus: 2.0, strawberry: 2.5,
+    pepper: 3.0, watermelon: 2.8, pineapple: 2.8,
+  };
+  const BLOP_GLB_SCALE = {
+    common: 0.9, rare: 1.0, veryrare: 1.0,
+    ultrarare: 1.2, mythic: 1.3, goat: 1.6,
+  };
+  // Mapping des plantes dispo en GLB (les autres utilisent la primitive)
+  const PLANT_GLB_FILE = {
+    sunflower: 'sunflower.glb',
+    cactus: 'cactus.glb',
+    strawberry: 'strawberry.glb',
+    pepper: 'pepper.glb',
+    watermelon: 'watermelon.glb',
+    pineapple: 'pineapple.glb',
+  };
+  const BLOP_GLB_FILE = {
+    common: 'common.glb', rare: 'rare.glb', veryrare: 'veryrare.glb',
+    ultrarare: 'ultrarare.glb', mythic: 'mythic.glb', goat: 'goat.glb',
+  };
+
+  async function preloadModels() {
+    if (!window.THREE || !THREE.GLTFLoader) return;
+    const loader = new THREE.GLTFLoader();
+    const loadOne = async (bucket, id, filename) => {
+      try {
+        const gltf = await loader.loadAsync(`${MODELS_BASE}/${bucket}/${filename}`);
+        gltf.scene.traverse(obj => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        loadedModels[bucket][id] = gltf.scene;
+      } catch (err) {
+        console.warn(`GLB load failed for ${bucket}/${id}:`, err.message);
+      }
+    };
+    const ps = [];
+    for (const [id, file] of Object.entries(PLANT_GLB_FILE)) ps.push(loadOne('plants', id, file));
+    for (const [id, file] of Object.entries(BLOP_GLB_FILE)) ps.push(loadOne('blops', id, file));
+    await Promise.all(ps);
+  }
 
   // --- SCENE ---
   const scene = new THREE.Scene();
@@ -1092,6 +1142,25 @@
     const br = BRAINROTS[rarityKey];
     const rcol = RARITIES[rarityKey];
     const sz = br.size * scaleMult;
+    // Si GLB chargé, utilise-le
+    if (loadedModels.blops[rarityKey]) {
+      const group = new THREE.Group();
+      const model = loadedModels.blops[rarityKey].clone(true);
+      const glbScale = (BLOP_GLB_SCALE[rarityKey] || 1.0) * sz;
+      model.scale.setScalar(glbScale);
+      // Teinte selon rareté (pour garder lisibilité des couleurs)
+      model.traverse(obj => {
+        if (obj.isMesh && obj.material) {
+          obj.material = obj.material.clone();
+          obj.material.emissive = new THREE.Color(rcol.hex);
+          obj.material.emissiveIntensity = 0.15;
+        }
+      });
+      group.add(model);
+      group.userData.bodyMesh = model;
+      group.userData.isGlb = true;
+      return group;
+    }
     const bodyMat = () => new THREE.MeshStandardMaterial({ color: rcol.hex, emissive: rcol.hex, emissiveIntensity: 0.18 });
     const group = new THREE.Group();
     let body;
@@ -1424,19 +1493,30 @@
     const col = RARITIES[p.rarity].hex;
     const mut = MUTATIONS[seed.mutation] || MUTATIONS.none;
     const group = new THREE.Group();
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.15, 0.7, 8),
-      new THREE.MeshStandardMaterial({ color: 0x3c8c3c })
-    );
-    stem.position.y = 0.35; stem.castShadow = true; group.add(stem);
-    const head = makePlantHead(seed.plantId, col);
-    head.position.y = 1.15; group.add(head);
+    let headRef;
+    if (loadedModels.plants[seed.plantId]) {
+      // GLB : modèle complet sans stem
+      const model = loadedModels.plants[seed.plantId].clone(true);
+      model.scale.setScalar(PLANT_GLB_SCALE[seed.plantId] || 1.5);
+      group.add(model);
+      headRef = model;
+    } else {
+      // Fallback primitive : stem + head
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.15, 0.7, 8),
+        new THREE.MeshStandardMaterial({ color: 0x3c8c3c })
+      );
+      stem.position.y = 0.35; stem.castShadow = true; group.add(stem);
+      const head = makePlantHead(seed.plantId, col);
+      head.position.y = 1.15; group.add(head);
+      headRef = head;
+    }
     group.userData = {
       type: 'plant',
       plantId: seed.plantId, mutation: seed.mutation,
       lane: slot.laneIdx, slot: slot,
       lastShot: 0, bobPhase: Math.random() * Math.PI * 2,
-      headRef: head, flashUntil: 0,
+      headRef, flashUntil: 0,
     };
     if (mut.label) {
       const ring = new THREE.Mesh(
@@ -2906,8 +2986,14 @@
       e.rotation.z = wiggle;
       e.position.y = 0.1 + Math.abs(Math.sin((now + e.userData.wigglePhase) * 8)) * 0.08;
       const bodyMesh = e.userData.bodyMesh;
-      if (bodyMesh && bodyMesh.material) {
-        bodyMesh.material.emissiveIntensity = slowed ? 0.55 : 0.18;
+      if (bodyMesh) {
+        const intensity = slowed ? 0.55 : 0.18;
+        if (bodyMesh.material) {
+          bodyMesh.material.emissiveIntensity = intensity;
+        } else {
+          // GLB : traverse pour mettre à jour toutes les matières
+          bodyMesh.traverse(o => { if (o.isMesh && o.material) o.material.emissiveIntensity = intensity; });
+        }
       }
       if (e.userData.variantRing) e.userData.variantRing.rotation.z = now * 1.5;
       if (e.userData.variantHalo) {
@@ -2955,33 +3041,35 @@
     renderer.render(scene, camera);
   }
 
-  // --- INIT ---
-  const savedData = loadGame();
-  let offlineResult = null;
-  if (savedData) {
-    offlineResult = applyLoad(savedData);
-    if (game.shop.length === 0) rollShop();
-    else renderShop();
-  } else {
-    rebuildTerrain();
-    rebuildParcVisual();
-    rollShop();
-  }
-  renderInventory();
-  updatePrestigeButtonVisibility();
-  checkAchievements();
-  updateHud();
-  updateAccountBadge();
-  initFirebase();
-  animate();
-
-  if (offlineResult && offlineResult.earned >= 1) {
-    $('welcome-time').textContent = fmtDuration(offlineResult.elapsedSec);
-    $('welcome-earned').textContent = fmtNumber(offlineResult.earned);
-    $('welcome-modal').classList.remove('hidden');
-  } else if (!savedData) {
-    showTutorial();
-  }
+  // --- INIT (async pour preload des modèles GLB avant de placer les plantes/blops) ---
+  (async () => {
+    await preloadModels();
+    const savedData = loadGame();
+    let offlineResult = null;
+    if (savedData) {
+      offlineResult = applyLoad(savedData);
+      if (game.shop.length === 0) rollShop();
+      else renderShop();
+    } else {
+      rebuildTerrain();
+      rebuildParcVisual();
+      rollShop();
+    }
+    renderInventory();
+    updatePrestigeButtonVisibility();
+    checkAchievements();
+    updateHud();
+    updateAccountBadge();
+    initFirebase();
+    animate();
+    if (offlineResult && offlineResult.earned >= 1) {
+      $('welcome-time').textContent = fmtDuration(offlineResult.elapsedSec);
+      $('welcome-earned').textContent = fmtNumber(offlineResult.earned);
+      $('welcome-modal').classList.remove('hidden');
+    } else if (!savedData) {
+      showTutorial();
+    }
+  })();
 
   addEventListener('beforeunload', saveGame);
   addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });

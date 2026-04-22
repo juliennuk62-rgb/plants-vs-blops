@@ -3387,7 +3387,15 @@
     const raw = localStorage.getItem(EDITOR_SAVE_KEY);
     if (!raw) return;
     try {
-      const data = JSON.parse(raw);
+      let data = JSON.parse(raw);
+      // Auto-clean : supprime les entrées éditeur dont le GLB est déjà baké
+      const bakedFiles = new Set(BAKED_DECORATIONS.map(d => d.file));
+      const before = data.length;
+      data = data.filter(d => !bakedFiles.has(d.libName));
+      if (data.length !== before) {
+        localStorage.setItem(EDITOR_SAVE_KEY, JSON.stringify(data));
+        console.log(`[Editor] Auto-cleaned ${before - data.length} entries already baked`);
+      }
       for (const d of data) {
         const lib = editor.library.find(l => l.id === d.libId) || editor.library.find(l => l.name === d.libName);
         if (!lib) { console.warn('Lib not found for', d.libName); continue; }

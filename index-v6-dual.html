@@ -2327,6 +2327,7 @@
     activeTab = tab;
     document.body.classList.toggle('tab-game', tab === 'game');
     document.body.classList.toggle('tab-house', tab === 'house');
+    document.body.classList.toggle('tab-campaign', tab === 'campaign');
     if (typeof updateTabSwitcherUI === 'function') updateTabSwitcherUI();
   }
 

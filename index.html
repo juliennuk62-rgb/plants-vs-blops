@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>Plants vs Blops - Proto v0.7</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* === TIER 2 : Design tokens (Sprint UI-2) === */
     :root {
@@ -61,9 +64,14 @@
       /* Elevation */
       --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
       --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+      /* Fonts */
+      --font-body: 'Inter', system-ui, -apple-system, Arial, sans-serif;
+      --font-display: 'Fredoka', 'Inter', system-ui, sans-serif;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; font-family: Arial, sans-serif; background: #000; color: #fff; user-select: none; -webkit-tap-highlight-color: transparent; }
+    body { overflow: hidden; font-family: var(--font-body); background: #000; color: #fff; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; }
+    .modal-title, h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.2px; }
+    #cash, .cash-value, .price, .parc-rate, .seed-price { font-family: var(--font-display); font-weight: 600; }
     canvas { display: block; }
 
     #hud {

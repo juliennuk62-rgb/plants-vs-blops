@@ -489,6 +489,14 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="blop-fiche-modal">
+    <div class="modal-content" style="max-width:440px;">
+      <div class="modal-title" id="fiche-title">Blop</div>
+      <div id="fiche-body" style="color:#ccc;font-size:13px;line-height:1.7;"></div>
+      <div class="modal-close"><div class="btn" id="fiche-close">Fermer</div></div>
+    </div>
+  </div>
+
   <div class="modal hidden" id="missions-modal">
     <div class="modal-content" style="max-width:620px;">
       <div class="modal-title">🎯 Missions</div>
@@ -1862,8 +1870,36 @@
   function sortBlops() {
     game.blops.sort((a, b) => blopValue(b) - blopValue(a));
   }
+  // === SEASON 2 - Feature #12 : Gaspard se souvient (personas) ===
+  const BLOP_FIRST_NAMES = [
+    'Gaspard', 'Mireille', 'Jean-Kévin', 'Brigitte', 'Thierry', 'Ginette', 'Roger', 'Colette',
+    'Marcel', 'Huguette', 'Raymond', 'Paulette', 'Gérard', 'Yvette', 'Norbert', 'Josette',
+    'Bernard', 'Michèle', 'Fernand', 'Simone', 'André', 'Odette', 'Lucien', 'Renée',
+    'Maurice', 'Suzanne', 'Henri', 'Jeannine', 'Robert', 'Monique', 'Pierrot', 'Bernadette',
+  ];
+  const BLOP_EPITHETS = [
+    'le Féroce', 'le Tranquille', 'l\'Éternel', 'le Grincheux', 'la Douce', 'le Curieux',
+    'le Galant', 'le Rusé', 'la Fière', 'le Bavard', 'le Silencieux', 'l\'Intrépide',
+    'le Boulanger', 'la Mélancolique', 'le Poète', 'la Bricoleuse',
+  ];
+  function generateBlopPersona(rarity, variant) {
+    const rng = Math.random;
+    const first = BLOP_FIRST_NAMES[Math.floor(rng() * BLOP_FIRST_NAMES.length)];
+    const epithet = rng() < 0.35 ? ' ' + BLOP_EPITHETS[Math.floor(rng() * BLOP_EPITHETS.length)] : '';
+    return {
+      fullName: first + epithet,
+      capturedAt: Date.now(),
+      rarity, variant,
+      wavesSurvived: Math.floor(rng() * 50) + 1,
+      bestFriend: rng() < 0.4 ? BLOP_FIRST_NAMES[Math.floor(rng() * BLOP_FIRST_NAMES.length)] : null,
+    };
+  }
+
   function addBlopToHolding(rarity, variant) {
-    game.blops.push({ rarity, variant: variant || 'none' });
+    const blop = { rarity, variant: variant || 'none' };
+    // Persona sur 70% des Blops non-commons
+    if (rarity !== 'common' && Math.random() < 0.7) blop.persona = generateBlopPersona(rarity, variant);
+    game.blops.push(blop);
     sortBlops();
     // Auto-sell overflow
     while (game.blops.length > INVENTORY_CAPACITY) {
@@ -2866,7 +2902,7 @@
         shop: game.shop.map(s => ({ plantId: s.plantId, mutation: s.mutation, bought: s.bought })),
         shopTimer: game.shopTimer,
         collection: { ...game.collection },
-        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none' })),
+        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none', p: b.persona || null })),
         achievements: { ...game.achievements },
         stats: { ...game.stats },
         missions: game.missions ? JSON.parse(JSON.stringify(game.missions)) : null,
@@ -2884,7 +2920,7 @@
       try {
         const d = JSON.parse(raw);
         if (d.v === 5) {
-          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none' }));
+          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none', persona: b.p || b.persona || null }));
           return d;
         }
       } catch {}
@@ -2937,7 +2973,7 @@
     updateMissionsBadge();
     // Blops (format v5: [{rarity, variant}])
     game.blops = (data.blops || [])
-      .map(b => typeof b === 'string' ? { rarity: b, variant: 'none' } : { rarity: b.rarity, variant: b.variant || 'none' })
+      .map(b => typeof b === 'string' ? { rarity: b, variant: 'none' } : { rarity: b.rarity, variant: b.variant || 'none', persona: b.persona || null })
       .filter(b => RARITIES[b.rarity]);
     sortBlops();
     // Lanes depend on prestige — rebuild BEFORE restoring plants
@@ -3588,8 +3624,11 @@
         }
         div.innerHTML = `${BLOP_ICONS[b.rarity] || '👾'}
           ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color};">${v.label}</div>` : ''}
+          ${b.persona ? `<div style="position:absolute; bottom:16px; left:0; right:0; font-size:8px; color:#ffddaa; text-align:center; text-shadow:0 0 3px #000;">${b.persona.fullName.split(' ')[0]}</div>` : ''}
           <div class="parc-rate">+${rate.toFixed(2)}</div>`;
-        div.title = `${br.name} (${r.label}${v.label ? ' ' + v.label + ' ×' + v.mult : ''}) — +${rate.toFixed(2)}$/sec`;
+        div.title = `${b.persona ? b.persona.fullName + ' — ' : ''}${br.name} (${r.label}${v.label ? ' ' + v.label + ' ×' + v.mult : ''}) — +${rate.toFixed(2)}$/sec`;
+        div.style.cursor = 'pointer';
+        div.onclick = () => { sfx('click'); showBlopFiche(b); };
       } else {
         div.className = 'parc-slot empty';
         div.innerHTML = '—';
@@ -3975,6 +4014,33 @@
 
   const btnClick = (id, fn) => { $(id).onclick = () => { sfx('click'); fn(); }; };
   btnClick('rec-btn', shareClip);
+  btnClick('fiche-close', () => $('blop-fiche-modal').classList.add('hidden'));
+
+  function showBlopFiche(blop) {
+    if (!blop) return;
+    const r = RARITIES[blop.rarity];
+    const v = blop.variant && blop.variant !== 'none' ? VARIANTS[blop.variant] : null;
+    const persona = blop.persona;
+    const br = BRAINROTS[blop.rarity];
+    $('fiche-title').innerHTML = persona ? persona.fullName : (br.name + ' (' + r.label + ')');
+    $('fiche-title').style.color = r.color;
+    const val = blopValue(blop);
+    let body = '<div><span style="color:#aaa;">Espèce :</span> <strong>' + br.name + '</strong></div>';
+    body += '<div><span style="color:#aaa;">Rareté :</span> <strong style="color:' + r.color + ';">' + r.label + '</strong></div>';
+    if (v) body += '<div><span style="color:#aaa;">Variante :</span> <strong style="color:' + v.color + ';">' + v.label + ' (×' + v.mult + ')</strong></div>';
+    body += '<div><span style="color:#aaa;">Revenu passif :</span> <strong>' + (val * PASSIVE_RATE).toFixed(2) + '$/s</strong></div>';
+    if (persona) {
+      const days = Math.floor((Date.now() - persona.capturedAt) / 86400000);
+      body += '<hr style="border:none;border-top:1px solid #333;margin:14px 0;">';
+      body += '<div style="font-style:italic;color:#eee;line-height:1.8;">';
+      body += 'Capturé <strong>' + (days === 0 ? 'aujourd\'hui' : 'il y a ' + days + ' jours') + '</strong>. ';
+      body += 'A survécu <strong>' + persona.wavesSurvived + '</strong> vagues avant d\'être pris.';
+      if (persona.bestFriend) body += ' Meilleur ami : <em>' + persona.bestFriend + '</em>.';
+      body += '</div>';
+    }
+    $('fiche-body').innerHTML = body;
+    $('blop-fiche-modal').classList.remove('hidden');
+  }
   btnClick('shop-btn', () => { renderShop(); $('shop-modal').classList.remove('hidden'); });
   btnClick('shop-close', () => $('shop-modal').classList.add('hidden'));
   btnClick('collection-btn', () => { renderCollection(); $('collection-modal').classList.remove('hidden'); });

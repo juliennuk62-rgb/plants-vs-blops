@@ -3540,6 +3540,11 @@
   }
   // Lanes par garden : tableau [lanesG1, lanesG2]
   function lanesPerGardenArr() {
+    // En campagne : single garden avec le nombre de lanes du niveau
+    // (le terrain, les slots et le spawn X dépendent tous de ce tableau)
+    if (game && game.mode === 'campaign' && game.campaignActive) {
+      return [game.campaignActive.data.lanes];
+    }
     if (!hasDualGarden()) return [BASE_LANE_COUNT + game.prestige];
     // G1 frozen : BASE + (DUAL_GARDEN_PRESTIGE - 1) = 3 + 4 = 7 lanes (pour DUAL=5)
     const g1Frozen = BASE_LANE_COUNT + (DUAL_GARDEN_PRESTIGE - 1);

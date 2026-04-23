@@ -1503,6 +1503,151 @@
   applySkyState();
   setInterval(applySkyState, 60000); // refresh toutes les 60s
 
+  // --- MÉTÉO IRL (Season 2) : pluie + canicule via Open-Meteo (gratuit, keyless) ---
+  game.weather = { loaded: false, temp: null, code: null, isRaining: false, isHot: false, city: null };
+
+  async function fetchWeatherIfAllowed() {
+    // Utilise wttr.in (gratuit, keyless, CORS ok) en fallback d'Open-Meteo (besoin lat/lon)
+    // On tente ip-api → lat/lon → open-meteo
+    try {
+      const cached = localStorage.getItem('pvb_weather_cache');
+      if (cached) {
+        const d = JSON.parse(cached);
+        if (Date.now() - d.at < 60 * 60 * 1000) { // 1h cache
+          Object.assign(game.weather, d.data, { loaded: true });
+          applyWeatherEffects();
+          return;
+        }
+      }
+      // Étape 1 : géoloc approx via ipapi.co (gratuit, CORS OK, no key)
+      const geoResp = await fetch('https://ipapi.co/json/', { cache: 'no-store' });
+      if (!geoResp.ok) return;
+      const geo = await geoResp.json();
+      if (!geo.latitude || !geo.longitude) return;
+      // Étape 2 : météo via Open-Meteo (gratuit, keyless)
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude.toFixed(1)}&longitude=${geo.longitude.toFixed(1)}&current=temperature_2m,weather_code,precipitation&timezone=auto`;
+      const wResp = await fetch(url);
+      if (!wResp.ok) return;
+      const w = await wResp.json();
+      const c = w.current || {};
+      // Weather code : 51-67 = pluie, 80-82 = averses, 95-99 = orage
+      const code = c.weather_code || 0;
+      const temp = c.temperature_2m;
+      const precip = c.precipitation || 0;
+      const isRaining = (code >= 51 && code <= 67) || (code >= 80 && code <= 99) || precip > 0.2;
+      const isHot = temp >= 32;
+      const data = { temp, code, isRaining, isHot, city: geo.city || null };
+      localStorage.setItem('pvb_weather_cache', JSON.stringify({ at: Date.now(), data }));
+      Object.assign(game.weather, data, { loaded: true });
+      applyWeatherEffects();
+    } catch (err) { console.warn('Weather fetch failed:', err); }
+  }
+
+  let rainParticles = null;
+  function applyWeatherEffects() {
+    const w = game.weather;
+    if (!w.loaded) return;
+    // PLUIE visuelle : particules 3D qui tombent
+    if (w.isRaining && !rainParticles) {
+      const geom = new THREE.BufferGeometry();
+      const count = 800;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 80;
+        positions[i * 3 + 1] = Math.random() * 40 + 5;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 80;
+      }
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({ color: 0x99ccff, size: 0.18, transparent: true, opacity: 0.6 });
+      rainParticles = new THREE.Points(geom, mat);
+      scene.add(rainParticles);
+      showHint('🌧 Il pleut à ' + (w.city || 'ta ville') + ' — Blops aquatiques +bonus', 4500);
+    } else if (!w.isRaining && rainParticles) {
+      scene.remove(rainParticles);
+      rainParticles = null;
+    }
+    // CANICULE : affiche hint une seule fois
+    if (w.isHot && !w._hotShown) {
+      w._hotShown = true;
+      showHint('☀ ' + Math.round(w.temp) + '°C détectés — Mode Siesta actif 14h-18h', 4500);
+    }
+  }
+
+  function updateRainAnimation(dt) {
+    if (!rainParticles) return;
+    const pos = rainParticles.geometry.attributes.position.array;
+    for (let i = 1; i < pos.length; i += 3) {
+      pos[i] -= 25 * dt;
+      if (pos[i] < 0) pos[i] = 35 + Math.random() * 8;
+    }
+    rainParticles.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Bonus passif pluvieux / siesta
+  function weatherBonusMultiplier() {
+    const w = game.weather;
+    if (!w.loaded) return 1;
+    let mult = 1;
+    if (w.isRaining) mult *= 1.2; // +20% passif si pluie
+    if (w.isHot) {
+      const h = new Date().getHours();
+      if (h >= 14 && h < 18) mult *= 1.5; // Siesta +50%
+    }
+    return mult;
+  }
+
+  // Fetch au démarrage + refresh toutes les heures
+  setTimeout(fetchWeatherIfAllowed, 3000);
+  setInterval(fetchWeatherIfAllowed, 60 * 60 * 1000);
+
+  // --- AMBIENT LIGHT + BLOP VAMPIRE (Season 2) ---
+  game.ambientLux = null;
+  game.darkSince = 0;
+  game.vampireUnlocked = false;
+
+  function initAmbientLightSensor() {
+    if ('AmbientLightSensor' in window) {
+      try {
+        const sensor = new AmbientLightSensor({ frequency: 1 });
+        sensor.addEventListener('reading', () => {
+          game.ambientLux = sensor.illuminance;
+          checkVampireCondition();
+        });
+        sensor.addEventListener('error', () => {});
+        sensor.start();
+        return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function checkVampireCondition() {
+    const h = new Date().getHours();
+    const night = h >= 21 || h < 6;
+    const dark = game.ambientLux !== null ? game.ambientLux < 10 : night; // fallback heure
+    if (dark) {
+      if (!game.darkSince) game.darkSince = Date.now();
+      // 20s de noir → unlock
+      if (Date.now() - game.darkSince > 20000 && !game.vampireUnlocked) {
+        game.vampireUnlocked = true;
+        showToast('🦇 Un Blop Vampire rôde dans la nuit...', 4000);
+        sfx('rarity');
+      }
+    } else {
+      game.darkSince = 0;
+      game.vampireUnlocked = false;
+    }
+  }
+  // Fallback : check chaque 5s même sans sensor
+  setInterval(checkVampireCondition, 5000);
+  initAmbientLightSensor();
+
+  // Definition du Blop Vampire
+  const VAMPIRE_BLOP = {
+    name: 'Nocturis', rarity: 'ultrarare', hp: 350, size: 1.6, value: 4000,
+    mechanic: 'rage-regen', isVampire: true,
+  };
+
   // --- SLOW-MO & FLASH (Season 2) ---
   function triggerSlowMo(factor, duration) {
     const now = clock ? clock.getElapsedTime() : performance.now() / 1000;
@@ -1729,7 +1874,14 @@
   function getMaxPlants() { return BASE_MAX_PLANTS + game.prestige; }
   function levelBonus() { return (game.level - 1) * LEVEL_PASSIVE_BONUS; }
   function prestigeBonus() { return game.prestige * PRESTIGE_PASSIVE_BONUS; }
-  function totalPassiveMultiplier() { return 1 + levelBonus() + prestigeBonus(); }
+  function totalPassiveMultiplier() {
+    let m = 1 + levelBonus() + prestigeBonus();
+    if (typeof weatherBonusMultiplier === 'function') m *= weatherBonusMultiplier();
+    // Weekend silencieux +30%
+    const d = new Date().getDay();
+    if (d === 0 || d === 6) m *= 1.3;
+    return m;
+  }
 
   function parcBaseIncome() {
     let total = 0;
@@ -2105,7 +2257,16 @@
         flashScreen(0xccccff, 0.4);
       }
     }
-    if (!isLunar && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+    let isVampire = false;
+    // Nocturis (vampire) override : 15% des ultrarare si vampire unlocked
+    if (!isLunar && rarityKey === 'ultrarare' && game.vampireUnlocked && !overrides.noVariant && Math.random() < 0.15) {
+      blopData = { hp: VAMPIRE_BLOP.hp, size: VAMPIRE_BLOP.size, value: VAMPIRE_BLOP.value, name: VAMPIRE_BLOP.name };
+      mechanic = VAMPIRE_BLOP.mechanic;
+      blopName = VAMPIRE_BLOP.name;
+      blopId = 'nocturis';
+      isVampire = true;
+    }
+    if (!isLunar && !isVampire && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
       const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
       if (pool && pool.length > 0) {
         blopId = pool[Math.floor(Math.random() * pool.length)];
@@ -2114,6 +2275,10 @@
         mechanic = ext.mechanic;
         blopName = ext.name;
       }
+    }
+    // Season 2 : bonus Aquatique — pluie = +50% valeur
+    if (game.weather && game.weather.isRaining) {
+      blopData = Object.assign({}, blopData, { value: Math.floor(blopData.value * 1.5) });
     }
     const variantKey = pickVariant();
     const variant = VARIANTS[variantKey];
@@ -2142,7 +2307,6 @@
     });
     addVariantRing(group, variantKey, blopData.size);
     if (isLunar) {
-      // Aura lunaire argentée autour de Selenis
       const aura = new THREE.Mesh(
         new THREE.SphereGeometry(blopData.size * 1.8, 16, 16),
         new THREE.MeshBasicMaterial({ color: 0xccccff, transparent: true, opacity: 0.15, side: THREE.BackSide })
@@ -2151,6 +2315,16 @@
       group.add(aura);
       group.userData.lunarAura = aura;
     }
+    if (isVampire) {
+      const aura = new THREE.Mesh(
+        new THREE.SphereGeometry(blopData.size * 1.6, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0x660044, transparent: true, opacity: 0.25, side: THREE.BackSide })
+      );
+      aura.position.y = blopData.size;
+      group.add(aura);
+      group.userData.vampireAura = aura;
+    }
+    group.userData.isVampire = isVampire;
     group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);
     game.brainrots.push(group);
@@ -4330,6 +4504,7 @@
     }
     for (let i = game.bullets.length - 1; i >= 0; i--) updateBullet(game.bullets[i], dt, now, i);
     updateParticles(dt);
+    if (typeof updateRainAnimation === 'function') updateRainAnimation(dt);
     updateHud();
   }
   function animate() {

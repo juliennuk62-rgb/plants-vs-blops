@@ -1728,21 +1728,44 @@
   }
   setupCameraCampaign();
 
-  // Placeholder visuel V1 : une plateforme jaune pour montrer qu'on est dans la campagne
-  const campaignPlaceholder = new THREE.Mesh(
-    new THREE.BoxGeometry(40, 0.4, 40),
-    new THREE.MeshStandardMaterial({ color: 0x88dd66 })
-  );
-  campaignPlaceholder.position.y = -0.2;
-  campaignPlaceholder.receiveShadow = Q === 'high';
-  sceneCampaign.add(campaignPlaceholder);
-  // Cartouche texte central (billboard vers cam)
-  const titleCampaign = new THREE.Mesh(
-    new THREE.BoxGeometry(12, 3, 0.3),
-    new THREE.MeshStandardMaterial({ color: 0xffcc33, emissive: 0xffaa22, emissiveIntensity: 0.3 })
-  );
-  titleCampaign.position.set(0, 2, 0);
-  sceneCampaign.add(titleCampaign);
+  // === CAMPAGNE : 15 niveaux sur 2 mondes (Point 2) ===
+  const CAMPAIGN_LEVELS = [
+    // MONDE 1 : LA FERME (7 niveaux, niveau 7 = mini-boss)
+    { id: 'w1-1', world: 1, idx: 1, name: 'Premier jour',         desc: 'Les premiers Blops arrivent. Apprends à planter.' },
+    { id: 'w1-2', world: 1, idx: 2, name: 'Renforts',             desc: 'Plus de Blops, deux lanes à défendre.' },
+    { id: 'w1-3', world: 1, idx: 3, name: 'Blops Rares',          desc: 'De nouveaux ennemis plus résistants.' },
+    { id: 'w1-4', world: 1, idx: 4, name: 'Vague de l\'aube',     desc: 'Les Blops attaquent en groupe.' },
+    { id: 'w1-5', world: 1, idx: 5, name: 'Mutations',            desc: 'Tes graines peuvent muter !' },
+    { id: 'w1-6', world: 1, idx: 6, name: 'Siège',                desc: 'Tiens jusqu\'à l\'aube.' },
+    { id: 'w1-7', world: 1, idx: 7, name: 'Le Grand Patapim',     desc: 'Boss : un Blop gigantesque te défie.', boss: true },
+    // MONDE 2 : LA FORÊT (8 niveaux, niveau 15 = boss final)
+    { id: 'w2-1', world: 2, idx: 1, name: 'Clairière',            desc: 'Nouveau terrain, nouveaux dangers.' },
+    { id: 'w2-2', world: 2, idx: 2, name: 'Blops Sauvages',       desc: 'Des ennemis plus rapides.' },
+    { id: 'w2-3', world: 2, idx: 3, name: 'Brouillard',           desc: 'Vision réduite — anticipe.' },
+    { id: 'w2-4', world: 2, idx: 4, name: 'La Meute',             desc: 'Ils arrivent par hordes.' },
+    { id: 'w2-5', world: 2, idx: 5, name: 'Variants',             desc: 'Les Blops mutent en Ethereal.' },
+    { id: 'w2-6', world: 2, idx: 6, name: 'Nuit sans lune',       desc: 'La nuit est leur alliée.' },
+    { id: 'w2-7', world: 2, idx: 7, name: 'Avant-garde',          desc: 'L\'ennemi prépare son champion.' },
+    { id: 'w2-8', world: 2, idx: 8, name: 'Bombombini Furieux',   desc: 'Boss final : le roi des Blops.', boss: true },
+  ];
+
+  // État progression campagne
+  if (!window.gameCampaign) {
+    window.gameCampaign = {
+      highestUnlocked: 'w1-1',
+      stars: {},         // { 'w1-1': 2, 'w1-2': 1, ... }
+      completed: {},     // { 'w1-1': true, ... }
+      currentLevel: null, // id du niveau en cours de jeu
+    };
+  }
+
+  function campaignLevelUnlocked(levelId) {
+    if (levelId === 'w1-1') return true;
+    const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === levelId);
+    if (idx <= 0) return false;
+    const prevId = CAMPAIGN_LEVELS[idx - 1].id;
+    return !!gameCampaign.completed[prevId];
+  }
 
   // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
   // Prix progressifs : on commence par du nature peu cher, buildings plus chers.
@@ -2521,9 +2544,114 @@
   window.addEventListener('DOMContentLoaded', () => {
     buildTabSwitcher();
     buildHouseShopUI();
+    buildCampaignMapUI();
     if (IS_ADMIN) buildAdminPanel();
     setupHousePlacementClicks();
   });
+
+  // === CAMPAGNE : UI Map Selector (Point 2) ===
+  function buildCampaignMapUI() {
+    const overlay = document.createElement('div');
+    overlay.id = 'campaign-map';
+    overlay.style.cssText = 'position:fixed;inset:0;display:none;z-index:200;background:linear-gradient(180deg,#8fd8ff 0%,#b6f0a6 65%,#87c4ff 100%);overflow-y:auto;padding:80px 20px 40px;';
+    document.body.appendChild(overlay);
+    const st = document.createElement('style');
+    st.textContent = `
+      body.tab-campaign #campaign-map { display:block; }
+      .camp-world { max-width: 960px; margin: 0 auto 40px; }
+      .camp-world-header {
+        display:flex; align-items:center; gap:12px; margin-bottom:16px;
+        font-family: var(--font-display, sans-serif); font-size: 24px; font-weight:700; color:#fff;
+        text-shadow: 2px 2px 0 rgba(0,0,0,0.4), 0 0 12px rgba(0,0,0,0.3);
+      }
+      .camp-world-header .icon { font-size: 32px; }
+      .camp-levels-row {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 14px;
+      }
+      .camp-level {
+        background: rgba(0,0,0,0.35); border: 2px solid rgba(255,255,255,0.2);
+        border-radius: 16px; padding: 14px 10px; text-align: center; color: #fff;
+        cursor: pointer; position: relative;
+        transition: transform 0.15s var(--e-pop, ease), box-shadow 0.15s ease;
+        backdrop-filter: blur(4px);
+      }
+      .camp-level:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+      .camp-level.locked { opacity: 0.55; cursor: not-allowed; }
+      .camp-level.locked:hover { transform: none; box-shadow: none; }
+      .camp-level.completed { border-color: #ffcc33; background: rgba(255,204,51,0.2); }
+      .camp-level.boss { border-color: #ff3366; background: linear-gradient(135deg, rgba(255,51,102,0.3), rgba(100,20,40,0.4)); }
+      .camp-level .l-num { font-family: var(--font-display, sans-serif); font-size: 26px; font-weight: 900; }
+      .camp-level .l-name { font-size: 11px; color: #e0e0e0; margin-top: 4px; line-height: 1.2; min-height: 26px; }
+      .camp-level .l-stars { margin-top: 6px; font-size: 14px; letter-spacing: 2px; color: #ffdd00; }
+      .camp-level .l-stars.empty { color: rgba(255,255,255,0.25); }
+      .camp-level .l-lock { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 36px; opacity: 0.8; }
+      .camp-level.boss .l-num::before { content: '👑 '; }
+      .camp-map-title {
+        text-align: center; font-family: var(--font-display, sans-serif);
+        font-size: 40px; font-weight: 900; color: #fff; margin-bottom: 24px;
+        text-shadow: 3px 3px 0 rgba(0,0,0,0.4), 0 0 20px rgba(0,0,0,0.3);
+      }
+      .camp-map-subtitle {
+        text-align: center; font-size: 14px; color: #234;
+        margin-bottom: 30px; max-width: 640px; margin-left: auto; margin-right: auto;
+      }
+    `;
+    document.head.appendChild(st);
+    renderCampaignMap();
+  }
+
+  function renderCampaignMap() {
+    const overlay = document.getElementById('campaign-map');
+    if (!overlay) return;
+    const worldsData = [
+      { num: 1, name: 'La Ferme', icon: '🌾' },
+      { num: 2, name: 'La Forêt', icon: '🌲' },
+    ];
+    let html = '<div class="camp-map-title">📖 L\'Aventure de Patapim</div>';
+    html += '<div class="camp-map-subtitle">Enchaîne les niveaux pour débloquer de nouvelles plantes et battre les boss. Termine un niveau parfaitement pour décrocher 3 étoiles.</div>';
+    for (const world of worldsData) {
+      const levels = CAMPAIGN_LEVELS.filter(l => l.world === world.num);
+      html += '<div class="camp-world">';
+      html += '<div class="camp-world-header"><span class="icon">' + world.icon + '</span>Monde ' + world.num + ' — ' + world.name + '</div>';
+      html += '<div class="camp-levels-row">';
+      for (const lv of levels) {
+        const unlocked = campaignLevelUnlocked(lv.id);
+        const completed = !!gameCampaign.completed[lv.id];
+        const stars = gameCampaign.stars[lv.id] || 0;
+        const starsStr = '★★★'.slice(0, stars) + '☆☆☆'.slice(0, 3 - stars);
+        const cls = ['camp-level', unlocked ? '' : 'locked', completed ? 'completed' : '', lv.boss ? 'boss' : ''].filter(Boolean).join(' ');
+        html += '<div class="' + cls + '" data-level="' + lv.id + '">';
+        if (!unlocked) {
+          html += '<div class="l-lock">🔒</div>';
+          html += '<div class="l-num" style="opacity:0.3">' + lv.world + '-' + lv.idx + '</div>';
+          html += '<div class="l-name">???</div>';
+          html += '<div class="l-stars empty">☆☆☆</div>';
+        } else {
+          html += '<div class="l-num">' + lv.world + '-' + lv.idx + '</div>';
+          html += '<div class="l-name">' + lv.name + '</div>';
+          html += '<div class="l-stars' + (stars === 0 ? ' empty' : '') + '">' + starsStr + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+    overlay.innerHTML = html;
+    overlay.querySelectorAll('.camp-level').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.dataset.level;
+        const lv = CAMPAIGN_LEVELS.find(l => l.id === id);
+        if (!lv) return;
+        if (!campaignLevelUnlocked(id)) {
+          sfx && sfx('error');
+          showHint('Niveau verrouillé — termine le précédent.', 2000);
+          return;
+        }
+        sfx && sfx('click');
+        showHint('📖 ' + lv.name + ' — bientôt jouable ! (' + lv.desc + ')', 4500);
+      });
+    });
+  }
   // Raccourci : Alt+Shift+A active le mode admin et reload
   window.addEventListener('keydown', (e) => {
     if (e.altKey && e.shiftKey && e.key === 'A') {
@@ -5104,6 +5232,11 @@
           purchased: { ...window.gameHouse.purchased },
           placed: window.gameHouse.placed.map(p => ({ id: p.id, itemId: p.itemId, x: p.x, y: p.y, z: p.z, rotY: p.rotY, scale: p.scale })),
         } : null,
+        campaign: window.gameCampaign ? {
+          highestUnlocked: window.gameCampaign.highestUnlocked,
+          stars: { ...window.gameCampaign.stars },
+          completed: { ...window.gameCampaign.completed },
+        } : null,
         achievements: { ...game.achievements },
         stats: { ...game.stats },
         missions: game.missions ? JSON.parse(JSON.stringify(game.missions)) : null,
@@ -5189,6 +5322,14 @@
         sceneHouse.add(mesh);
         window.gameHouse.placed.push({ ...p, mesh });
       });
+    }
+    // Campagne (Point 2)
+    if (data.campaign) {
+      window.gameCampaign = window.gameCampaign || { highestUnlocked: 'w1-1', stars: {}, completed: {}, currentLevel: null };
+      window.gameCampaign.highestUnlocked = data.campaign.highestUnlocked || 'w1-1';
+      window.gameCampaign.stars = { ...(data.campaign.stars || {}) };
+      window.gameCampaign.completed = { ...(data.campaign.completed || {}) };
+      if (typeof renderCampaignMap === 'function') renderCampaignMap();
     }
     if (data.missions) game.missions = data.missions;
     initMissions();

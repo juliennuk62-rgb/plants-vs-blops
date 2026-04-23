@@ -362,6 +362,7 @@
     <div class="btn" id="collection-btn">Collection</div>
     <div class="btn" id="profile-btn">Profil</div>
     <div class="btn" id="missions-btn">Missions <span id="missions-badge" style="display:none;background:#ff3355;color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-size:11px;">!</span></div>
+    <div class="btn" id="memorial-btn">🕊 Mémorial</div>
     <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
     <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
     <div class="btn" id="leaderboard-btn">🏆 Classement</div>
@@ -486,6 +487,24 @@
         <div class="btn gold" id="leaderboard-submit">Publier mon score</div>
       </div>
       <div class="modal-close"><div class="btn" id="leaderboard-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="memorial-modal">
+    <div class="modal-content" style="max-width:620px;">
+      <div class="modal-title">🕊 Mémorial des Braves</div>
+      <div style="color:#aaa;font-size:12px;margin-bottom:14px;font-style:italic;">Tes plantes qui ont atteint 200 kills partent en retraite et reposent ici. Chacune t'offre +1% de revenus passifs à vie.</div>
+      <div id="memorial-summary" style="color:#ffcc88;margin-bottom:12px;"></div>
+      <div id="memorial-list" style="max-height:400px;overflow-y:auto;"></div>
+      <div class="modal-close"><div class="btn" id="memorial-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="blop-fiche-modal">
+    <div class="modal-content" style="max-width:440px;">
+      <div class="modal-title" id="fiche-title">Blop</div>
+      <div id="fiche-body" style="color:#ccc;font-size:13px;line-height:1.7;"></div>
+      <div class="modal-close"><div class="btn" id="fiche-close">Fermer</div></div>
     </div>
   </div>
 
@@ -1648,6 +1667,66 @@
     mechanic: 'rage-regen', isVampire: true,
   };
 
+  // --- GASPARD SE SOUVIENT (Season 2) : chaque Blop capturé a un prénom unique + fiche ---
+  const BLOP_FIRST_NAMES = [
+    'Gaspard', 'Mireille', 'Jean-Kévin', 'Brigitte', 'Thierry', 'Ginette', 'Roger', 'Colette',
+    'Marcel', 'Huguette', 'Raymond', 'Paulette', 'Gérard', 'Yvette', 'Norbert', 'Josette',
+    'Bernard', 'Michèle', 'Fernand', 'Simone', 'André', 'Odette', 'Lucien', 'Renée',
+    'Maurice', 'Suzanne', 'Henri', 'Jeannine', 'Robert', 'Monique', 'Pierrot', 'Bernadette',
+    'Gilbert', 'Christiane', 'Francis', 'Danielle', 'Claude', 'Nicole', 'Gilles', 'Martine',
+    'Didier', 'Chantal', 'Patrick', 'Véronique', 'Olivier', 'Isabelle',
+  ];
+  const BLOP_EPITHETS = [
+    'le Féroce', 'le Tranquille', 'l\'Éternel', 'le Grincheux', 'la Douce', 'le Curieux',
+    'le Galant', 'le Rusé', 'la Fière', 'le Bavard', 'le Silencieux', 'l\'Intrépide',
+    'le Boulanger', 'la Mélancolique', 'le Poète', 'la Bricoleuse', 'le Comptable', 'le Rêveur',
+  ];
+  function generateBlopPersona(rarity, variant) {
+    const rng = Math.random;
+    const first = BLOP_FIRST_NAMES[Math.floor(rng() * BLOP_FIRST_NAMES.length)];
+    const epithet = rng() < 0.35 ? ' ' + BLOP_EPITHETS[Math.floor(rng() * BLOP_EPITHETS.length)] : '';
+    return {
+      fullName: first + epithet,
+      capturedAt: Date.now(),
+      rarity, variant,
+      wavesSurvived: Math.floor(rng() * 50) + 1,
+      bestFriend: rng() < 0.4 ? BLOP_FIRST_NAMES[Math.floor(rng() * BLOP_FIRST_NAMES.length)] : null,
+    };
+  }
+
+  // --- MÉMORIAL DES BRAVES (Season 2) : plantes retirées après 200 kills ---
+  // Format : { plantId, mutation, kills, retiredAt, name }
+  if (!game.memorial) game.memorial = [];
+  const PLANT_RETIREMENT_KILLS = 200;
+
+  function maybeRetirePlant(plantGroup) {
+    const pd = plantGroup.userData;
+    if (!pd.killCount) pd.killCount = 0;
+    if (pd.killCount < PLANT_RETIREMENT_KILLS) return false;
+    // Retraite !
+    const persona = generateBlopPersona(PLANTS[pd.plantId].rarity, pd.mutation);
+    game.memorial.push({
+      plantId: pd.plantId,
+      mutation: pd.mutation,
+      kills: pd.killCount,
+      retiredAt: Date.now(),
+      name: persona.fullName,
+    });
+    // Bonus passif : +1% par plante retraitée sur sa rareté (stockage cumul simple)
+    if (!game.memorialBonus) game.memorialBonus = 0;
+    game.memorialBonus += 0.01;
+    showToast('🕊 ' + persona.fullName + ' part en retraite (' + pd.killCount + ' kills). +1% passif permanent.', 4500);
+    sfx('reward');
+    // Retirer la plante visuellement
+    const slot = pd.slot;
+    if (slot) slot.plant = null;
+    scene.remove(plantGroup);
+    const idx = game.plants.indexOf(plantGroup);
+    if (idx !== -1) game.plants.splice(idx, 1);
+    saveGame();
+    return true;
+  }
+
   // --- SLOW-MO & FLASH (Season 2) ---
   function triggerSlowMo(factor, duration) {
     const now = clock ? clock.getElapsedTime() : performance.now() / 1000;
@@ -1877,9 +1956,10 @@
   function totalPassiveMultiplier() {
     let m = 1 + levelBonus() + prestigeBonus();
     if (typeof weatherBonusMultiplier === 'function') m *= weatherBonusMultiplier();
-    // Weekend silencieux +30%
     const d = new Date().getDay();
     if (d === 0 || d === 6) m *= 1.3;
+    // Mémorial des Braves : +1% par plante retraitée
+    if (game.memorialBonus) m *= (1 + game.memorialBonus);
     return m;
   }
 
@@ -1997,8 +2077,12 @@
   function sortBlops() {
     game.blops.sort((a, b) => blopValue(b) - blopValue(a));
   }
-  function addBlopToHolding(rarity, variant) {
-    game.blops.push({ rarity, variant: variant || 'none' });
+  function addBlopToHolding(rarity, variant, persona) {
+    const blop = { rarity, variant: variant || 'none' };
+    // Season 2 : chaque Blop a un persona généré (nom + histoire)
+    if (persona) blop.persona = persona;
+    else if (rarity !== 'common' && Math.random() < 0.7) blop.persona = generateBlopPersona(rarity, variant);
+    game.blops.push(blop);
     sortBlops();
     // Auto-sell overflow
     while (game.blops.length > INVENTORY_CAPACITY) {
@@ -2258,15 +2342,29 @@
       }
     }
     let isVampire = false;
+    let isMirror = false;
+    // "Le Blop Qui Sait Ton Prénom" : spawn rare à partir prestige 3, nom = pseudo
+    const myName = (game.lbName) || (typeof localStorage !== 'undefined' && localStorage.getItem('pvb_lb_name'));
+    if (!isLunar && !overrides.noVariant && game.prestige >= 3 && myName && rarityKey === 'mythic' && Math.random() < 0.08 && !game.mirrorSpawnedToday) {
+      game.mirrorSpawnedToday = true;
+      setTimeout(() => { game.mirrorSpawnedToday = false; }, 60 * 60 * 1000); // cooldown 1h
+      blopData = { hp: blopData.hp * 1.8, size: blopData.size * 1.1, value: blopData.value * 2.5, name: myName };
+      mechanic = 'rage-regen';
+      blopName = myName;
+      blopId = 'mirror_' + myName;
+      isMirror = true;
+      showToast('🪞 "' + myName + '" — un miroir de toi...', 4500);
+      flashScreen(0xff3366, 0.3);
+    }
     // Nocturis (vampire) override : 15% des ultrarare si vampire unlocked
-    if (!isLunar && rarityKey === 'ultrarare' && game.vampireUnlocked && !overrides.noVariant && Math.random() < 0.15) {
+    if (!isLunar && !isMirror && rarityKey === 'ultrarare' && game.vampireUnlocked && !overrides.noVariant && Math.random() < 0.15) {
       blopData = { hp: VAMPIRE_BLOP.hp, size: VAMPIRE_BLOP.size, value: VAMPIRE_BLOP.value, name: VAMPIRE_BLOP.name };
       mechanic = VAMPIRE_BLOP.mechanic;
       blopName = VAMPIRE_BLOP.name;
       blopId = 'nocturis';
       isVampire = true;
     }
-    if (!isLunar && !isVampire && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+    if (!isLunar && !isVampire && !isMirror && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
       const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
       if (pool && pool.length > 0) {
         blopId = pool[Math.floor(Math.random() * pool.length)];
@@ -2462,20 +2560,26 @@
     updateHud();
     checkAchievements();
   }
-  function applyDamage(enemy, damage) {
+  function applyDamage(enemy, damage, sourcePlant) {
     if (!enemy || !enemy.parent) return;
     const ud = enemy.userData;
-    // Mécaniques défensives
     if (ud.mechanic === 'phase-through' && !ud.phaseUsed) {
       ud.phaseUsed = true;
       spawnDeathBurst(enemy.position, 0x66ffcc, 0.3);
       return;
     }
-    if (ud.shielded) return; // shield-phase
-    if (ud.invisible) return; // invisibility-pulse (balles passent à travers pendant phase invisible)
+    if (ud.shielded) return;
+    if (ud.invisible) return;
     if (ud.mechanic === 'armored') damage *= 0.5;
     ud.hp -= damage;
-    if (ud.hp <= 0) killBrainrot(enemy);
+    if (ud.hp <= 0) {
+      // Crédite le kill à la plante source (Mémorial)
+      if (sourcePlant && sourcePlant.userData && sourcePlant.userData.type === 'plant') {
+        sourcePlant.userData.killCount = (sourcePlant.userData.killCount || 0) + 1;
+        maybeRetirePlant(sourcePlant);
+      }
+      killBrainrot(enemy);
+    }
   }
   function applySlow(enemy, factor, duration, now) {
     if (!enemy || !enemy.parent) return;
@@ -2705,6 +2809,7 @@
       chain: options.chain || null,
       lifesteal: options.lifesteal || 0,
       plantGroup: options.plantGroup || null,
+      sourcePlant: plantGroup,
       pierce: !!options.pierce,
       piercedTargets: options.pierce ? new Set() : null,
       direction: options.pierce ? dir : null,
@@ -2815,7 +2920,7 @@
       for (const e of game.brainrots) {
         if (b.userData.piercedTargets.has(e)) continue;
         if (b.position.distanceTo(e.position) < 0.9 * e.userData.size) {
-          applyDamage(e, b.userData.damage);
+          applyDamage(e, b.userData.damage, b.userData.sourcePlant);
           b.userData.piercedTargets.add(e);
           if (b.userData.splash > 0) applySplash(b, e);
           if (b.userData.slow) applySlow(e, b.userData.slow.factor, b.userData.slow.duration, now);
@@ -2835,7 +2940,7 @@
     const dir = new THREE.Vector3().subVectors(t.position, b.position).normalize();
     b.position.addScaledVector(dir, b.userData.speed * dt);
     if (b.position.distanceTo(t.position) < 0.9 * t.userData.size) {
-      applyDamage(t, b.userData.damage);
+      applyDamage(t, b.userData.damage, b.userData.sourcePlant);
       if (b.userData.splash > 0) applySplash(b, t);
       if (b.userData.slow && t.parent) applySlow(t, b.userData.slow.factor, b.userData.slow.duration, now);
       if (b.userData.dot && t.parent) applyDot(t, b.userData.dot.dps, b.userData.dot.duration, now);
@@ -2969,10 +3074,13 @@
         shop: game.shop.map(s => ({ plantId: s.plantId, mutation: s.mutation, bought: s.bought })),
         shopTimer: game.shopTimer,
         collection: { ...game.collection },
-        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none' })),
+        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none', p: b.persona || null })),
         achievements: { ...game.achievements },
         stats: { ...game.stats },
         missions: game.missions ? JSON.parse(JSON.stringify(game.missions)) : null,
+        memorial: game.memorial || [],
+        memorialBonus: game.memorialBonus || 0,
+        lbName: game.lbName || null,
         lastSave: Date.now(),
       };
       localStorage.setItem(SAVE_KEY_V5, JSON.stringify(data));
@@ -2987,7 +3095,7 @@
       try {
         const d = JSON.parse(raw);
         if (d.v === 5) {
-          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none' }));
+          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none', persona: b.p || b.persona || null }));
           return d;
         }
       } catch {}
@@ -3036,6 +3144,9 @@
     game.achievements = data.achievements || {};
     game.stats = Object.assign(game.stats, data.stats || {});
     if (data.missions) game.missions = data.missions;
+    if (data.memorial) game.memorial = data.memorial;
+    if (data.memorialBonus) game.memorialBonus = data.memorialBonus;
+    if (data.lbName) game.lbName = data.lbName;
     initMissions();
     updateMissionsBadge();
     // Blops (format v5: [{rarity, variant}])
@@ -3691,8 +3802,11 @@
         }
         div.innerHTML = `${BLOP_ICONS[b.rarity] || '👾'}
           ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color};">${v.label}</div>` : ''}
+          ${b.persona ? `<div style="position:absolute; bottom:18px; left:0; right:0; font-size:8px; color:#ffddaa; text-align:center;">${escapeHtml(b.persona.fullName.split(' ')[0])}</div>` : ''}
           <div class="parc-rate">+${rate.toFixed(2)}</div>`;
-        div.title = `${br.name} (${r.label}${v.label ? ' ' + v.label + ' ×' + v.mult : ''}) — +${rate.toFixed(2)}$/sec`;
+        div.title = `${b.persona ? b.persona.fullName + ' — ' : ''}${br.name} (${r.label}${v.label ? ' ' + v.label + ' ×' + v.mult : ''}) — +${rate.toFixed(2)}$/sec`;
+        div.style.cursor = 'pointer';
+        div.onclick = () => { sfx('click'); showBlopFiche(b); };
       } else {
         div.className = 'parc-slot empty';
         div.innerHTML = '—';
@@ -4091,6 +4205,58 @@
   btnClick('leaderboard-close', () => $('leaderboard-modal').classList.add('hidden'));
   btnClick('leaderboard-submit', submitLeaderboardScore);
   btnClick('rec-btn', shareClip);
+  btnClick('memorial-btn', () => { renderMemorial(); $('memorial-modal').classList.remove('hidden'); });
+  btnClick('memorial-close', () => $('memorial-modal').classList.add('hidden'));
+  btnClick('fiche-close', () => $('blop-fiche-modal').classList.add('hidden'));
+
+  function renderMemorial() {
+    const bonus = ((game.memorialBonus || 0) * 100).toFixed(1);
+    $('memorial-summary').innerHTML = (game.memorial && game.memorial.length > 0)
+      ? '<strong>' + game.memorial.length + '</strong> plante(s) retraitée(s) — bonus passif permanent : <strong style="color:#ffcc33;">+' + bonus + '%</strong>'
+      : 'Aucune plante n\'a encore atteint 200 kills. Laisse-les chasser !';
+    const list = $('memorial-list');
+    list.innerHTML = '';
+    const mem = game.memorial || [];
+    const reverse = mem.slice().reverse();
+    reverse.forEach(m => {
+      const row = document.createElement('div');
+      const daysAgo = Math.floor((Date.now() - m.retiredAt) / (1000 * 60 * 60 * 24));
+      const plantName = (PLANTS[m.plantId] && PLANTS[m.plantId].name) || m.plantId;
+      const mut = MUTATIONS[m.mutation] && MUTATIONS[m.mutation].label ? ' ' + MUTATIONS[m.mutation].label : '';
+      row.style.cssText = 'background:#181820;border:1px solid #333;border-radius:8px;padding:12px;margin-bottom:8px;';
+      row.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<div><div style="font-weight:700;color:#ffddaa;">🌿 ' + escapeHtml(m.name || '—') + '</div>'
+        + '<div style="font-size:12px;color:#aaa;margin-top:2px;">' + plantName + mut + ' · ' + m.kills + ' kills</div></div>'
+        + '<div style="color:#888;font-size:11px;">il y a ' + (daysAgo === 0 ? 'peu' : daysAgo + 'j') + '</div></div>';
+      list.appendChild(row);
+    });
+    if (reverse.length === 0) list.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-style:italic;">Le mémorial attend ses héros...</div>';
+  }
+
+  // Afficher la fiche d'un Blop au tap
+  function showBlopFiche(blop) {
+    if (!blop) return;
+    const r = RARITIES[blop.rarity];
+    const v = blop.variant && blop.variant !== 'none' ? VARIANTS[blop.variant] : null;
+    const persona = blop.persona;
+    $('fiche-title').innerHTML = (persona ? escapeHtml(persona.fullName) : r.label + ' Blop');
+    $('fiche-title').style.color = r.color;
+    const val = blopValue(blop);
+    let body = '<div><span style="color:#aaa;">Rareté :</span> <strong style="color:' + r.color + ';">' + r.label + '</strong></div>';
+    if (v) body += '<div><span style="color:#aaa;">Variante :</span> <strong style="color:' + v.color + ';">' + v.label + '</strong></div>';
+    body += '<div><span style="color:#aaa;">Revenu passif :</span> <strong>' + (val * PASSIVE_RATE).toFixed(2) + '$/s</strong></div>';
+    if (persona) {
+      const capturedDays = Math.floor((Date.now() - persona.capturedAt) / (1000 * 60 * 60 * 24));
+      body += '<hr style="border:none;border-top:1px solid #333;margin:14px 0;">';
+      body += '<div style="font-style:italic;color:#eee;line-height:1.8;">';
+      body += 'Capturé il y a <strong>' + (capturedDays === 0 ? 'aujourd\'hui' : capturedDays + ' jours') + '</strong>. ';
+      body += 'A survécu <strong>' + persona.wavesSurvived + '</strong> vagues avant d\'être pris.';
+      if (persona.bestFriend) body += ' Meilleur ami : <em>' + escapeHtml(persona.bestFriend) + '</em>.';
+      body += '</div>';
+    }
+    $('fiche-body').innerHTML = body;
+    $('blop-fiche-modal').classList.remove('hidden');
+  }
   btnClick('referral-copy', () => {
     const link = getMyReferralLink();
     if (!link) { showHint('Connecte-toi pour obtenir ton lien', 2000); return; }

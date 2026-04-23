@@ -1701,6 +1701,141 @@
   }
   setupCameraHouse();
 
+  // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
+  // Prix progressifs : on commence par du nature peu cher, buildings plus chers.
+  // file = chemin GLB relatif au repo (models/house/...). En attendant de les
+  // télécharger, on utilise les GLB Kenney existants (Nature, Food, etc.) comme placeholder.
+  const BUILD_CATALOG = [
+    // 🌳 Nature (pas cher, progression rapide)
+    { id: 'tree_pine', name: 'Sapin', price: 200, cat: 'nature', file: 'nature/tree_pine.glb', fallback: 'cone_green' },
+    { id: 'tree_round', name: 'Arbre rond', price: 250, cat: 'nature', file: 'nature/tree_round.glb', fallback: 'sphere_green' },
+    { id: 'bush', name: 'Buisson', price: 80, cat: 'nature', file: 'nature/bush.glb', fallback: 'sphere_small_green' },
+    { id: 'rock_small', name: 'Caillou', price: 50, cat: 'nature', file: 'nature/rock_small.glb', fallback: 'rock' },
+    { id: 'rock_big', name: 'Rocher', price: 300, cat: 'nature', file: 'nature/rock_big.glb', fallback: 'rock_big' },
+    { id: 'flower', name: 'Fleur', price: 40, cat: 'nature', file: 'nature/flower.glb', fallback: 'flower' },
+    { id: 'mushroom', name: 'Champignon', price: 120, cat: 'nature', file: 'nature/mushroom.glb', fallback: 'mushroom' },
+    { id: 'log', name: 'Tronc', price: 150, cat: 'nature', file: 'nature/log.glb', fallback: 'cylinder_brown' },
+    // 🏠 Bâtiments (plus cher, donne du sens au farming)
+    { id: 'shed', name: 'Cabane', price: 2500, cat: 'build', file: 'build/shed.glb', fallback: 'box_wood' },
+    { id: 'house_small', name: 'Maison simple', price: 8000, cat: 'build', file: 'build/house_small.glb', fallback: 'house_small' },
+    { id: 'house_big', name: 'Grande maison', price: 35000, cat: 'build', file: 'build/house_big.glb', fallback: 'house_big' },
+    { id: 'tower', name: 'Tour', price: 80000, cat: 'build', file: 'build/tower.glb', fallback: 'tower' },
+    { id: 'castle', name: 'Château', price: 500000, cat: 'build', file: 'build/castle.glb', fallback: 'castle' },
+    // 🪑 Mobilier
+    { id: 'bench', name: 'Banc', price: 400, cat: 'furniture', file: 'furniture/bench.glb', fallback: 'box_brown' },
+    { id: 'lamp', name: 'Lampadaire', price: 800, cat: 'furniture', file: 'furniture/lamp.glb', fallback: 'lamp' },
+    { id: 'fountain', name: 'Fontaine', price: 5000, cat: 'furniture', file: 'furniture/fountain.glb', fallback: 'fountain' },
+    { id: 'statue', name: 'Statue', price: 12000, cat: 'furniture', file: 'furniture/statue.glb', fallback: 'statue' },
+    { id: 'wellpool', name: 'Puits', price: 2000, cat: 'furniture', file: 'furniture/well.glb', fallback: 'well' },
+    // 🛣 Routes (pour faire des circuits)
+    { id: 'road_straight', name: 'Route droite', price: 300, cat: 'road', file: 'road/straight.glb', fallback: 'road_straight' },
+    { id: 'road_curve', name: 'Virage', price: 400, cat: 'road', file: 'road/curve.glb', fallback: 'road_curve' },
+    { id: 'road_cross', name: 'Carrefour', price: 600, cat: 'road', file: 'road/cross.glb', fallback: 'road_cross' },
+    // 🎨 Déco / Signalétique
+    { id: 'fence', name: 'Clôture', price: 100, cat: 'deco', file: 'deco/fence.glb', fallback: 'fence' },
+    { id: 'flag', name: 'Drapeau', price: 350, cat: 'deco', file: 'deco/flag.glb', fallback: 'flag' },
+    { id: 'sign', name: 'Panneau', price: 180, cat: 'deco', file: 'deco/sign.glb', fallback: 'sign' },
+  ];
+  const BUILD_CATEGORIES = {
+    nature: { label: '🌳 Nature', order: 1 },
+    build: { label: '🏠 Bâtiments', order: 2 },
+    furniture: { label: '🪑 Mobilier', order: 3 },
+    road: { label: '🛣 Routes', order: 4 },
+    deco: { label: '🎨 Déco', order: 5 },
+  };
+
+  // Primitives de fallback pour les GLB pas encore téléchargés (le jeu reste jouable)
+  function makeBuildFallback(kind, color) {
+    const g = new THREE.Group();
+    const m = (c) => new THREE.MeshStandardMaterial({ color: c });
+    switch (kind) {
+      case 'cone_green': { const c = new THREE.Mesh(new THREE.ConeGeometry(0.6, 2, 8), m(0x2f8a2f)); c.position.y = 1; c.castShadow = true; g.add(c);
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.4, 6), m(0x664422)); trunk.position.y = 0.2; g.add(trunk); break; }
+      case 'sphere_green': { const s = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), m(0x44aa44)); s.position.y = 1; s.castShadow = true; g.add(s);
+        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.3, 6), m(0x664422)); t.position.y = 0.15; g.add(t); break; }
+      case 'sphere_small_green': { const s = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), m(0x66aa44)); s.position.y = 0.4; s.castShadow = true; g.add(s); break; }
+      case 'rock': { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), m(0x888888)); r.position.y = 0.3; r.castShadow = true; g.add(r); break; }
+      case 'rock_big': { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9), m(0x777777)); r.position.y = 0.7; r.castShadow = true; g.add(r); break; }
+      case 'flower': { const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 4), m(0x44aa33)); stem.position.y = 0.25; g.add(stem);
+        const pet = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), m(0xff66aa)); pet.position.y = 0.55; g.add(pet); break; }
+      case 'mushroom': { const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.35, 6), m(0xeedd99)); stem.position.y = 0.17; g.add(stem);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), m(0xcc2222)); cap.position.y = 0.4; g.add(cap); break; }
+      case 'cylinder_brown': { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 1, 8), m(0x664422)); c.rotation.z = Math.PI / 2; c.position.y = 0.22; c.castShadow = true; g.add(c); break; }
+      case 'box_wood': { const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 1.4), m(0x886644)); b.position.y = 0.6; b.castShadow = true; g.add(b);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(1.2, 0.7, 4), m(0xaa5533)); roof.rotation.y = Math.PI / 4; roof.position.y = 1.55; g.add(roof); break; }
+      case 'house_small': { const b = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.8, 2.2), m(0xddbb88)); b.position.y = 0.9; b.castShadow = true; g.add(b);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1, 4), m(0xaa3333)); roof.rotation.y = Math.PI / 4; roof.position.y = 2.3; g.add(roof); break; }
+      case 'house_big': { const b = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.5, 3.5), m(0xbb9966)); b.position.y = 1.25; b.castShadow = true; g.add(b);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.8, 1.5, 4), m(0x884422)); roof.rotation.y = Math.PI / 4; roof.position.y = 3.25; g.add(roof); break; }
+      case 'tower': { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 4, 10), m(0x777777)); b.position.y = 2; b.castShadow = true; g.add(b);
+        const top = new THREE.Mesh(new THREE.ConeGeometry(1.1, 1.4, 10), m(0xaa3333)); top.position.y = 4.7; g.add(top); break; }
+      case 'castle': { const b = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 4), m(0x888888)); b.position.y = 1.5; b.castShadow = true; g.add(b);
+        for (const [x, z] of [[-2,-2],[2,-2],[-2,2],[2,2]]) {
+          const t = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 4.5, 8), m(0x999999)); t.position.set(x, 2.25, z); t.castShadow = true; g.add(t);
+          const top = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1, 8), m(0xaa3333)); top.position.set(x, 5, z); g.add(top);
+        } break; }
+      case 'lamp': { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.8, 6), m(0x222222)); p.position.y = 0.9; g.add(p);
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffdd66, emissiveIntensity: 1.5 })); bulb.position.y = 1.85; g.add(bulb); break; }
+      case 'fountain': { const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.4, 16), m(0xaaaaaa)); base.position.y = 0.2; base.castShadow = true; g.add(base);
+        const water = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0x44aaff, transparent: true, opacity: 0.7 })); water.position.y = 0.45; g.add(water);
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.8, 8), m(0xbbbbbb)); pillar.position.y = 0.9; g.add(pillar); break; }
+      case 'statue': { const base = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.8), m(0xaaaaaa)); base.position.y = 0.15; g.add(base);
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.4), m(0xcccccc)); body.position.y = 1; g.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), m(0xcccccc)); head.position.y = 1.9; g.add(head); break; }
+      case 'well': { const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.8, 12), m(0x888888)); ring.position.y = 0.4; ring.castShadow = true; g.add(ring);
+        const water = new THREE.Mesh(new THREE.CircleGeometry(0.7, 12), new THREE.MeshStandardMaterial({ color: 0x224488 })); water.rotation.x = -Math.PI / 2; water.position.y = 0.79; g.add(water); break; }
+      case 'road_straight': { const r = new THREE.Mesh(new THREE.BoxGeometry(2, 0.05, 2), m(0x333333)); r.position.y = 0.02; r.receiveShadow = true; g.add(r);
+        const l = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.01, 1.4), m(0xffffff)); l.position.y = 0.03; g.add(l); break; }
+      case 'road_curve': { const r = new THREE.Mesh(new THREE.BoxGeometry(2, 0.05, 2), m(0x333333)); r.position.y = 0.02; g.add(r); break; }
+      case 'road_cross': { const r = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.05, 2.2), m(0x333333)); r.position.y = 0.02; g.add(r); break; }
+      case 'fence': { const top = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.08), m(0xddcc88)); top.position.y = 0.75; g.add(top);
+        for (const x of [-0.5, 0, 0.5]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), m(0xddcc88)); post.position.set(x, 0.4, 0); g.add(post); } break; }
+      case 'flag': { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), m(0x553322)); p.position.y = 1.1; g.add(p);
+        const f = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.04), m(0xff4444)); f.position.set(0.4, 1.85, 0); g.add(f); break; }
+      case 'sign': { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), m(0x664422)); p.position.y = 0.7; g.add(p);
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.05), m(0xddcc88)); b.position.y = 1.3; g.add(b); break; }
+      default: { const d = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), m(color || 0xff00ff)); d.position.y = 0.4; g.add(d); }
+    }
+    return g;
+  }
+
+  // === V6 : état maison ===
+  if (!window.gameHouse) window.gameHouse = { purchased: {}, placed: [] };
+  // purchased: { itemId: count }  → count permet d'acheter plusieurs fois un même item
+  // placed: [{ id, itemId, x, y, z, rotY, scale, mesh }]
+
+  function housePurchase(itemId) {
+    const item = BUILD_CATALOG.find(i => i.id === itemId);
+    if (!item) return false;
+    if (game.cash < item.price) return false;
+    spendCash(item.price);
+    gameHouse.purchased[itemId] = (gameHouse.purchased[itemId] || 0) + 1;
+    sfx && sfx('buy');
+    updateHud(); saveGame();
+    return true;
+  }
+  function houseGetPlacedMesh(item) {
+    // TODO : essayer de charger le vrai GLB plus tard ; pour l'instant fallback
+    return makeBuildFallback(item.fallback);
+  }
+  function housePlaceItem(itemId, x, z) {
+    if (!gameHouse.purchased[itemId] || gameHouse.purchased[itemId] <= 0) return null;
+    const item = BUILD_CATALOG.find(i => i.id === itemId);
+    if (!item) return null;
+    const mesh = houseGetPlacedMesh(item);
+    mesh.position.set(x, 0.25, z);
+    sceneHouse.add(mesh);
+    const placed = {
+      id: 'p_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      itemId, x, y: 0.25, z, rotY: 0, scale: 1, mesh,
+    };
+    gameHouse.placed.push(placed);
+    gameHouse.purchased[itemId]--;
+    if (gameHouse.purchased[itemId] <= 0) delete gameHouse.purchased[itemId];
+    saveGame();
+    return placed;
+  }
+
   // === V6 : onglet actif (game OU house) ===
   let activeTab = 'game'; // 'game' | 'house'
   function setActiveTab(tab) {
@@ -1903,8 +2038,154 @@
     };
     _updateV6Badge();
     buildTabSwitcher();
+    buildHouseShopUI();
     buildAdminPanel();
+    setupHousePlacementClicks();
   });
+
+  // Click handler : pose l'item sélectionné sur la plateforme maison
+  function setupHousePlacementClicks() {
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    renderer.domElement.addEventListener('click', (e) => {
+      if (activeTab !== 'house' || !housePlacingId) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, cameraHouse);
+      const hit = raycaster.intersectObject(houseGround)[0];
+      if (!hit) return;
+      const x = Math.round(hit.point.x * 2) / 2; // grid snap 0.5
+      const z = Math.round(hit.point.z * 2) / 2;
+      const placed = housePlaceItem(housePlacingId, x, z);
+      if (placed) {
+        sfx && sfx('plant');
+        showHint('Placé !', 1200);
+        renderHouseDock();
+        if (!gameHouse.purchased[housePlacingId]) housePlacingId = null;
+      }
+    });
+  }
+
+  // Update dock when tab changes
+  const _origSetActiveTab = setActiveTab;
+  setActiveTab = function(tab) {
+    _origSetActiveTab(tab);
+    if (typeof renderHouseDock === 'function') renderHouseDock();
+  };
+
+  // === V6 : Banque de construction (catalog shop) ===
+  function buildHouseShopUI() {
+    // Bouton "🏪 Banque" affiché uniquement dans tab maison
+    const btn = document.createElement('div');
+    btn.id = 'build-shop-btn';
+    btn.innerHTML = '🏪 Banque';
+    btn.style.cssText = 'position:fixed;bottom:70px;right:12px;background:linear-gradient(90deg,#ffcc33,#ff8844);color:#000;padding:12px 18px;border-radius:12px;font-family:var(--font-display,sans-serif);font-weight:700;cursor:pointer;z-index:500;box-shadow:0 4px 12px rgba(0,0,0,0.5);display:none;letter-spacing:0.5px;';
+    btn.onclick = () => { sfx && sfx('click'); openModal('build-shop-modal'); renderBuildShop(); };
+    document.body.appendChild(btn);
+
+    // Modal shop
+    const modal = document.createElement('div');
+    modal.className = 'modal hidden';
+    modal.id = 'build-shop-modal';
+    modal.innerHTML = `
+      <div class="modal-content modal-content--lg">
+        <div class="modal-title">🏪 Banque de construction</div>
+        <div style="font-size:12px;color:#aaa;margin-bottom:10px;">Achète des éléments avec ton cash. Chaque achat débloque 1 unité à placer.</div>
+        <div id="build-cat-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div id="build-shop-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;max-height:440px;overflow-y:auto;"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Dock du bas : items achetés à placer
+    const dock = document.createElement('div');
+    dock.id = 'house-dock';
+    dock.style.cssText = 'position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:rgba(0,0,0,0.7);padding:8px;border-radius:12px;z-index:500;max-width:80vw;overflow-x:auto;display:none;';
+    document.body.appendChild(dock);
+
+    window.renderBuildShop = renderBuildShop;
+    window.renderHouseDock = renderHouseDock;
+  }
+
+  let currentBuildCat = 'nature';
+  function renderBuildShop() {
+    const cats = Object.keys(BUILD_CATEGORIES).sort((a, b) => BUILD_CATEGORIES[a].order - BUILD_CATEGORIES[b].order);
+    const tabsEl = $('build-cat-tabs');
+    tabsEl.innerHTML = '';
+    cats.forEach(c => {
+      const b = document.createElement('div');
+      b.className = 'btn' + (currentBuildCat === c ? ' gold' : '');
+      b.style.padding = '6px 12px';
+      b.style.fontSize = '12px';
+      b.textContent = BUILD_CATEGORIES[c].label;
+      b.onclick = () => { currentBuildCat = c; renderBuildShop(); };
+      tabsEl.appendChild(b);
+    });
+    const grid = $('build-shop-grid');
+    grid.innerHTML = '';
+    BUILD_CATALOG.filter(i => i.cat === currentBuildCat).forEach(item => {
+      const card = document.createElement('div');
+      const owned = gameHouse.purchased[item.id] || 0;
+      const afford = game.cash >= item.price;
+      card.style.cssText = 'background:var(--bg-raised,#2a2a3a);border-radius:8px;padding:10px;text-align:center;border:2px solid ' + (afford ? '#444' : '#331a1a') + ';cursor:' + (afford ? 'pointer' : 'not-allowed') + ';position:relative;transition:all 0.2s;';
+      card.innerHTML = `
+        <div style="font-size:32px;margin-bottom:4px;">${categoryEmoji(item.cat)}</div>
+        <div style="font-size:12px;font-weight:600;color:#fff;line-height:1.2;">${item.name}</div>
+        <div style="font-size:14px;color:${afford ? '#ffcc33' : '#ff6666'};font-weight:700;margin-top:4px;">${fmtNumber(item.price)}$</div>
+        ${owned > 0 ? `<div style="position:absolute;top:4px;right:6px;background:#44cc88;color:#fff;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:700;">×${owned}</div>` : ''}
+      `;
+      card.onclick = () => {
+        if (housePurchase(item.id)) {
+          sfx && sfx('buy');
+          renderBuildShop();
+          renderHouseDock();
+        } else {
+          sfx && sfx('error');
+          showHint('Pas assez de cash : ' + fmtNumber(item.price) + '$ requis', 2000);
+        }
+      };
+      grid.appendChild(card);
+    });
+  }
+
+  function categoryEmoji(cat) {
+    return { nature: '🌳', build: '🏠', furniture: '🪑', road: '🛣', deco: '🎨' }[cat] || '📦';
+  }
+
+  function renderHouseDock() {
+    const dock = $('house-dock');
+    if (!dock) return;
+    dock.style.display = activeTab === 'house' ? 'flex' : 'none';
+    dock.innerHTML = '';
+    const purchased = gameHouse.purchased || {};
+    const ids = Object.keys(purchased).filter(id => purchased[id] > 0);
+    if (ids.length === 0) {
+      dock.innerHTML = '<div style="color:#888;font-style:italic;padding:8px 12px;font-size:12px;">Achète depuis la banque pour placer des éléments</div>';
+      return;
+    }
+    ids.forEach(id => {
+      const item = BUILD_CATALOG.find(i => i.id === id);
+      if (!item) return;
+      const count = purchased[id];
+      const card = document.createElement('div');
+      card.style.cssText = 'min-width:68px;background:var(--bg-raised,#2a2a3a);border-radius:8px;padding:6px;text-align:center;cursor:pointer;border:2px solid ' + (housePlacingId === id ? '#ffdd00' : 'transparent') + ';';
+      card.innerHTML = `
+        <div style="font-size:22px;">${categoryEmoji(item.cat)}</div>
+        <div style="font-size:10px;color:#fff;line-height:1.1;">${item.name}</div>
+        <div style="font-size:11px;color:#ffcc33;font-weight:700;">×${count}</div>
+      `;
+      card.onclick = () => {
+        housePlacingId = housePlacingId === id ? null : id;
+        renderHouseDock();
+        showHint(housePlacingId ? 'Clique sur la plateforme pour poser ' + item.name : 'Placement annulé', 2500);
+      };
+      dock.appendChild(card);
+    });
+  }
+
+  // État placement actif
+  let housePlacingId = null;
 
   // === V6 : Tab Switcher UI ===
   function buildTabSwitcher() {
@@ -4150,6 +4431,10 @@
         blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none', p: b.persona || null, i: b.blopId || null })),
         memorial: game.memorial || [],
         memorialBonus: game.memorialBonus || 0,
+        house: window.gameHouse ? {
+          purchased: { ...window.gameHouse.purchased },
+          placed: window.gameHouse.placed.map(p => ({ id: p.id, itemId: p.itemId, x: p.x, y: p.y, z: p.z, rotY: p.rotY, scale: p.scale })),
+        } : null,
         achievements: { ...game.achievements },
         stats: { ...game.stats },
         missions: game.missions ? JSON.parse(JSON.stringify(game.missions)) : null,
@@ -4219,6 +4504,23 @@
     game.stats = Object.assign(game.stats, data.stats || {});
     if (data.memorial) game.memorial = data.memorial;
     if (data.memorialBonus) game.memorialBonus = data.memorialBonus;
+    // V6 : restore maison
+    if (data.house) {
+      window.gameHouse = window.gameHouse || { purchased: {}, placed: [] };
+      window.gameHouse.purchased = { ...(data.house.purchased || {}) };
+      window.gameHouse.placed = [];
+      // Re-créer les meshes pour chaque item placé
+      (data.house.placed || []).forEach(p => {
+        const item = BUILD_CATALOG.find(i => i.id === p.itemId);
+        if (!item) return;
+        const mesh = houseGetPlacedMesh(item);
+        mesh.position.set(p.x, p.y, p.z);
+        mesh.rotation.y = p.rotY || 0;
+        mesh.scale.setScalar(p.scale || 1);
+        sceneHouse.add(mesh);
+        window.gameHouse.placed.push({ ...p, mesh });
+      });
+    }
     if (data.missions) game.missions = data.missions;
     initMissions();
     updateMissionsBadge();

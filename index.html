@@ -1903,11 +1903,20 @@
     const cached = HOUSE_GLB_CACHE[item.file];
     if (cached) {
       const clone = cached.clone(true);
-      clone.scale.setScalar(3); // Kenney racing kit est en unités 1×1, on agrandit
+      clone.scale.setScalar(3);
       clone.traverse(o => { if (o.isMesh) { o.castShadow = Q === 'high'; o.receiveShadow = Q === 'high'; } });
-      return clone;
+      // Wrap dans un group et re-centre le modèle (pivot Kenney pas toujours centré)
+      const wrapper = new THREE.Group();
+      wrapper.add(clone);
+      clone.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(clone);
+      if (isFinite(box.min.x) && isFinite(box.max.x)) {
+        const center = new THREE.Vector3(); box.getCenter(center);
+        // Translate le clone pour que son centre X/Z et son sol Y tombent sur (0,0,0) du wrapper
+        clone.position.sub(new THREE.Vector3(center.x, box.min.y, center.z));
+      }
+      return wrapper;
     }
-    // Fallback PAR item : chaque item a sa géométrie unique
     return makeRacingFallback(item.id);
   }
 
@@ -2196,8 +2205,7 @@
       for (const item of BUILD_CATALOG) {
         try {
           const m = houseGetPlacedMesh(item);
-          // Reset scale + position + rotation pour mesurer la taille NATURELLE
-          m.scale.setScalar(1);
+          // Le mesh est déjà centré sur son origine, juste normaliser la taille
           m.position.set(0, 0, 0);
           m.rotation.set(0, 0, 0);
           let box = new THREE.Box3().setFromObject(m);
@@ -2206,11 +2214,6 @@
           if (maxSize > 0 && isFinite(maxSize)) {
             const fitScale = 4.5 / maxSize;
             m.scale.setScalar(fitScale);
-            // RECOMPUTE bbox APRÈS scale (crucial pour centrage correct)
-            box = new THREE.Box3().setFromObject(m);
-            const center = new THREE.Vector3(); box.getCenter(center);
-            // Centre en X/Z, pose au sol en Y
-            m.position.set(-center.x, -box.min.y, -center.z);
           }
           tScene.add(m);
           tRenderer.render(tScene, tCam);

@@ -1428,6 +1428,82 @@
   applySkyByHour();
   setInterval(applySkyByHour, 60000);
 
+  // === SEASON 2 - Feature #8 : Pluie Réelle (Open-Meteo, keyless) ===
+  const weatherState = { loaded: false, temp: null, isRaining: false, city: null };
+  let rainParticles = null;
+
+  function weatherMultiplier() {
+    if (!weatherState.loaded) return 1;
+    return weatherState.isRaining ? 1.2 : 1;
+  }
+
+  function buildRainParticles() {
+    const geom = new THREE.BufferGeometry();
+    const count = 800;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 80;
+      positions[i * 3 + 1] = Math.random() * 40 + 5;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 80;
+    }
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color: 0x99ccff, size: 0.18, transparent: true, opacity: 0.6 });
+    return new THREE.Points(geom, mat);
+  }
+
+  function applyWeatherVisuals() {
+    if (weatherState.isRaining && !rainParticles) {
+      rainParticles = buildRainParticles();
+      scene.add(rainParticles);
+      if (typeof showHint === 'function') showHint('🌧 Il pleut à ' + (weatherState.city || 'ta ville') + ' — passif +20%', 4500);
+    } else if (!weatherState.isRaining && rainParticles) {
+      scene.remove(rainParticles);
+      rainParticles = null;
+    }
+  }
+
+  function updateRainAnimation(dt) {
+    if (!rainParticles) return;
+    const pos = rainParticles.geometry.attributes.position.array;
+    for (let i = 1; i < pos.length; i += 3) {
+      pos[i] -= 25 * dt;
+      if (pos[i] < 0) pos[i] = 35 + Math.random() * 8;
+    }
+    rainParticles.geometry.attributes.position.needsUpdate = true;
+  }
+
+  async function fetchWeather() {
+    try {
+      const cached = localStorage.getItem('pvb_weather_cache');
+      if (cached) {
+        const d = JSON.parse(cached);
+        if (Date.now() - d.at < 60 * 60 * 1000) {
+          Object.assign(weatherState, d.data, { loaded: true });
+          applyWeatherVisuals();
+          return;
+        }
+      }
+      const geoResp = await fetch('https://ipapi.co/json/', { cache: 'no-store' });
+      if (!geoResp.ok) return;
+      const geo = await geoResp.json();
+      if (!geo.latitude || !geo.longitude) return;
+      const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + geo.latitude.toFixed(1) + '&longitude=' + geo.longitude.toFixed(1) + '&current=temperature_2m,weather_code,precipitation&timezone=auto';
+      const wResp = await fetch(url);
+      if (!wResp.ok) return;
+      const w = await wResp.json();
+      const c = w.current || {};
+      const code = c.weather_code || 0;
+      const isRaining = (code >= 51 && code <= 67) || (code >= 80 && code <= 99) || (c.precipitation || 0) > 0.2;
+      const data = { temp: c.temperature_2m, isRaining, city: geo.city || null };
+      try { localStorage.setItem('pvb_weather_cache', JSON.stringify({ at: Date.now(), data })); } catch (e) {}
+      Object.assign(weatherState, data, { loaded: true });
+      applyWeatherVisuals();
+    } catch (err) { console.warn('Weather fetch failed:', err); }
+  }
+
+  setTimeout(fetchWeather, 3000);
+  setInterval(fetchWeather, 60 * 60 * 1000);
+
   // --- ETAT ---
   const game = {
     cash: STARTING_CASH, kills: 0, level: 1, xp: 0, prestige: 0,
@@ -1611,7 +1687,11 @@
   function getMaxPlants() { return BASE_MAX_PLANTS + game.prestige; }
   function levelBonus() { return (game.level - 1) * LEVEL_PASSIVE_BONUS; }
   function prestigeBonus() { return game.prestige * PRESTIGE_PASSIVE_BONUS; }
-  function totalPassiveMultiplier() { return 1 + levelBonus() + prestigeBonus(); }
+  function totalPassiveMultiplier() {
+    let m = 1 + levelBonus() + prestigeBonus();
+    if (typeof weatherMultiplier === 'function') m *= weatherMultiplier();
+    return m;
+  }
 
   function parcBaseIncome() {
     let total = 0;
@@ -4270,6 +4350,7 @@
     }
     for (let i = game.bullets.length - 1; i >= 0; i--) updateBullet(game.bullets[i], dt, now, i);
     updateParticles(dt);
+    if (typeof updateRainAnimation === 'function') updateRainAnimation(dt);
     updateHud();
   }
   function animate() {

@@ -1517,15 +1517,20 @@
     const sunY = Math.max(8, Math.sin(sunAngle) * 35);
     const sunX = Math.cos(sunAngle) * 20;
     sun.position.set(sunX, sunY, 15);
-    game.skyState = s;
+    if (typeof game !== 'undefined' && game) game.skyState = s;
   }
   applySkyState();
   setInterval(applySkyState, 60000); // refresh toutes les 60s
 
   // --- MÉTÉO IRL (Season 2) : pluie + canicule via Open-Meteo (gratuit, keyless) ---
-  game.weather = { loaded: false, temp: null, code: null, isRaining: false, isHot: false, city: null };
+  function ensureWeatherState() {
+    if (typeof game === 'undefined' || !game) return null;
+    if (!game.weather) game.weather = { loaded: false, temp: null, code: null, isRaining: false, isHot: false, city: null };
+    return game.weather;
+  }
 
   async function fetchWeatherIfAllowed() {
+    if (!ensureWeatherState()) return;
     // Utilise wttr.in (gratuit, keyless, CORS ok) en fallback d'Open-Meteo (besoin lat/lon)
     // On tente ip-api → lat/lon → open-meteo
     try {
@@ -1620,11 +1625,9 @@
   setInterval(fetchWeatherIfAllowed, 60 * 60 * 1000);
 
   // --- AMBIENT LIGHT + BLOP VAMPIRE (Season 2) ---
-  game.ambientLux = null;
-  game.darkSince = 0;
-  game.vampireUnlocked = false;
-
   function initAmbientLightSensor() {
+    if (typeof game === 'undefined' || !game) return false;
+    if (game.ambientLux === undefined) { game.ambientLux = null; game.darkSince = 0; game.vampireUnlocked = false; }
     if ('AmbientLightSensor' in window) {
       try {
         const sensor = new AmbientLightSensor({ frequency: 1 });
@@ -1641,12 +1644,13 @@
   }
 
   function checkVampireCondition() {
+    if (typeof game === 'undefined' || !game) return;
+    if (game.ambientLux === undefined) { game.ambientLux = null; game.darkSince = 0; game.vampireUnlocked = false; }
     const h = new Date().getHours();
     const night = h >= 21 || h < 6;
-    const dark = game.ambientLux !== null ? game.ambientLux < 10 : night; // fallback heure
+    const dark = game.ambientLux !== null ? game.ambientLux < 10 : night;
     if (dark) {
       if (!game.darkSince) game.darkSince = Date.now();
-      // 20s de noir → unlock
       if (Date.now() - game.darkSince > 20000 && !game.vampireUnlocked) {
         game.vampireUnlocked = true;
         showToast('🦇 Un Blop Vampire rôde dans la nuit...', 4000);
@@ -1695,11 +1699,11 @@
   }
 
   // --- MÉMORIAL DES BRAVES (Season 2) : plantes retirées après 200 kills ---
-  // Format : { plantId, mutation, kills, retiredAt, name }
-  if (!game.memorial) game.memorial = [];
   const PLANT_RETIREMENT_KILLS = 200;
 
   function maybeRetirePlant(plantGroup) {
+    if (typeof game === 'undefined' || !game) return false;
+    if (!game.memorial) game.memorial = [];
     const pd = plantGroup.userData;
     if (!pd.killCount) pd.killCount = 0;
     if (pd.killCount < PLANT_RETIREMENT_KILLS) return false;

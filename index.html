@@ -1763,6 +1763,7 @@
     const laneCount = currentLaneCount();
     const laneColors = [0x6abf4e, 0x5aaf3e];
     for (let i = 0; i < laneCount; i++) {
+      // Herbe (base de la lane)
       const lane = new THREE.Mesh(
         new THREE.BoxGeometry(LANE_WIDTH, 0.2, LANE_LENGTH),
         new THREE.MeshStandardMaterial({ color: laneColors[i % 2] })
@@ -1771,8 +1772,30 @@
       lane.receiveShadow = true;
       scene.add(lane);
       terrainObjects.push(lane);
+      // Tier 3 : chemin central (sable/pierre) — ratio 0.4
+      const path = new THREE.Mesh(
+        new THREE.BoxGeometry(LANE_WIDTH * 0.4, 0.01, LANE_LENGTH),
+        new THREE.MeshStandardMaterial({ color: 0xccb888, roughness: 1 })
+      );
+      path.position.set((i - (laneCount - 1) / 2) * LANE_WIDTH, 0.11, 0);
+      path.receiveShadow = true;
+      scene.add(path);
+      terrainObjects.push(path);
+      // Tier 3 : chevrons de flow (indication direction base)
+      for (let c = 0; c < 6; c++) {
+        const chevron = new THREE.Mesh(
+          new THREE.ConeGeometry(0.25, 0.4, 3),
+          new THREE.MeshStandardMaterial({ color: 0x88ff88, emissive: 0x33aa33, emissiveIntensity: 0.3, transparent: true, opacity: 0.25 })
+        );
+        chevron.rotation.x = Math.PI / 2;
+        chevron.rotation.z = Math.PI;
+        chevron.position.set((i - (laneCount - 1) / 2) * LANE_WIDTH, 0.12, -LANE_LENGTH / 2 + (c + 1) * (LANE_LENGTH / 7));
+        scene.add(chevron);
+        terrainObjects.push(chevron);
+      }
     }
     const totalW = laneCount * LANE_WIDTH;
+    // Base (zone verte à défendre)
     const baseZone = new THREE.Mesh(
       new THREE.BoxGeometry(totalW, 0.3, 1.5),
       new THREE.MeshStandardMaterial({ color: 0x2d5016 })
@@ -1780,6 +1803,14 @@
     baseZone.position.set(0, 0.05, LANE_LENGTH / 2 + 0.75);
     scene.add(baseZone);
     terrainObjects.push(baseZone);
+    // Tier 3 : 2 drapeaux verts sur la base
+    for (const s of [-1, 1]) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8, 6), new THREE.MeshStandardMaterial({ color: 0x553322 }));
+      pole.position.set(s * totalW * 0.4, 0.9, LANE_LENGTH / 2 + 0.75); scene.add(pole); terrainObjects.push(pole);
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.05), new THREE.MeshStandardMaterial({ color: 0x44cc88, emissive: 0x228844, emissiveIntensity: 0.2 }));
+      flag.position.set(s * totalW * 0.4 + 0.3 * s, 1.6, LANE_LENGTH / 2 + 0.75); scene.add(flag); terrainObjects.push(flag);
+    }
+    // Spawn (zone rouge)
     const spawnZone = new THREE.Mesh(
       new THREE.BoxGeometry(totalW, 0.3, 1.5),
       new THREE.MeshStandardMaterial({ color: 0x8B0000 })
@@ -1787,6 +1818,20 @@
     spawnZone.position.set(0, 0.05, -LANE_LENGTH / 2 - 0.75);
     scene.add(spawnZone);
     terrainObjects.push(spawnZone);
+    // Tier 3 : Arche portail rouge lumineuse au spawn
+    const archMat = new THREE.MeshStandardMaterial({ color: 0x331111, emissive: 0xff2233, emissiveIntensity: 0.6 });
+    for (const s of [-1, 1]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.2, 0.5), archMat);
+      pillar.position.set(s * totalW * 0.42, 1.1, -LANE_LENGTH / 2 - 0.75);
+      scene.add(pillar); terrainObjects.push(pillar);
+    }
+    const archTop = new THREE.Mesh(new THREE.BoxGeometry(totalW * 0.95, 0.4, 0.5), archMat);
+    archTop.position.set(0, 2.3, -LANE_LENGTH / 2 - 0.75);
+    scene.add(archTop); terrainObjects.push(archTop);
+    // Light source au spawn (rouge atmosphérique)
+    const spawnLight = new THREE.PointLight(0xff3322, 0.6, 10);
+    spawnLight.position.set(0, 2, -LANE_LENGTH / 2 - 0.75);
+    scene.add(spawnLight); terrainObjects.push(spawnLight);
     // Parc floor (15 slots, 5 cols × 3 rows)
     const parcFloor = new THREE.Mesh(
       new THREE.BoxGeometry(10, 0.15, 6),

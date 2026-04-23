@@ -519,24 +519,24 @@
     </div>
     <!-- Groupe 2 : Progression -->
     <div class="hud-group">
-      <div class="btn" id="profile-btn" title="Profil">👤</div>
-      <div class="btn" id="missions-btn" title="Missions">🎯<span id="missions-badge" style="display:none;background:var(--alert);color:#fff;border-radius:var(--rad-pill);padding:1px 5px;margin-left:4px;font-size:10px;">!</span></div>
-      <div class="btn" id="leaderboard-btn" title="Classement">🏆</div>
+      <div class="btn" id="profile-btn" title="Profil" role="button" tabindex="0" aria-label="Ouvrir le profil">👤</div>
+      <div class="btn" id="missions-btn" title="Missions" role="button" tabindex="0" aria-label="Ouvrir les missions">🎯<span id="missions-badge" style="display:none;background:var(--alert);color:#fff;border-radius:var(--rad-pill);padding:1px 5px;margin-left:4px;font-size:10px;">!</span></div>
+      <div class="btn" id="leaderboard-btn" title="Classement" role="button" tabindex="0" aria-label="Ouvrir le classement">🏆</div>
       <div class="btn gold" id="prestige-btn" style="display:none;" title="Prestige">✨ Prestige</div>
     </div>
     <!-- Groupe 3 : Social -->
     <div class="hud-group">
-      <div class="btn" id="memorial-btn" title="Mémorial des Braves">🕊</div>
-      <div class="btn" id="account-btn" title="Compte & sauvegarde cloud">☁ <span id="account-status" style="margin-left:2px;">📱</span></div>
-      <div class="btn alert" id="rec-btn" title="Partager les 20 dernières secondes">🎬</div>
+      <div class="btn" id="memorial-btn" title="Mémorial des Braves" role="button" tabindex="0" aria-label="Mémorial des plantes retraitées">🕊</div>
+      <div class="btn" id="account-btn" title="Compte & sauvegarde cloud" role="button" tabindex="0" aria-label="Compte et sauvegarde cloud">☁ <span id="account-status" style="margin-left:2px;">📱</span></div>
+      <div class="btn alert" id="rec-btn" title="Partager les 20 dernières secondes" role="button" tabindex="0" aria-label="Partager clip 20 secondes">🎬</div>
     </div>
     <!-- Groupe 4 : Dev / Système / Danger -->
     <div class="hud-group">
-      <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
-      <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
-      <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
-      <div class="btn icon" id="help-btn" title="Aide">?</div>
-      <div class="btn danger" id="reset-btn" title="Reset">↺</div>
+      <div class="btn icon" id="editor-btn" title="Éditeur de map" role="button" tabindex="0" aria-label="Éditeur de map">🛠</div>
+      <div class="btn icon" id="settings-btn" title="Paramètres" role="button" tabindex="0" aria-label="Paramètres">⚙</div>
+      <div class="btn icon" id="audio-btn" title="Audio" role="button" tabindex="0" aria-label="Audio et musique">🔊</div>
+      <div class="btn icon" id="help-btn" title="Aide" role="button" tabindex="0" aria-label="Aide et tutoriel">?</div>
+      <div class="btn danger" id="reset-btn" title="Reset" role="button" tabindex="0" aria-label="Réinitialiser la progression">↺</div>
     </div>
   </div>
 
@@ -4086,6 +4086,9 @@
   }
 
   function renderShop() {
+    try { _renderShop(); } catch (e) { console.error('renderShop failed:', e); shopSlotsEl.innerHTML = '<div style="padding:20px;color:#f66;text-align:center;">Erreur d\'affichage shop. Ouvre F12 et dis-moi.</div>'; }
+  }
+  function _renderShop() {
     shopSlotsEl.innerHTML = '';
     const slotsByPlant = {};
     game.shop.forEach((slot, i) => {
@@ -5557,7 +5560,15 @@
   }
 
   addEventListener('beforeunload', saveGame);
-  addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+  addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      saveGame();
+      // Pause recorder pour économie batterie (feature Auto-Recorder)
+      try { if (typeof recorder !== 'undefined' && recorder && recorder.state === 'recording') recorder.pause(); } catch (e) {}
+    } else {
+      try { if (typeof recorder !== 'undefined' && recorder && recorder.state === 'paused') recorder.resume(); } catch (e) {}
+    }
+  });
   addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
     setupCamera();

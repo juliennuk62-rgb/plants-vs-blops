@@ -624,6 +624,10 @@
     <div class="modal-content" style="max-width: 560px;">
       <div class="modal-title">Paramètres</div>
 
+      <h3>🎵 Musique d'ambiance</h3>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px;">Chaque piste embarque un feeling différent (phonk, lofi, chiptune, zen, rave...). Idéal pour les clips TikTok.</div>
+      <select id="bgm-select" style="width:100%;padding:8px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;font-size:13px;margin-bottom:16px;"></select>
+
       <h3>🔔 Notifications Discord (refresh boutique)</h3>
       <div style="margin-bottom: 10px; font-size: 12px; color: #aaa; line-height: 1.6;">
         Crée un webhook sur ton serveur Discord (Paramètres → Intégrations → Webhooks → Nouveau webhook), copie l'URL et colle-la ici.
@@ -789,24 +793,28 @@
   function startMusic() {
     if (!audioCtx || !musicEnabled || musicTimer) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    const track = (typeof getBgmTrack === 'function') ? getBgmTrack() : null;
+    const scale = track ? track.scale : MUSIC_SCALE;
+    const bass  = track ? track.bass  : MUSIC_BASS;
+    const melType = track ? track.type : 'triangle';
+    const bassType = track ? track.bassType : 'sawtooth';
+    const tempo = track ? track.tempo : 450;
     const masterGain = audioCtx.createGain();
     masterGain.gain.value = 0.035;
     masterGain.connect(audioCtx.destination);
-    // Léger filtre passe-bas pour feutrer
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 1600;
+    filter.frequency.value = track && track.id === 'phonk' ? 900 : (track && track.id === 'rave' ? 2400 : 1600);
     filter.connect(masterGain);
     musicNodes = { masterGain, filter };
     const tick = () => {
       if (!musicEnabled || !audioCtx) return;
       const t = audioCtx.currentTime;
-      const dur = 0.45;
-      // Note mélodie
-      const noteIdx = (Math.floor(Math.random() * 8));
-      const freq = MUSIC_SCALE[noteIdx];
+      const dur = tempo / 1000;
+      const noteIdx = Math.floor(Math.random() * scale.length);
+      const freq = scale[noteIdx];
       const osc = audioCtx.createOscillator();
-      osc.type = 'triangle';
+      osc.type = melType;
       osc.frequency.setValueAtTime(freq, t);
       const g = audioCtx.createGain();
       g.gain.setValueAtTime(0, t);
@@ -814,11 +822,10 @@
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       osc.connect(g).connect(filter);
       osc.start(t); osc.stop(t + dur);
-      // Basse tous les 4 steps
       if (musicStep % 4 === 0) {
-        const bassFreq = MUSIC_BASS[Math.floor(musicStep / 4) % MUSIC_BASS.length];
+        const bassFreq = bass[Math.floor(musicStep / 4) % bass.length];
         const bosc = audioCtx.createOscillator();
-        bosc.type = 'sawtooth';
+        bosc.type = bassType;
         bosc.frequency.setValueAtTime(bassFreq, t);
         const bg = audioCtx.createGain();
         bg.gain.setValueAtTime(0, t);
@@ -830,7 +837,7 @@
       musicStep++;
     };
     tick();
-    musicTimer = setInterval(tick, 450);
+    musicTimer = setInterval(tick, tempo);
   }
   function stopMusic() {
     if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
@@ -845,6 +852,28 @@
     try { localStorage.setItem('pvb_music', musicEnabled ? '1' : '0'); } catch (e) {}
   }
   try { musicEnabled = localStorage.getItem('pvb_music') !== '0'; } catch (e) {}
+
+  // --- TRENDING BGM (Season 2) : 10 ambiances procédurales "TikTok-core" ---
+  const BGM_TRACKS = [
+    { id: 'arpeggio', name: '🎹 Arpège Classique', scale: [220, 277.18, 329.63, 392, 440, 523.25, 587.33, 659.25], bass: [55, 73.42, 82.41, 98], type: 'triangle', bassType: 'sawtooth', tempo: 450 },
+    { id: 'phonk',    name: '🖤 Phonk Dark',       scale: [196, 220, 261.63, 293.66, 349.23, 392, 440, 466.16],      bass: [49, 55, 65.41, 73.42], type: 'square',  bassType: 'sawtooth', tempo: 400 },
+    { id: 'sigma',    name: '⚡ Sigma Epic',        scale: [261.63, 311.13, 349.23, 392, 466.16, 523.25, 622.25, 698.46], bass: [65.41, 77.78, 87.31, 98], type: 'sawtooth', bassType: 'triangle', tempo: 360 },
+    { id: 'lofi',     name: '☕ Lo-Fi Chill',       scale: [293.66, 329.63, 369.99, 415.3, 466.16, 523.25, 587.33, 659.25], bass: [73.42, 82.41, 92.5, 103.83], type: 'sine', bassType: 'sine', tempo: 600 },
+    { id: 'skibidi',  name: '🚽 Skibidi Energy',   scale: [329.63, 392, 440, 493.88, 587.33, 659.25, 783.99, 880], bass: [82.41, 98, 110, 123.47], type: 'square',  bassType: 'square', tempo: 300 },
+    { id: 'horror',   name: '👻 Halloween Mode',    scale: [130.81, 155.56, 174.61, 220, 233.08, 261.63, 311.13, 349.23], bass: [32.7, 38.89, 43.65, 55], type: 'sawtooth', bassType: 'triangle', tempo: 550 },
+    { id: 'anime',    name: '🌸 Anime Opening',     scale: [349.23, 392, 440, 466.16, 523.25, 587.33, 698.46, 783.99], bass: [87.31, 98, 110, 116.54], type: 'triangle', bassType: 'sawtooth', tempo: 380 },
+    { id: 'rave',     name: '🎧 Rave 140bpm',       scale: [220, 261.63, 329.63, 392, 440, 523.25, 659.25, 783.99], bass: [55, 65.41, 82.41, 98], type: 'square',  bassType: 'sawtooth', tempo: 280 },
+    { id: 'game',     name: '🕹 Chiptune 8-bit',    scale: [261.63, 293.66, 329.63, 349.23, 392, 440, 493.88, 523.25], bass: [65.41, 73.42, 82.41, 87.31], type: 'square', bassType: 'square', tempo: 350 },
+    { id: 'zen',      name: '🧘 Zen Garden',        scale: [196, 220, 246.94, 293.66, 329.63, 369.99, 415.3, 440], bass: [49, 55, 61.74, 73.42], type: 'sine', bassType: 'sine', tempo: 750 },
+  ];
+  let currentBgmId = 'arpeggio';
+  try { currentBgmId = localStorage.getItem('pvb_bgm') || 'arpeggio'; } catch (e) {}
+  function getBgmTrack() { return BGM_TRACKS.find(t => t.id === currentBgmId) || BGM_TRACKS[0]; }
+  function setBgmTrack(id) {
+    currentBgmId = id;
+    try { localStorage.setItem('pvb_bgm', id); } catch (e) {}
+    if (musicEnabled) { stopMusic(); startMusic(); }
+  }
 
   // --- RARETES ---
   const RARITIES = {
@@ -913,6 +942,35 @@
   RARITY_KEYS.forEach(k => BLOPS_BY_RARITY_EXTENDED[k] = []);
   Object.keys(BLOPS_EXTENDED).forEach(id => BLOPS_BY_RARITY_EXTENDED[BLOPS_EXTENDED[id].rarity].push(id));
   const VARIANT_SPAWN_CHANCE = 0.4; // 40% qu'un Blop spawn soit une variante spéciale
+
+  // Season 2 : Selenis — GOAT de Pleine Lune (3 nuits/mois)
+  const SELENIS = {
+    name: 'Selenis', rarity: 'goat', hp: 5000, size: 2.4, value: 120000,
+    mechanic: 'rage-regen', isLunar: true,
+  };
+  // Conway simplifié : phase lunaire 0-1 (0 = nouvelle lune, 0.5 = pleine lune)
+  function moonPhase(date) {
+    const d = date || new Date();
+    const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+    const r = y % 100;
+    const k = Math.floor(r * 0.25) + day + ((m < 3) ? [0, 2, 0][m] : [0, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6][m - 3]);
+    return ((k % 30) / 29.53); // 0-1
+  }
+  function isFullMoonNight() {
+    const p = moonPhase();
+    const h = new Date().getHours();
+    // Pleine lune : ±3j autour du milieu du cycle, uniquement entre 20h et 6h
+    const nearFull = Math.abs(p - 0.5) < 0.1;
+    const night = h >= 20 || h < 6;
+    return nearFull && night;
+  }
+  let selenisSpawnedThisCycle = false;
+  // Reset au début d'un nouveau cycle
+  function checkSelenisCycle() {
+    const key = 'pvb_selenis_' + Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 29.53));
+    selenisSpawnedThisCycle = localStorage.getItem(key) === '1';
+    return key;
+  }
 
   const PLANTS = {
     // --- COMMUN (4) ---
@@ -1952,7 +2010,23 @@
     let mechanic = null;
     let blopName = blopData.name;
     let blopId = null;
-    if (!overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+    let isLunar = false;
+    // Season 2 : Selenis override si pleine lune et rareté GOAT
+    if (rarityKey === 'goat' && !overrides.noVariant && isFullMoonNight()) {
+      const cycleKey = checkSelenisCycle();
+      if (!selenisSpawnedThisCycle) {
+        selenisSpawnedThisCycle = true;
+        try { localStorage.setItem(cycleKey, '1'); } catch (e) {}
+        blopData = { hp: SELENIS.hp, size: SELENIS.size, value: SELENIS.value, name: SELENIS.name };
+        mechanic = SELENIS.mechanic;
+        blopName = SELENIS.name;
+        blopId = 'selenis';
+        isLunar = true;
+        showToast('🌕 SELENIS ! GOAT de Pleine Lune !', 4500);
+        flashScreen(0xccccff, 0.4);
+      }
+    }
+    if (!isLunar && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
       const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
       if (pool && pool.length > 0) {
         blopId = pool[Math.floor(Math.random() * pool.length)];
@@ -1981,12 +2055,23 @@
       mechanic: mechanic,
       blopId: blopId,
       blopName: blopName,
+      isLunar: isLunar,
       mechanicCd: 0,
       phaseUsed: false,
       ragePhase: false,
       invisible: false,
     });
     addVariantRing(group, variantKey, blopData.size);
+    if (isLunar) {
+      // Aura lunaire argentée autour de Selenis
+      const aura = new THREE.Mesh(
+        new THREE.SphereGeometry(blopData.size * 1.8, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xccccff, transparent: true, opacity: 0.15, side: THREE.BackSide })
+      );
+      aura.position.y = blopData.size;
+      group.add(aura);
+      group.userData.lunarAura = aura;
+    }
     group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);
     game.brainrots.push(group);
@@ -3787,7 +3872,20 @@
     $('webhook-enabled').checked = localStorage.getItem(WEBHOOK_ENABLED_KEY) === '1';
     $('webhook-status').textContent = '';
     $('pdf-status').textContent = '';
+    // Populate BGM selector
+    const sel = $('bgm-select');
+    if (sel && sel.children.length === 0) {
+      BGM_TRACKS.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id; opt.textContent = t.name;
+        sel.appendChild(opt);
+      });
+    }
+    if (sel) sel.value = currentBgmId;
     $('settings-modal').classList.remove('hidden');
+  });
+  document.addEventListener('change', e => {
+    if (e.target && e.target.id === 'bgm-select') setBgmTrack(e.target.value);
   });
   btnClick('settings-close', () => $('settings-modal').classList.add('hidden'));
   btnClick('privacy-btn', () => $('privacy-modal').classList.remove('hidden'));

@@ -624,6 +624,10 @@
     <div class="modal-content" style="max-width: 560px;">
       <div class="modal-title">Paramètres</div>
 
+      <h3>🎵 Musique d'ambiance</h3>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px;">10 pistes procédurales différentes (phonk, lofi, chiptune, zen, rave, anime…). Idéal pour les clips TikTok.</div>
+      <select id="bgm-select" style="width:100%;padding:8px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;font-size:13px;margin-bottom:16px;"></select>
+
       <h3>🔔 Notifications Discord (refresh boutique)</h3>
       <div style="margin-bottom: 10px; font-size: 12px; color: #aaa; line-height: 1.6;">
         Crée un webhook sur ton serveur Discord (Paramètres → Intégrations → Webhooks → Nouveau webhook), copie l'URL et colle-la ici.
@@ -778,35 +782,54 @@
   };
   function sfx(name) { if (audioEnabled && SFX[name]) SFX[name](); }
 
-  // --- MUSIQUE AMBIANCE : boucle arpège générée ---
+  // --- MUSIQUE AMBIANCE : boucle procédurale ---
   let musicEnabled = true;
   let musicNodes = null;
-  const MUSIC_SCALE = [220, 277.18, 329.63, 392, 440, 523.25, 587.33, 659.25]; // Am pentatonique
-  const MUSIC_BASS  = [55, 73.42, 82.41, 98]; // A1-G2
+  // === SEASON 2 - Feature #6 : Trending BGM Injector (10 pistes) ===
+  const BGM_TRACKS = [
+    { id: 'arpeggio', name: '🎹 Arpège Classique', scale: [220, 277.18, 329.63, 392, 440, 523.25, 587.33, 659.25], bass: [55, 73.42, 82.41, 98], type: 'triangle', bassType: 'sawtooth', tempo: 450, cutoff: 1600 },
+    { id: 'phonk',    name: '🖤 Phonk Dark',       scale: [196, 220, 261.63, 293.66, 349.23, 392, 440, 466.16],      bass: [49, 55, 65.41, 73.42],     type: 'square',   bassType: 'sawtooth', tempo: 400, cutoff: 900 },
+    { id: 'sigma',    name: '⚡ Sigma Epic',        scale: [261.63, 311.13, 349.23, 392, 466.16, 523.25, 622.25, 698.46], bass: [65.41, 77.78, 87.31, 98], type: 'sawtooth', bassType: 'triangle', tempo: 360, cutoff: 1800 },
+    { id: 'lofi',     name: '☕ Lo-Fi Chill',       scale: [293.66, 329.63, 369.99, 415.3, 466.16, 523.25, 587.33, 659.25], bass: [73.42, 82.41, 92.5, 103.83], type: 'sine', bassType: 'sine', tempo: 600, cutoff: 1200 },
+    { id: 'skibidi',  name: '🚽 Skibidi Energy',   scale: [329.63, 392, 440, 493.88, 587.33, 659.25, 783.99, 880],   bass: [82.41, 98, 110, 123.47],    type: 'square',   bassType: 'square', tempo: 300, cutoff: 2000 },
+    { id: 'horror',   name: '👻 Halloween Mode',    scale: [130.81, 155.56, 174.61, 220, 233.08, 261.63, 311.13, 349.23], bass: [32.7, 38.89, 43.65, 55], type: 'sawtooth', bassType: 'triangle', tempo: 550, cutoff: 700 },
+    { id: 'anime',    name: '🌸 Anime Opening',     scale: [349.23, 392, 440, 466.16, 523.25, 587.33, 698.46, 783.99], bass: [87.31, 98, 110, 116.54],   type: 'triangle', bassType: 'sawtooth', tempo: 380, cutoff: 1700 },
+    { id: 'rave',     name: '🎧 Rave 140bpm',       scale: [220, 261.63, 329.63, 392, 440, 523.25, 659.25, 783.99],   bass: [55, 65.41, 82.41, 98],     type: 'square',   bassType: 'sawtooth', tempo: 280, cutoff: 2400 },
+    { id: 'chiptune', name: '🕹 Chiptune 8-bit',    scale: [261.63, 293.66, 329.63, 349.23, 392, 440, 493.88, 523.25], bass: [65.41, 73.42, 82.41, 87.31], type: 'square', bassType: 'square', tempo: 350, cutoff: 1500 },
+    { id: 'zen',      name: '🧘 Zen Garden',        scale: [196, 220, 246.94, 293.66, 329.63, 369.99, 415.3, 440],    bass: [49, 55, 61.74, 73.42],     type: 'sine',     bassType: 'sine', tempo: 750, cutoff: 1100 },
+  ];
+  let currentBgmId = 'arpeggio';
+  try { currentBgmId = localStorage.getItem('pvb_bgm') || 'arpeggio'; } catch (e) {}
+  function getBgmTrack() { return BGM_TRACKS.find(t => t.id === currentBgmId) || BGM_TRACKS[0]; }
+  function setBgmTrack(id) {
+    currentBgmId = id;
+    try { localStorage.setItem('pvb_bgm', id); } catch (e) {}
+    if (musicEnabled) { stopMusic(); startMusic(); }
+  }
+
   let musicStep = 0;
   let musicTimer = null;
 
   function startMusic() {
     if (!audioCtx || !musicEnabled || musicTimer) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    const track = getBgmTrack();
     const masterGain = audioCtx.createGain();
     masterGain.gain.value = 0.035;
     masterGain.connect(audioCtx.destination);
-    // Léger filtre passe-bas pour feutrer
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 1600;
+    filter.frequency.value = track.cutoff;
     filter.connect(masterGain);
     musicNodes = { masterGain, filter };
     const tick = () => {
       if (!musicEnabled || !audioCtx) return;
       const t = audioCtx.currentTime;
-      const dur = 0.45;
-      // Note mélodie
-      const noteIdx = (Math.floor(Math.random() * 8));
-      const freq = MUSIC_SCALE[noteIdx];
+      const dur = track.tempo / 1000;
+      const noteIdx = Math.floor(Math.random() * track.scale.length);
+      const freq = track.scale[noteIdx];
       const osc = audioCtx.createOscillator();
-      osc.type = 'triangle';
+      osc.type = track.type;
       osc.frequency.setValueAtTime(freq, t);
       const g = audioCtx.createGain();
       g.gain.setValueAtTime(0, t);
@@ -814,11 +837,10 @@
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       osc.connect(g).connect(filter);
       osc.start(t); osc.stop(t + dur);
-      // Basse tous les 4 steps
       if (musicStep % 4 === 0) {
-        const bassFreq = MUSIC_BASS[Math.floor(musicStep / 4) % MUSIC_BASS.length];
+        const bassFreq = track.bass[Math.floor(musicStep / 4) % track.bass.length];
         const bosc = audioCtx.createOscillator();
-        bosc.type = 'sawtooth';
+        bosc.type = track.bassType;
         bosc.frequency.setValueAtTime(bassFreq, t);
         const bg = audioCtx.createGain();
         bg.gain.setValueAtTime(0, t);
@@ -830,7 +852,7 @@
       musicStep++;
     };
     tick();
-    musicTimer = setInterval(tick, 450);
+    musicTimer = setInterval(tick, track.tempo);
   }
   function stopMusic() {
     if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
@@ -3782,6 +3804,17 @@
     $('webhook-enabled').checked = localStorage.getItem(WEBHOOK_ENABLED_KEY) === '1';
     $('webhook-status').textContent = '';
     $('pdf-status').textContent = '';
+    // Season 2 : populate BGM selector
+    const sel = $('bgm-select');
+    if (sel && sel.children.length === 0) {
+      BGM_TRACKS.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id; opt.textContent = t.name;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', () => setBgmTrack(sel.value));
+    }
+    if (sel) sel.value = currentBgmId;
     $('settings-modal').classList.remove('hidden');
   });
   btnClick('settings-close', () => $('settings-modal').classList.add('hidden'));

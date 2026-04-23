@@ -2141,6 +2141,19 @@
     let blopId = null;
     let isLunar = false;
     let isVampire = false;
+    let isMirror = false;
+    // Feature #11 : Miroir du joueur — Mythique qui porte ton pseudo (prestige 3+)
+    const myName = (game.lbName) || (function() { try { return localStorage.getItem('pvb_lb_name'); } catch (e) { return null; } })();
+    if (rarityKey === 'mythic' && !overrides.noVariant && game.prestige >= 3 && myName && myName.length >= 3 && !game._mirrorCooldown && Math.random() < 0.08) {
+      game._mirrorCooldown = true;
+      setTimeout(() => { game._mirrorCooldown = false; }, 60 * 60 * 1000);
+      blopData = { hp: blopData.hp * 1.8, size: blopData.size * 1.1, value: blopData.value * 2.5, name: myName };
+      mechanic = 'rage-regen';
+      blopName = myName;
+      blopId = 'mirror';
+      isMirror = true;
+      if (typeof showToast === 'function') showToast('🪞 "' + myName + '" — un miroir de toi...', 4500);
+    }
     // Selenis override : rareté GOAT + pleine lune + pas déjà spawn ce cycle
     if (rarityKey === 'goat' && !overrides.noVariant && canSelenisSpawn()) {
       blopData = { hp: SELENIS.hp, size: SELENIS.size, value: SELENIS.value, name: SELENIS.name };
@@ -2152,14 +2165,14 @@
       showToast('🌕 SELENIS ! GOAT de Pleine Lune !', 4500);
     }
     // Nocturis override : rareté ultrarare + vampire unlocked (15% chance)
-    if (!isLunar && rarityKey === 'ultrarare' && !overrides.noVariant && canNocturisSpawn() && Math.random() < 0.15) {
+    if (!isLunar && !isMirror && rarityKey === 'ultrarare' && !overrides.noVariant && canNocturisSpawn() && Math.random() < 0.15) {
       blopData = { hp: NOCTURIS.hp, size: NOCTURIS.size, value: NOCTURIS.value, name: NOCTURIS.name };
       mechanic = NOCTURIS.mechanic;
       blopName = NOCTURIS.name;
       blopId = 'nocturis';
       isVampire = true;
     }
-    if (!isLunar && !isVampire && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+    if (!isLunar && !isVampire && !isMirror && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
       const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
       if (pool && pool.length > 0) {
         blopId = pool[Math.floor(Math.random() * pool.length)];

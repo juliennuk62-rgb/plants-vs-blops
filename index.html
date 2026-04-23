@@ -1485,8 +1485,8 @@
   };
   // Mapping des plantes dispo en GLB (les autres utilisent la primitive)
   const PLANT_GLB_FILE = {
-    sunflower: 'sunflower.glb',
-    cactus: 'cactus.glb',
+    // sunflower + cactus retirés : les GLB Food Kit Kenney étaient trop simples
+    // (cylindre/disque) -> les primitives custom sont plus stylées
     strawberry: 'strawberry.glb',
     pepper: 'pepper.glb',
     watermelon: 'watermelon.glb',
@@ -3084,17 +3084,22 @@
       group.add(model);
       headRef = model;
     } else {
-      console.log('[PLANT] GLB fallback primitive pour:', seed.plantId);
-      // Fallback primitive : stem + head (scale doublé pour visibilité)
+      // Fallback primitive — scale visible pour tous
       const plantScale = 1.9;
-      const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18 * plantScale, 0.22 * plantScale, 1.1 * plantScale, 8),
-        new THREE.MeshStandardMaterial({ color: 0x3c8c3c })
-      );
-      stem.position.y = 0.55 * plantScale; stem.castShadow = true; group.add(stem);
+      // Plantes "corps-plein" (pas besoin de tige verte sous)
+      const NO_STEM = new Set(['cactus', 'ice', 'bamboo', 'lotus', 'phoenix', 'pumpkin', 'durian', 'coconut']);
+      const hasStem = !NO_STEM.has(seed.plantId);
+      if (hasStem) {
+        const stem = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18 * plantScale, 0.22 * plantScale, 1.1 * plantScale, 8),
+          new THREE.MeshStandardMaterial({ color: 0x3c8c3c })
+        );
+        stem.position.y = 0.55 * plantScale; stem.castShadow = true; group.add(stem);
+      }
       const head = makePlantHead(seed.plantId, col);
       head.scale.setScalar(plantScale);
-      head.position.y = 1.8 * plantScale; group.add(head);
+      head.position.y = hasStem ? (1.8 * plantScale) : (0.9 * plantScale);
+      group.add(head);
       headRef = head;
     }
     group.userData = {

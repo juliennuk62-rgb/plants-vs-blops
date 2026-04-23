@@ -364,6 +364,7 @@
     <div class="btn" id="missions-btn">Missions <span id="missions-badge" style="display:none;background:#ff3355;color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-size:11px;">!</span></div>
     <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
     <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
+    <div class="btn" id="leaderboard-btn">🏆 Classement</div>
     <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
     <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
     <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
@@ -462,6 +463,28 @@
       </div>
       <div id="mixer-list"></div>
       <div class="modal-close"><div class="btn" id="mixer-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="leaderboard-modal">
+    <div class="modal-content" style="max-width:680px;">
+      <div class="modal-title">🏆 Classement mondial</div>
+      <div style="color:#aaa;font-size:12px;margin-bottom:10px;">Connecte-toi avec Google pour apparaître avec ton pseudo et apparaître publiquement. Les scores sont mis à jour automatiquement.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;" id="leaderboard-tabs">
+        <div class="btn lb-tab" data-cat="kills">Kills totaux</div>
+        <div class="btn lb-tab" data-cat="earned">$ gagné</div>
+        <div class="btn lb-tab" data-cat="prestige">Prestige</div>
+        <div class="btn lb-tab" data-cat="level">Niveau</div>
+        <div class="btn lb-tab" data-cat="mixed">Mix total</div>
+        <div class="btn lb-tab" data-cat="playtime">Temps de jeu</div>
+      </div>
+      <div id="leaderboard-status" style="color:#888;font-size:12px;margin-bottom:8px;">—</div>
+      <div id="leaderboard-list" style="max-height:360px;overflow-y:auto;"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <input type="text" id="leaderboard-name" placeholder="Pseudo public (3-16 char)" maxlength="16" style="flex:1;padding:8px;background:#222;color:#fff;border:1px solid #444;border-radius:6px;" />
+        <div class="btn gold" id="leaderboard-submit">Publier mon score</div>
+      </div>
+      <div class="modal-close"><div class="btn" id="leaderboard-close">Fermer</div></div>
     </div>
   </div>
 
@@ -2684,6 +2707,119 @@
     cloudSaveDebounce = setTimeout(() => saveToCloud(data), 2000);
   }
 
+  // --- LEADERBOARDS (Sprint 3B) ---
+  const LB_CATEGORIES = ['kills', 'earned', 'prestige', 'level', 'mixed', 'playtime'];
+  const LB_LABEL = { kills: 'Kills', earned: '$ gagné', prestige: 'Prestige', level: 'Niveau', mixed: 'Mix', playtime: 'Temps (h)' };
+  let currentLbCat = 'kills';
+  let lbSubmitDebounce = null;
+
+  function currentScores() {
+    return {
+      kills: game.kills || 0,
+      earned: Math.floor(game.stats.totalEarned || 0),
+      prestige: game.prestige || 0,
+      level: game.level || 1,
+      mixed: game.stats.plantsMixed || 0,
+      playtime: Math.floor((game.stats.totalPlayTimeMs || 0) / 1000),
+    };
+  }
+
+  function validLbName(n) {
+    if (!n || typeof n !== 'string') return false;
+    const t = n.trim();
+    return t.length >= 3 && t.length <= 16 && /^[a-zA-Z0-9_\- ]+$/.test(t);
+  }
+
+  async function submitLeaderboardScore() {
+    const nameEl = $('leaderboard-name');
+    const name = (nameEl.value || '').trim();
+    if (!validLbName(name)) {
+      showHint('Pseudo invalide (3-16 caractères, lettres/chiffres)', 2500);
+      return;
+    }
+    if (!cloudReady || !cloudUser || !firebaseDb) {
+      showHint('Connecte-toi pour publier ton score', 2500);
+      return;
+    }
+    const scores = currentScores();
+    try {
+      await firebaseDb.collection('leaderboards').doc(cloudUser.uid).set({
+        uid: cloudUser.uid,
+        name: name,
+        scores: scores,
+        updatedAt: Date.now(),
+      });
+      game.lbName = name;
+      try { localStorage.setItem('pvb_lb_name', name); } catch {}
+      saveGame();
+      showHint('✓ Score publié', 2000);
+      renderLeaderboard(currentLbCat);
+    } catch (err) {
+      console.warn('LB submit failed:', err);
+      showHint('Erreur publication : ' + (err.message || err), 3000);
+    }
+  }
+
+  async function fetchLeaderboard(cat) {
+    if (!firebaseDb) return [];
+    try {
+      const snap = await firebaseDb.collection('leaderboards')
+        .orderBy('scores.' + cat, 'desc')
+        .limit(50)
+        .get();
+      const rows = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (d && d.name) rows.push({ uid: doc.id, name: d.name, scores: d.scores || {}, updatedAt: d.updatedAt || 0 });
+      });
+      return rows;
+    } catch (err) {
+      console.warn('LB fetch failed:', err);
+      return [];
+    }
+  }
+
+  async function renderLeaderboard(cat) {
+    currentLbCat = cat;
+    document.querySelectorAll('.lb-tab').forEach(el => {
+      el.classList.toggle('gold', el.dataset.cat === cat);
+    });
+    $('leaderboard-status').textContent = 'Chargement...';
+    $('leaderboard-list').innerHTML = '';
+    if (!FIREBASE_ENABLED || !cloudReady) {
+      $('leaderboard-status').textContent = 'Non connecté à Firebase — le classement nécessite une connexion.';
+      return;
+    }
+    const rows = await fetchLeaderboard(cat);
+    if (rows.length === 0) {
+      $('leaderboard-status').textContent = 'Aucun score pour cette catégorie (sois le premier !)';
+      return;
+    }
+    $('leaderboard-status').textContent = rows.length + ' joueurs — tu apparaîtras ici après "Publier mon score"';
+    const myUid = cloudUser ? cloudUser.uid : null;
+    const list = $('leaderboard-list');
+    rows.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 10px;margin-bottom:4px;background:' + (r.uid === myUid ? '#2a3a2a' : '#181820') + ';border:1px solid ' + (r.uid === myUid ? '#66ff88' : '#333') + ';border-radius:6px;';
+      const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '#' + (i + 1)));
+      const val = r.scores[cat] || 0;
+      const displayVal = cat === 'playtime' ? (val / 3600).toFixed(1) + 'h' : fmtNumber(val);
+      row.innerHTML = '<div><span style="min-width:40px;display:inline-block;color:#ffcc33;">' + medal + '</span> <strong>' + escapeHtml(r.name) + '</strong>' + (r.uid === myUid ? ' <span style="color:#66ff88;font-size:11px;">(toi)</span>' : '') + '</div><div style="color:#fff;font-weight:600;">' + displayVal + '</div>';
+      list.appendChild(row);
+    });
+  }
+
+  function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function openLeaderboard() {
+    try {
+      const saved = localStorage.getItem('pvb_lb_name') || game.lbName || '';
+      if ($('leaderboard-name')) $('leaderboard-name').value = saved;
+    } catch {}
+    $('leaderboard-modal').classList.remove('hidden');
+    renderLeaderboard(currentLbCat || 'kills');
+  }
+
   async function linkOrSignInGoogle() {
     if (!firebaseAuth) return;
     const statusEl = $('account-status-msg');
@@ -3376,6 +3512,12 @@
   btnClick('profile-close', () => $('profile-modal').classList.add('hidden'));
   btnClick('missions-btn', () => { initMissions(); renderMissions(); $('missions-modal').classList.remove('hidden'); });
   btnClick('missions-close', () => $('missions-modal').classList.add('hidden'));
+  btnClick('leaderboard-btn', openLeaderboard);
+  btnClick('leaderboard-close', () => $('leaderboard-modal').classList.add('hidden'));
+  btnClick('leaderboard-submit', submitLeaderboardScore);
+  document.querySelectorAll('.lb-tab').forEach(el => {
+    el.addEventListener('click', () => renderLeaderboard(el.dataset.cat));
+  });
   btnClick('prestige-btn', () => { renderPrestigeModal(); $('prestige-modal').classList.remove('hidden'); });
   btnClick('prestige-cancel', () => $('prestige-modal').classList.add('hidden'));
   btnClick('prestige-confirm', () => {

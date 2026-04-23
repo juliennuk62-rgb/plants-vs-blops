@@ -3014,6 +3014,8 @@
     const modal = document.createElement('div');
     modal.id = 'camp-level-modal';
     modal.className = 'modal';
+    // z-index 9999 pour passer au-dessus du campaign-map overlay (z:200)
+    modal.style.zIndex = '9999';
     modal.innerHTML = '<div class="modal-content modal-content--md" id="camp-level-body" style="position:relative;"></div>';
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeCampaignLevelModal(); });

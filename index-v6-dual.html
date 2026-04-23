@@ -529,6 +529,7 @@
       <div class="btn" id="profile-btn" role="button" tabindex="0" aria-label="Ouvrir le profil">👤 Profil</div>
       <div class="btn" id="missions-btn" role="button" tabindex="0" aria-label="Ouvrir les missions">🎯 Missions<span id="missions-badge" style="display:none;background:var(--alert);color:#fff;border-radius:var(--rad-pill);padding:1px 5px;margin-left:4px;font-size:10px;">!</span></div>
       <div class="btn" id="leaderboard-btn" role="button" tabindex="0" aria-label="Ouvrir le classement">🏆 Classement</div>
+      <div class="btn" id="camera-mode-btn" role="button" tabindex="0" aria-label="Mode caméra" style="display:none;">📷 Les 2</div>
       <div class="btn gold" id="prestige-btn" style="display:none;">✨ Prestige</div>
     </div>
     <!-- Groupe 3 : Social -->
@@ -2131,27 +2132,49 @@
     const n1 = lanesInGarden(0);
     return laneIdx < n1 ? laneIdx : laneIdx - n1;
   }
-  // Capacity parc : 15 en solo, 30 en dual
-  function parcCapacity() { return hasDualGarden() ? 30 : PARC_CAPACITY; }
+  // Capacity parc : 15 en solo, 15 (G1) + 30 (G2) = 45 en dual
+  function parcCapacity() { return hasDualGarden() ? 45 : PARC_CAPACITY; }
+
+  // V6 : mode caméra - 'both' (défaut), 'g1', 'g2'
+  let cameraMode = 'both';
+  function setCameraMode(mode) {
+    cameraMode = mode;
+    setupCamera();
+    updateCameraModeBtn();
+  }
+  function updateCameraModeBtn() {
+    const btn = document.getElementById('camera-mode-btn');
+    if (!btn) return;
+    btn.style.display = hasDualGarden() ? '' : 'none';
+    const labels = { both: '📷 Les 2', g1: '📷 G1', g2: '📷 G2' };
+    btn.textContent = labels[cameraMode] || '📷';
+  }
 
   function setupCamera() {
-    const width = playfieldWidth();
-    const depth = LANE_LENGTH + 18; // lanes + base + zoo/parc
+    const depth = LANE_LENGTH + 18;
     const aspect = innerWidth / innerHeight;
-    // En vraie iso 45°, la map apparaît comme un diamant : dimensions se combinent
-    // On calcule le rayon qui englobe le diamant pour fit sur écran
-    const diamondR = (width + depth) * 0.33; // approximation du rayon apparent
+    const dual = hasDualGarden();
+    let width, centerX = 0;
+    if (dual && cameraMode === 'g1') {
+      width = lanesInGarden(0) * LANE_WIDTH;
+      centerX = gardenCenterX(0);
+    } else if (dual && cameraMode === 'g2') {
+      width = lanesInGarden(1) * LANE_WIDTH;
+      centerX = gardenCenterX(1);
+    } else {
+      width = playfieldWidth();
+    }
+    const diamondR = (width + depth) * 0.33;
     const frustumH = Math.max(diamondR, 18);
     camera.left = -frustumH * aspect;
     camera.right = frustumH * aspect;
     camera.top = frustumH;
     camera.bottom = -frustumH;
-    // Position isométrique 45° horizontal + ~40° elevation (style Clash Royale)
-    camera.position.set(35, 40, 35);
-    camera.lookAt(0, 0, 5);
+    // Position iso 45° + 40° elevation, offset par centerX
+    camera.position.set(35 + centerX, 40, 35);
+    camera.lookAt(centerX, 0, 5);
     camera.updateProjectionMatrix();
-    // Shadow bounds (plus large car map tournée)
-    const shadowHalf = Math.max(width, depth) * 0.9 + 10;
+    const shadowHalf = Math.max(playfieldWidth(), depth) * 0.9 + 10;
     sun.shadow.camera.left = -shadowHalf; sun.shadow.camera.right = shadowHalf;
     sun.shadow.camera.top = shadowHalf;   sun.shadow.camera.bottom = -shadowHalf;
     sun.shadow.camera.updateProjectionMatrix();
@@ -2271,25 +2294,42 @@
   }
 
   function buildSharedParcFloor() {
-    // En solo : 15 slots (5×3). En dual : 30 slots (5×6, plus profond) ou 2 parcs côte à côte.
-    // Ici on fait 1 parc central plus grand si dual.
-    const isDual = hasDualGarden();
-    const parcW = isDual ? 16 : 10;
-    const parcD = isDual ? 10 : 6;
-    const parcFloor = new THREE.Mesh(
-      new THREE.BoxGeometry(parcW, 0.15, parcD),
+    if (!hasDualGarden()) {
+      // Solo : parc classique 15 slots (5×3) centré
+      const parcFloor = new THREE.Mesh(
+        new THREE.BoxGeometry(10, 0.15, 6),
+        new THREE.MeshStandardMaterial({ color: 0x7a5c3a })
+      );
+      parcFloor.position.set(0, 0.02, LANE_LENGTH / 2 + 5.5);
+      parcFloor.receiveShadow = true;
+      scene.add(parcFloor);
+      terrainObjects.push(parcFloor);
+      return;
+    }
+    // Dual : 2 parcs distincts
+    // Parc G1 : 15 slots (5×3), sous garden 1
+    const parc1 = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 0.15, 6),
       new THREE.MeshStandardMaterial({ color: 0x7a5c3a })
     );
-    parcFloor.position.set(0, 0.02, LANE_LENGTH / 2 + 2.5 + parcD / 2);
-    parcFloor.receiveShadow = true;
-    scene.add(parcFloor);
-    terrainObjects.push(parcFloor);
+    parc1.position.set(gardenCenterX(0), 0.02, LANE_LENGTH / 2 + 5.5);
+    parc1.receiveShadow = true;
+    scene.add(parc1); terrainObjects.push(parc1);
+    // Parc G2 : 30 slots (6×5) 2× plus grand, sous garden 2, couleur légèrement différente
+    const parc2 = new THREE.Mesh(
+      new THREE.BoxGeometry(12, 0.15, 10),
+      new THREE.MeshStandardMaterial({ color: 0x8a6c44 })
+    );
+    parc2.position.set(gardenCenterX(1), 0.02, LANE_LENGTH / 2 + 7);
+    parc2.receiveShadow = true;
+    scene.add(parc2); terrainObjects.push(parc2);
   }
 
   function rebuildTerrain() {
     clearTerrain();
     buildTerrain();
     setupCamera();
+    if (typeof updateCameraModeBtn === 'function') updateCameraModeBtn();
   }
 
   function setSlotsVisible(visible) {
@@ -2352,7 +2392,11 @@
       checkAchievements();
     }
   }
-  function getMaxPlants() { return BASE_MAX_PLANTS + game.prestige; }
+  function getMaxPlants() {
+    const base = BASE_MAX_PLANTS + game.prestige;
+    // V6 : dual mode double la capacité plantes (un board par garden)
+    return hasDualGarden() ? base * 2 : base;
+  }
   function levelBonus() { return (game.level - 1) * LEVEL_PASSIVE_BONUS; }
   function prestigeBonus() { return game.prestige * PRESTIGE_PASSIVE_BONUS; }
   function totalPassiveMultiplier() {
@@ -2653,25 +2697,49 @@
   function rebuildParcVisual() {
     game.parcMeshes.forEach(m => scene.remove(m));
     game.parcMeshes = [];
-    // En dual : grille plus grande 8×4 = 32 slots
     const isDual = hasDualGarden();
-    const COLS = isDual ? 8 : 5;
-    const ROWS = isDual ? 4 : 3;
     const CELL_W = 1.8, CELL_D = 1.8;
-    const originX = -(COLS - 1) / 2 * CELL_W;
-    const originZ = LANE_LENGTH / 2 + 3.2;
-    const cap = parcCapacity();
-    const toRender = Math.min(cap, game.blops.length);
-    for (let i = 0; i < toRender; i++) {
+    const toRender = Math.min(parcCapacity(), game.blops.length);
+    if (!isDual) {
+      // Solo : 5×3 classique
+      const COLS = 5;
+      const originX = -(COLS - 1) / 2 * CELL_W;
+      const originZ = LANE_LENGTH / 2 + 3.2;
+      for (let i = 0; i < toRender; i++) {
+        const b = game.blops[i];
+        const br = BRAINROTS[b.rarity];
+        const m = createBlopMesh(b.rarity, 0.5);
+        m.position.set(originX + (i % COLS) * CELL_W, 0.1, originZ + Math.floor(i / COLS) * CELL_D);
+        addVariantRing(m, b.variant || 'none', br.size * 0.5);
+        scene.add(m); game.parcMeshes.push(m);
+      }
+      return;
+    }
+    // Dual : 15 premiers Blops dans parc G1 (5×3), 30 suivants dans parc G2 (6×5 → 30 slots)
+    // Parc G1 (sous garden 1)
+    const g1Cap = 15, g1Cols = 5;
+    const g1OrigX = gardenCenterX(0) - (g1Cols - 1) / 2 * CELL_W;
+    const g1OrigZ = LANE_LENGTH / 2 + 3.2;
+    for (let i = 0; i < Math.min(g1Cap, toRender); i++) {
       const b = game.blops[i];
       const br = BRAINROTS[b.rarity];
-      const miniGroup = createBlopMesh(b.rarity, 0.5);
-      const colIdx = i % COLS;
-      const rowIdx = Math.floor(i / COLS);
-      miniGroup.position.set(originX + colIdx * CELL_W, 0.1, originZ + rowIdx * CELL_D);
-      addVariantRing(miniGroup, b.variant || 'none', br.size * 0.5);
-      scene.add(miniGroup);
-      game.parcMeshes.push(miniGroup);
+      const m = createBlopMesh(b.rarity, 0.5);
+      m.position.set(g1OrigX + (i % g1Cols) * CELL_W, 0.1, g1OrigZ + Math.floor(i / g1Cols) * CELL_D);
+      addVariantRing(m, b.variant || 'none', br.size * 0.5);
+      scene.add(m); game.parcMeshes.push(m);
+    }
+    // Parc G2 (sous garden 2) : 30 slots (6×5)
+    const g2Cols = 6;
+    const g2OrigX = gardenCenterX(1) - (g2Cols - 1) / 2 * CELL_W;
+    const g2OrigZ = LANE_LENGTH / 2 + 3.2;
+    for (let i = g1Cap; i < toRender; i++) {
+      const parcIdx = i - g1Cap;
+      const b = game.blops[i];
+      const br = BRAINROTS[b.rarity];
+      const m = createBlopMesh(b.rarity, 0.5);
+      m.position.set(g2OrigX + (parcIdx % g2Cols) * CELL_W, 0.1, g2OrigZ + Math.floor(parcIdx / g2Cols) * CELL_D);
+      addVariantRing(m, b.variant || 'none', br.size * 0.5);
+      scene.add(m); game.parcMeshes.push(m);
     }
   }
 
@@ -5184,6 +5252,11 @@
   btnClick('missions-btn', () => { initMissions(); renderMissions(); openModal('missions-modal'); });
   btnClick('missions-close', () => closeModal($('missions-modal')));
   btnClick('leaderboard-btn', openLeaderboard);
+  // V6 : cycle caméra Both → G1 → G2 → Both
+  btnClick('camera-mode-btn', () => {
+    const cycle = { both: 'g1', g1: 'g2', g2: 'both' };
+    setCameraMode(cycle[cameraMode] || 'both');
+  });
   btnClick('leaderboard-close', () => closeModal($('leaderboard-modal')));
   btnClick('leaderboard-submit', submitLeaderboardScore);
   btnClick('referral-copy', () => {

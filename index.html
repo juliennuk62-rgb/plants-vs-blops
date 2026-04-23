@@ -4523,7 +4523,38 @@
     } else if (!savedData) {
       showTutorial();
     }
+    // === SEASON 2 - Feature #4 : Lettre des 30 Jours ===
+    if (savedData && savedData.lastSave) {
+      const daysAway = (Date.now() - savedData.lastSave) / (1000 * 60 * 60 * 24);
+      const bucket = Math.floor(daysAway / 30);
+      if (daysAway >= 30 && !localStorage.getItem('pvb_letter_shown_' + bucket)) {
+        setTimeout(() => {
+          showLongAbsenceLetter(Math.floor(daysAway));
+          try { localStorage.setItem('pvb_letter_shown_' + bucket, '1'); } catch (e) {}
+        }, 1800);
+      }
+    }
   })();
+
+  function showLongAbsenceLetter(days) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9998;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);opacity:0;transition:opacity 0.6s ease;padding:20px;';
+    overlay.innerHTML = '<div style="max-width:420px;background:linear-gradient(180deg,#1e1a2e,#0f0d1a);border:1px solid #554;border-radius:16px;padding:28px 24px;text-align:center;color:#e8e4d8;font-family:Georgia,serif;box-shadow:0 20px 60px rgba(0,0,0,0.5);">'
+      + '<div style="font-size:40px;margin-bottom:8px;">🌱</div>'
+      + '<div style="font-size:20px;color:#ffcc88;margin-bottom:16px;font-style:italic;">Ton jardin va bien.</div>'
+      + '<div style="font-size:14px;line-height:1.7;color:#ccc;margin-bottom:20px;">Ça fait <strong>' + days + ' jours</strong> qu\'on ne s\'était pas vus.<br>'
+      + 'Les plantes ont continué sans toi, sans rancune.<br>'
+      + 'Tes Blops capturés dorment. Ton shop t\'attend.<br><br>'
+      + '<em style="color:#aaa;">Pas de pression. Reviens quand ça te dit — on est là.</em></div>'
+      + '<div class="btn gold" id="letter-close-btn" style="padding:10px 22px;cursor:pointer;">Revenir au jardin</div>'
+      + '<div style="margin-top:14px;font-size:11px;color:#666;">— Julien, le dev</div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+    const close = () => { overlay.style.opacity = '0'; setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 600); };
+    overlay.querySelector('#letter-close-btn').onclick = close;
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  }
 
   addEventListener('beforeunload', saveGame);
   addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });

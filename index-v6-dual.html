@@ -1801,7 +1801,283 @@
     badge.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,#ff3388,#33ccff);color:#fff;padding:6px 14px;border-radius:20px;font-family:var(--font-display,sans-serif);font-weight:700;font-size:13px;z-index:9998;box-shadow:0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;pointer-events:none;';
     badge.textContent = 'V6 · DUAL GARDEN · prototype local';
     document.body.appendChild(badge);
+    buildAdminPanel();
   });
+
+  // === ADMIN PANEL (test local seulement) ===
+  function buildAdminPanel() {
+    // Bouton toggle flottant
+    const btn = document.createElement('div');
+    btn.id = 'admin-toggle';
+    btn.textContent = '⚡ ADMIN';
+    btn.style.cssText = 'position:fixed;bottom:12px;right:12px;background:#ff3388;color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;z-index:9997;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-family:var(--font-display,sans-serif);user-select:none;';
+    btn.onclick = () => {
+      const p = document.getElementById('admin-panel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    };
+    document.body.appendChild(btn);
+
+    const panel = document.createElement('div');
+    panel.id = 'admin-panel';
+    panel.style.cssText = 'position:fixed;bottom:60px;right:12px;width:380px;max-height:80vh;overflow-y:auto;background:rgba(10,10,20,0.96);color:#fff;padding:16px;border-radius:12px;border:2px solid #ff3388;z-index:9996;display:none;font-family:var(--font-body,sans-serif);font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,0.6);';
+    panel.innerHTML = `
+      <div style="font-weight:700;font-size:16px;margin-bottom:12px;color:#ff66aa;">⚡ Admin Panel</div>
+
+      <div style="font-weight:700;color:#ffcc33;margin:8px 0 4px;">🏆 Prestige</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px;">
+        <button data-prestige="0">P0</button>
+        <button data-prestige="1">P1</button>
+        <button data-prestige="5">P5</button>
+        <button data-prestige="9">P9</button>
+        <button data-prestige="10">P10</button>
+        <button data-prestige="15">P15</button>
+        <button data-prestige="20">P20</button>
+        <button data-prestige="50">P50</button>
+      </div>
+
+      <div style="font-weight:700;color:#66ff99;margin:8px 0 4px;">💰 Cash</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px;">
+        <button data-cash="1000">+1k</button>
+        <button data-cash="10000">+10k</button>
+        <button data-cash="100000">+100k</button>
+        <button data-cash="1000000">+1M</button>
+        <button data-cash="10000000">+10M</button>
+        <button data-cash="100000000">+100M</button>
+        <button data-cash="1000000000">+1B</button>
+        <button data-cash="-all" style="background:#aa3333;">Vider</button>
+      </div>
+
+      <div style="font-weight:700;color:#33ccff;margin:8px 0 4px;">⭐ Niveau / XP</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px;">
+        <button data-xp="100">+100 XP</button>
+        <button data-xp="1000">+1k XP</button>
+        <button data-xp="10000">+10k XP</button>
+        <button data-xp="100000">+100k XP</button>
+      </div>
+
+      <div style="font-weight:700;color:#ff9933;margin:8px 0 4px;">👾 Spawn Blops</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px;">
+        <button data-spawn="common">Common</button>
+        <button data-spawn="rare">Rare</button>
+        <button data-spawn="veryrare">V.Rare</button>
+        <button data-spawn="ultrarare">U.Rare</button>
+        <button data-spawn="mythic">Mythic</button>
+        <button data-spawn="goat">GOAT</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px;">
+        <button data-spawn-force="selenis" style="background:#6677ff;">🌕 Selenis</button>
+        <button data-spawn-force="nocturis" style="background:#aa2266;">🦇 Nocturis</button>
+        <button data-spawn-force="mirror" style="background:#ff3366;">🪞 Miroir</button>
+      </div>
+
+      <div style="font-weight:700;color:#ff66ff;margin:8px 0 4px;">🧪 Modes</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-bottom:8px;">
+        <button id="admin-toggle-dual">Toggle DUAL</button>
+        <button id="admin-toggle-weather">Toggle Pluie</button>
+        <button id="admin-toggle-hot">Toggle Canicule</button>
+        <button id="admin-toggle-vampire">Unlock Vampire</button>
+      </div>
+
+      <div style="font-weight:700;color:#aaffaa;margin:8px 0 4px;">🌱 Inventaire</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-bottom:8px;">
+        <button id="admin-fill-inv">+10 graines random</button>
+        <button id="admin-fill-goat">+3 graines GOAT</button>
+        <button id="admin-fill-blops">+15 Blops aléatoires</button>
+        <button id="admin-fill-goats-blops" style="background:#aa7700;">+5 Blops GOAT</button>
+      </div>
+
+      <div style="font-weight:700;color:#ff6666;margin:8px 0 4px;">💣 Reset</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;">
+        <button id="admin-reset-save" style="background:#cc4444;">Reset save</button>
+        <button id="admin-reload" style="background:#448844;">Reload</button>
+      </div>
+
+      <div id="admin-status" style="margin-top:12px;padding:6px;background:#222;border-radius:4px;font-size:11px;color:#aaa;min-height:20px;"></div>
+    `;
+    // Style des boutons
+    const st = document.createElement('style');
+    st.textContent = `
+      #admin-panel button { background:#2a2a3a;color:#fff;border:1px solid #555;padding:6px 8px;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit; }
+      #admin-panel button:hover { background:#3a3a4a; }
+      #admin-panel button:active { transform:scale(0.96); }
+    `;
+    document.head.appendChild(st);
+    document.body.appendChild(panel);
+
+    const status = (msg) => { panel.querySelector('#admin-status').textContent = msg; };
+
+    // Prestige buttons
+    panel.querySelectorAll('[data-prestige]').forEach(b => {
+      b.onclick = () => {
+        const p = parseInt(b.dataset.prestige, 10);
+        const savedPlants = game.plants.map(pp => ({
+          plantId: pp.userData.plantId, mutation: pp.userData.mutation,
+          laneIdx: pp.userData.slot.laneIdx, slotIdx: pp.userData.slot.slotIdx,
+          killCount: pp.userData.killCount || 0,
+        }));
+        game.prestige = p;
+        // Wipe and rebuild
+        game.plants.forEach(pp => scene.remove(pp)); game.plants = [];
+        game.brainrots.forEach(e => { removeHpBar(e); scene.remove(e); }); game.brainrots = [];
+        rebuildTerrain();
+        rebuildParcVisual();
+        // Re-place plants where possible
+        let restored = 0;
+        savedPlants.forEach(pp => {
+          const slot = slots.find(s => s.laneIdx === pp.laneIdx && s.slotIdx === pp.slotIdx);
+          if (slot && !slot.plant && PLANTS[pp.plantId]) {
+            placePlant({ plantId: pp.plantId, mutation: pp.mutation }, slot);
+            if (slot.plant) slot.plant.userData.killCount = pp.killCount;
+            restored++;
+          }
+        });
+        updateHud(); updatePrestigeButtonVisibility(); saveGame();
+        status(`Prestige → ${p} (${restored}/${savedPlants.length} plantes restaurées)`);
+      };
+    });
+
+    // Cash buttons
+    panel.querySelectorAll('[data-cash]').forEach(b => {
+      b.onclick = () => {
+        const amount = b.dataset.cash;
+        if (amount === '-all') { game.cash = 0; }
+        else { addCash(parseInt(amount, 10)); }
+        updateHud(); saveGame();
+        status(`Cash: ${fmtNumber(game.cash)}$`);
+      };
+    });
+
+    // XP buttons
+    panel.querySelectorAll('[data-xp]').forEach(b => {
+      b.onclick = () => {
+        addXp(parseInt(b.dataset.xp, 10));
+        updateHud(); saveGame();
+        status(`Niveau ${game.level} — XP ${fmtNumber(game.xp)}`);
+      };
+    });
+
+    // Spawn buttons
+    panel.querySelectorAll('[data-spawn]').forEach(b => {
+      b.onclick = () => {
+        const rarity = b.dataset.spawn;
+        const lane = Math.floor(Math.random() * currentLaneCount());
+        spawnBrainrot(lane, rarity, { noVariant: true });
+        status(`Spawn ${rarity} sur lane ${lane}`);
+      };
+    });
+
+    // Forced special spawns
+    panel.querySelector('[data-spawn-force="selenis"]').onclick = () => {
+      const cycleKey = 'pvb_selenis_' + Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 29.53));
+      try { localStorage.removeItem(cycleKey); } catch {}
+      // Force spawn en simulant pleine lune nocturne : on crée directement le mesh
+      const lane = Math.floor(Math.random() * currentLaneCount());
+      const perGarden = lanesPerGarden();
+      const gardenIdx = Math.floor(lane / perGarden);
+      const localLane = lane % perGarden;
+      const offsetX = gardenCenterX(gardenIdx);
+      const group = createBlopMesh('goat', 1);
+      const spawnX = offsetX + (localLane - (perGarden - 1) / 2) * LANE_WIDTH;
+      group.position.set(spawnX, 0.1, -LANE_LENGTH / 2);
+      Object.assign(group.userData, {
+        type: 'brainrot', hp: 5000, maxHp: 5000, speed: BRAINROT_SPEED,
+        lane, rarity: 'goat', variant: 'none', value: 120000, size: 2.4,
+        slowUntil: 0, slowFactor: 1, wigglePhase: Math.random() * Math.PI * 2,
+        hpBarEl: createHpBar(), mechanic: 'rage-regen', blopId: 'selenis', blopName: 'Selenis',
+      });
+      const aura = makeLunarAura ? makeLunarAura(2.4) : null;
+      if (aura) { aura.position.y = 2.4; group.add(aura); }
+      group.scale.set(0.1, 0.1, 0.1);
+      scene.add(group); game.brainrots.push(group);
+      status('🌕 Selenis spawned');
+    };
+    panel.querySelector('[data-spawn-force="nocturis"]').onclick = () => {
+      vampireState && (vampireState.unlocked = true);
+      const lane = Math.floor(Math.random() * currentLaneCount());
+      spawnBrainrot(lane, 'ultrarare');
+      status('🦇 Vampire unlocked + ultrarare spawned (Nocturis chance)');
+    };
+    panel.querySelector('[data-spawn-force="mirror"]').onclick = () => {
+      game._mirrorCooldown = false;
+      const prevP = game.prestige;
+      if (game.prestige < 3) game.prestige = 3;
+      const lane = Math.floor(Math.random() * currentLaneCount());
+      spawnBrainrot(lane, 'mythic');
+      game.prestige = prevP;
+      status('🪞 Mirror mythic spawn');
+    };
+
+    // Modes toggles
+    panel.querySelector('#admin-toggle-dual').onclick = () => {
+      const cur = localStorage.getItem('pvb_force_dual');
+      localStorage.setItem('pvb_force_dual', cur === '0' ? '1' : '0');
+      status('DUAL toggled → ' + localStorage.getItem('pvb_force_dual') + ' (reload requis)');
+    };
+    panel.querySelector('#admin-toggle-weather').onclick = () => {
+      if (typeof weatherState !== 'undefined') {
+        weatherState.isRaining = !weatherState.isRaining;
+        weatherState.loaded = true;
+        if (typeof applyWeatherVisuals === 'function') applyWeatherVisuals();
+        status('Pluie → ' + weatherState.isRaining);
+      }
+    };
+    panel.querySelector('#admin-toggle-hot').onclick = () => {
+      if (typeof weatherState !== 'undefined') {
+        weatherState.isHot = !weatherState.isHot;
+        weatherState.temp = weatherState.isHot ? 35 : 20;
+        weatherState.loaded = true;
+        weatherState._hotShown = false;
+        if (typeof applyWeatherVisuals === 'function') applyWeatherVisuals();
+        status('Canicule → ' + weatherState.isHot);
+      }
+    };
+    panel.querySelector('#admin-toggle-vampire').onclick = () => {
+      if (typeof vampireState !== 'undefined') {
+        vampireState.unlocked = !vampireState.unlocked;
+        status('Vampire unlocked → ' + vampireState.unlocked);
+      }
+    };
+
+    // Inventaire fill
+    panel.querySelector('#admin-fill-inv').onclick = () => {
+      for (let i = 0; i < 10; i++) {
+        game.inventory.push({ plantId: pickPlantForRarity(pickRarity()), mutation: pickMutation() });
+      }
+      renderInventory(); saveGame();
+      status('+10 graines ajoutées');
+    };
+    panel.querySelector('#admin-fill-goat').onclick = () => {
+      for (let i = 0; i < 3; i++) {
+        game.inventory.push({ plantId: pickPlantForRarity('goat'), mutation: pickMutation() });
+      }
+      renderInventory(); saveGame();
+      status('+3 graines GOAT ajoutées');
+    };
+    panel.querySelector('#admin-fill-blops').onclick = () => {
+      for (let i = 0; i < 15; i++) {
+        addBlopToHolding(pickRarity(), pickVariant());
+      }
+      saveGame();
+      status('+15 Blops aléatoires capturés');
+    };
+    panel.querySelector('#admin-fill-goats-blops').onclick = () => {
+      for (let i = 0; i < 5; i++) {
+        addBlopToHolding('goat', pickVariant());
+      }
+      saveGame();
+      status('+5 Blops GOAT capturés');
+    };
+
+    // Reset
+    panel.querySelector('#admin-reset-save').onclick = () => {
+      if (!confirm('Reset TOUTE la save locale ? (Firebase cloud intact)')) return;
+      try {
+        Object.keys(localStorage).filter(k => k.startsWith('pvb_')).forEach(k => localStorage.removeItem(k));
+        location.reload();
+      } catch (e) { status('Reset fail: ' + e.message); }
+    };
+    panel.querySelector('#admin-reload').onclick = () => location.reload();
+  }
   function gardenCount() { return hasDualGarden() ? 2 : 1; }
   // Lanes par jardin : prestige 0..9 = 3..12 lanes dans le jardin unique.
   // À partir du prestige 10 : chaque garden garde un nombre fixe de lanes de base

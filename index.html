@@ -365,6 +365,7 @@
     <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
     <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
     <div class="btn" id="leaderboard-btn">🏆 Classement</div>
+    <div class="btn" id="rec-btn" style="background:#aa2233;border-color:#ff5566;" title="Partager les 20 dernières secondes">🎬 Clip</div>
     <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
     <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
     <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
@@ -873,6 +874,84 @@
     currentBgmId = id;
     try { localStorage.setItem('pvb_bgm', id); } catch (e) {}
     if (musicEnabled) { stopMusic(); startMusic(); }
+  }
+
+  // --- AUTO-RECORDER (Season 2) : rolling buffer 20s via MediaRecorder ---
+  let recChunks = [];
+  let recorder = null;
+  let recStartedAt = 0;
+  const REC_DURATION_MS = 20000;
+
+  function startRollingRecorder() {
+    if (recorder) return;
+    try {
+      const canvas = renderer && renderer.domElement;
+      if (!canvas || !canvas.captureStream) return;
+      const stream = canvas.captureStream(30);
+      // Essaie d'ajouter l'audio si dispo
+      if (audioCtx && audioCtx.createMediaStreamDestination) {
+        try {
+          const audioDest = audioCtx.createMediaStreamDestination();
+          // Reconnecter musicNodes vers audioDest si présent
+          if (musicNodes && musicNodes.masterGain) {
+            try { musicNodes.masterGain.connect(audioDest); } catch (e) {}
+          }
+          audioDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+        } catch (e) {}
+      }
+      const mimes = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+      let chosen = null;
+      for (const m of mimes) { if (MediaRecorder.isTypeSupported(m)) { chosen = m; break; } }
+      if (!chosen) return;
+      recorder = new MediaRecorder(stream, { mimeType: chosen, videoBitsPerSecond: 2_500_000 });
+      recorder.ondataavailable = e => {
+        if (!e.data || e.data.size === 0) return;
+        recChunks.push({ blob: e.data, t: Date.now() });
+        // Purge chunks plus vieux que REC_DURATION_MS + 2s
+        const cutoff = Date.now() - REC_DURATION_MS - 2000;
+        recChunks = recChunks.filter(c => c.t >= cutoff);
+      };
+      recorder.start(1000); // 1 chunk par seconde
+      recStartedAt = Date.now();
+    } catch (err) { console.warn('Recorder failed:', err); recorder = null; }
+  }
+
+  async function captureLast20s() {
+    if (!recorder || recChunks.length === 0) {
+      showHint('Le clip démarre quand tu joues — reviens après 5s.', 2500);
+      return null;
+    }
+    // Prends les chunks des 20 dernières secondes
+    const cutoff = Date.now() - REC_DURATION_MS;
+    const recent = recChunks.filter(c => c.t >= cutoff);
+    if (recent.length === 0) return null;
+    const blob = new Blob(recent.map(c => c.blob), { type: recorder.mimeType });
+    return blob;
+  }
+
+  async function shareClip() {
+    sfx('click');
+    const blob = await captureLast20s();
+    if (!blob) return;
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+    const filename = 'plants-vs-blops-' + Date.now() + '.' + ext;
+    const file = new File([blob], filename, { type: blob.type });
+    const refLink = (typeof getMyReferralLink === 'function') ? getMyReferralLink() : null;
+    const shareText = '🌱 Plants vs Blops — mon dernier clip' + (refLink ? '\n' + refLink : ' https://juliennuk62-rgb.github.io/plants-vs-blops/');
+    // Web Share API level 2 (partage fichier)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], text: shareText, title: 'Plants vs Blops' });
+        sfx('reward');
+        return;
+      } catch (e) { /* user cancelled */ }
+    }
+    // Fallback : téléchargement
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    showHint('🎬 Clip téléchargé ! Partage-le sur TikTok/Reels', 3000);
   }
 
   // --- RARETES ---
@@ -3813,6 +3892,8 @@
   const initOnce = () => {
     initAudio();
     if (musicEnabled) startMusic();
+    // Season 2 : démarre le recorder après 500ms (le temps que le canvas tourne)
+    setTimeout(() => { try { startRollingRecorder(); } catch (e) {} }, 500);
     document.removeEventListener('click', initOnce);
     document.removeEventListener('keydown', initOnce);
     document.removeEventListener('touchstart', initOnce);
@@ -3835,6 +3916,7 @@
   btnClick('leaderboard-btn', openLeaderboard);
   btnClick('leaderboard-close', () => $('leaderboard-modal').classList.add('hidden'));
   btnClick('leaderboard-submit', submitLeaderboardScore);
+  btnClick('rec-btn', shareClip);
   btnClick('referral-copy', () => {
     const link = getMyReferralLink();
     if (!link) { showHint('Connecte-toi pour obtenir ton lien', 2000); return; }

@@ -4098,7 +4098,7 @@
       body.tab-campaign #inventory, body.tab-campaign #top-right, body.tab-campaign #hud { opacity:0.5; pointer-events:none; }
       /* Masquer les overlays game (HP bars, tooltips) en Maison ou Aventure */
       body.tab-house #hp-overlay, body.tab-house #plant-tooltip,
-      body.tab-campaign #hp-overlay, body.tab-campaign #plant-tooltip { display:none !important; }
+      body.tab-campaign #hp-overlay { display:none !important; }
       body.tab-house #build-shop-btn { display:block !important; }
     `;
     document.head.appendChild(st);
@@ -7512,13 +7512,36 @@
         <span>${plant.name}</span>
       </div>
       ${rows.map(([l, v]) => `<div class="tt-row"><span class="label">${l}</span><span class="val">${v}</span></div>`).join('')}
-      <div class="tt-footer">Clic ailleurs pour fermer</div>
+      <div class="tt-actions" style="display:flex;gap:6px;margin-top:10px;">
+        <button id="tt-move" style="flex:1;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;">↔ Déplacer</button>
+        <button id="tt-remove" style="flex:1;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;">🗑 Retirer</button>
+      </div>
+      <div class="tt-footer">Tape ailleurs pour fermer</div>
     `;
     const maxX = innerWidth - 320;
     const maxY = innerHeight - tooltipEl.offsetHeight - 20;
     tooltipEl.style.left = Math.min(x + 14, maxX) + 'px';
     tooltipEl.style.top = Math.min(y + 14, Math.max(10, maxY)) + 'px';
     tooltipEl.style.display = 'block';
+    // Wire actions (support clic ET touch)
+    const btnMove = document.getElementById('tt-move');
+    const btnRemove = document.getElementById('tt-remove');
+    if (btnMove) {
+      btnMove.onclick = (ev) => {
+        ev.stopPropagation();
+        hideTooltip();
+        enterMoveMode(plantGroup);
+        sfx && sfx('click');
+      };
+    }
+    if (btnRemove) {
+      btnRemove.onclick = (ev) => {
+        ev.stopPropagation();
+        hideTooltip();
+        removePlant(plantGroup);
+        sfx && sfx('click');
+      };
+    }
   }
   function hideTooltip() { tooltipEl.style.display = 'none'; }
 
@@ -7587,6 +7610,61 @@
   renderer.domElement.addEventListener('mouseleave', onCanvasMouseLeave);
   renderer.domElement.addEventListener('click', onLeftClick);
   renderer.domElement.addEventListener('contextmenu', onRightClick);
+
+  // === Touch support jardin + campagne (iPad / mobile) ===
+  // Tap court → comme un clic ; long-press (>400ms) → tooltip avec boutons Déplacer / Retirer
+  (function attachTouch() {
+    const canvas = renderer.domElement;
+    // Empêche iOS de déclencher son callout natif sur long-press
+    canvas.style.touchAction = 'none';
+    canvas.style.webkitTouchCallout = 'none';
+    canvas.style.webkitUserSelect = 'none';
+    let touchStartX = 0, touchStartY = 0, touchMoved = false, touchStartT = 0;
+    canvas.addEventListener('touchstart', (e) => {
+      if (activeTab === 'house') return; // le tab maison a déjà son propre handler
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      touchStartX = t.clientX; touchStartY = t.clientY;
+      touchMoved = false; touchStartT = performance.now();
+      // Simule mousedown pour déclencher le long-press tooltip
+      canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY, button: 0, bubbles: true }));
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      if (activeTab === 'house') return;
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
+      if (Math.hypot(dx, dy) > 12) {
+        touchMoved = true;
+        // Annule le long-press si on bouge le doigt
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      }
+    }, { passive: true });
+    canvas.addEventListener('touchend', (e) => {
+      if (activeTab === 'house') return;
+      const dt = performance.now() - touchStartT;
+      // Déclenche le mouseup pour nettoyer le timer long-press
+      canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: touchStartX, clientY: touchStartY, button: 0, bubbles: true }));
+      // Si c'était un tap court sans long-press et sans drag → simule un click
+      if (!longPressTriggered && !touchMoved && dt < LONG_PRESS_MS) {
+        canvas.dispatchEvent(new MouseEvent('click', { clientX: touchStartX, clientY: touchStartY, button: 0, bubbles: true }));
+      }
+      // Reset du flag long-press (il aura été traité dans onLeftClick)
+      setTimeout(() => { longPressTriggered = false; }, 50);
+    }, { passive: true });
+    // Annule si le doigt sort
+    canvas.addEventListener('touchcancel', () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      longPressTriggered = false;
+    }, { passive: true });
+  })();
+
+  // Ferme la tooltip sur tap ailleurs (touch support)
+  document.addEventListener('touchstart', (e) => {
+    if (tooltipEl.style.display === 'block' && !tooltipEl.contains(e.target)) {
+      hideTooltip();
+    }
+  }, { passive: true });
 
   // Close tooltip when clicking outside
   document.addEventListener('mousedown', (e) => {

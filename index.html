@@ -361,6 +361,7 @@
     <div class="btn" id="mixer-btn">Mixer</div>
     <div class="btn" id="collection-btn">Collection</div>
     <div class="btn" id="profile-btn">Profil</div>
+    <div class="btn" id="missions-btn">Missions <span id="missions-badge" style="display:none;background:#ff3355;color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-size:11px;">!</span></div>
     <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
     <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
     <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
@@ -461,6 +462,18 @@
       </div>
       <div id="mixer-list"></div>
       <div class="modal-close"><div class="btn" id="mixer-close">Fermer</div></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="missions-modal">
+    <div class="modal-content" style="max-width:620px;">
+      <div class="modal-title">🎯 Missions</div>
+      <div style="color:#aaa;font-size:12px;margin-bottom:10px;">Relève les défis pour gagner cash, XP et boosts. Réinitialisation quotidienne à minuit + hebdo le lundi.</div>
+      <h3 style="color:#4dd0e1;">📅 Quotidiennes <span id="missions-daily-timer" style="font-size:12px;color:#888;">— 24h</span></h3>
+      <div id="missions-daily-list"></div>
+      <h3 style="color:#ffcc00;margin-top:16px;">📆 Hebdomadaires <span id="missions-weekly-timer" style="font-size:12px;color:#888;">— 7j</span></h3>
+      <div id="missions-weekly-list"></div>
+      <div class="modal-close"><div class="btn" id="missions-close">Fermer</div></div>
     </div>
   </div>
 
@@ -961,6 +974,144 @@
   };
   const ACHIEVEMENT_KEYS = Object.keys(ACHIEVEMENTS);
 
+  // --- MISSIONS (Sprint 3A) ---
+  // Pools de templates ; la roue choisit 3 quotidiennes + 2 hebdo par période.
+  // stat = clé de game.missions.progress[stat] incrémentée à chaque event
+  const MISSION_POOL_DAILY = [
+    { id: 'kill_50',       desc: 'Tuer 50 Blops',                       stat: 'kills',     goal: 50,     reward: 500 },
+    { id: 'kill_200',      desc: 'Tuer 200 Blops',                      stat: 'kills',     goal: 200,    reward: 1500 },
+    { id: 'kill_rare_10',  desc: 'Tuer 10 Blops Rares+',                stat: 'killsRare', goal: 10,     reward: 800 },
+    { id: 'plant_20',      desc: 'Placer 20 plantes',                   stat: 'planted',   goal: 20,     reward: 600 },
+    { id: 'spend_5k',      desc: 'Dépenser 5 000$',                     stat: 'spent',     goal: 5000,   reward: 1000 },
+    { id: 'earn_10k',      desc: 'Gagner 10 000$',                      stat: 'earned',    goal: 10000,  reward: 1200 },
+    { id: 'mix_3',         desc: 'Fusionner 3 fois dans le mixer',      stat: 'mixed',     goal: 3,      reward: 1500 },
+    { id: 'kill_variant_5',desc: 'Tuer 5 Blops variants spéciaux',      stat: 'killsVariant', goal: 5,   reward: 1200 },
+    { id: 'shop_buy_5',    desc: 'Acheter 5 graines à la boutique',     stat: 'bought',    goal: 5,      reward: 700 },
+  ];
+  const MISSION_POOL_WEEKLY = [
+    { id: 'kill_2000',       desc: 'Tuer 2 000 Blops',                  stat: 'kills',       goal: 2000, reward: 15000 },
+    { id: 'kill_mythic_3',   desc: 'Tuer 3 Blops Mythiques',            stat: 'killsMythic', goal: 3,    reward: 20000 },
+    { id: 'kill_goat_1',     desc: 'Tuer 1 Blop GOAT',                  stat: 'killsGoat',   goal: 1,    reward: 50000 },
+    { id: 'plant_100',       desc: 'Placer 100 plantes',                stat: 'planted',     goal: 100,  reward: 10000 },
+    { id: 'earn_100k',       desc: 'Gagner 100 000$',                   stat: 'earned',      goal: 100000, reward: 25000 },
+    { id: 'mix_15',          desc: 'Fusionner 15 fois',                 stat: 'mixed',       goal: 15,   reward: 15000 },
+    { id: 'variants_20',     desc: 'Tuer 20 Blops variants spéciaux',   stat: 'killsVariant',goal: 20,   reward: 18000 },
+    { id: 'mutation_got',    desc: 'Obtenir 5 graines mutées',          stat: 'mutationGot', goal: 5,    reward: 12000 },
+  ];
+
+  const DAILY_MS = 24 * 60 * 60 * 1000;
+  const WEEKLY_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function pickMissions(pool, count, seed) {
+    const rng = (() => { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; })();
+    const copy = pool.slice();
+    const chosen = [];
+    for (let i = 0; i < count && copy.length > 0; i++) {
+      const idx = Math.floor(rng() * copy.length);
+      chosen.push(copy.splice(idx, 1)[0]);
+    }
+    return chosen;
+  }
+
+  function initMissions() {
+    const now = Date.now();
+    if (!game.missions) {
+      game.missions = { daily: [], weekly: [], dailyRolledAt: 0, weeklyRolledAt: 0, progress: {}, claimed: {} };
+    }
+    const dayStart = Math.floor(now / DAILY_MS) * DAILY_MS;
+    const weekStart = Math.floor(now / WEEKLY_MS) * WEEKLY_MS;
+    if (game.missions.dailyRolledAt !== dayStart) {
+      game.missions.daily = pickMissions(MISSION_POOL_DAILY, 3, dayStart);
+      game.missions.dailyRolledAt = dayStart;
+      // Reset daily stats (pas hebdo, qui tourne en parallèle)
+      game.missions.progress.dailyKills = 0;
+      game.missions.progress.dailyPlanted = 0;
+      // Reset status claimed pour les missions daily
+      for (const m of game.missions.daily) delete game.missions.claimed['d_' + m.id];
+    }
+    if (game.missions.weeklyRolledAt !== weekStart) {
+      game.missions.weekly = pickMissions(MISSION_POOL_WEEKLY, 2, weekStart + 1);
+      game.missions.weeklyRolledAt = weekStart;
+      for (const m of game.missions.weekly) delete game.missions.claimed['w_' + m.id];
+    }
+  }
+
+  function missionProgressFor(stat) {
+    return (game.missions && game.missions.progress && game.missions.progress[stat]) || 0;
+  }
+  function incMissionStat(stat, amount) {
+    if (!game.missions) initMissions();
+    game.missions.progress[stat] = (game.missions.progress[stat] || 0) + (amount || 1);
+    if (typeof updateMissionsBadge === 'function') updateMissionsBadge();
+  }
+
+  function claimMission(scope, mission) {
+    const key = scope + '_' + mission.id;
+    if (game.missions.claimed[key]) return;
+    const prog = missionProgressFor(mission.stat);
+    if (prog < mission.goal) return;
+    game.missions.claimed[key] = true;
+    addCash(mission.reward);
+    addXp(mission.reward / 20);
+    sfx('reward');
+    showHint('🎯 +' + fmtNumber(mission.reward) + '$ — ' + mission.desc, 2500);
+    renderMissions();
+    updateMissionsBadge();
+    saveGame();
+  }
+
+  function fmtCountdown(ms) {
+    if (ms <= 0) return '00:00';
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d > 0) return d + 'j ' + h + 'h';
+    return h + 'h ' + m + 'm';
+  }
+
+  function renderMissions() {
+    if (!game.missions) initMissions();
+    const renderList = (scope, list, el) => {
+      el.innerHTML = '';
+      list.forEach(m => {
+        const prog = Math.min(missionProgressFor(m.stat), m.goal);
+        const key = scope + '_' + m.id;
+        const claimed = !!game.missions.claimed[key];
+        const done = prog >= m.goal;
+        const row = document.createElement('div');
+        row.className = 'mission-row';
+        row.style.cssText = 'background:' + (claimed ? '#1a2a1a' : (done ? '#2a2e14' : '#1a1a22')) + ';border:1px solid ' + (done && !claimed ? '#ffcc33' : '#333') + ';border-radius:8px;padding:10px;margin-bottom:8px;';
+        row.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'
+          + '<div style="flex:1;"><div style="font-weight:600;color:#fff;">' + m.desc + '</div>'
+          + '<div style="margin-top:4px;height:6px;background:#000;border-radius:3px;overflow:hidden;"><div style="width:' + ((prog / m.goal) * 100).toFixed(0) + '%;height:100%;background:' + (done ? '#ffcc33' : '#4dd0e1') + ';"></div></div>'
+          + '<div style="font-size:11px;color:#aaa;margin-top:3px;">' + fmtNumber(prog) + ' / ' + fmtNumber(m.goal) + '</div></div>'
+          + '<div style="text-align:right;"><div style="color:#ffcc33;font-weight:700;">+' + fmtNumber(m.reward) + '$</div>'
+          + (claimed ? '<div style="color:#66ff88;font-size:11px;">✓ Récupéré</div>' : (done ? '<div class="btn gold" style="padding:4px 10px;font-size:12px;">Récupérer</div>' : '<div style="color:#888;font-size:11px;">en cours</div>'))
+          + '</div></div>';
+        if (done && !claimed) {
+          const claimBtn = row.querySelector('.btn');
+          if (claimBtn) claimBtn.onclick = () => claimMission(scope, m);
+        }
+        el.appendChild(row);
+      });
+      if (list.length === 0) el.innerHTML = '<div style="color:#888;font-style:italic;padding:8px;">Aucune mission</div>';
+    };
+    renderList('d', game.missions.daily || [], $('missions-daily-list'));
+    renderList('w', game.missions.weekly || [], $('missions-weekly-list'));
+    // Countdowns
+    const now = Date.now();
+    $('missions-daily-timer').textContent = '— ' + fmtCountdown(DAILY_MS - (now - game.missions.dailyRolledAt));
+    $('missions-weekly-timer').textContent = '— ' + fmtCountdown(WEEKLY_MS - (now - game.missions.weeklyRolledAt));
+  }
+
+  function updateMissionsBadge() {
+    if (!game.missions) return;
+    const all = [...(game.missions.daily || []).map(m => ['d_' + m.id, m]), ...(game.missions.weekly || []).map(m => ['w_' + m.id, m])];
+    const anyReady = all.some(([key, m]) => !game.missions.claimed[key] && missionProgressFor(m.stat) >= m.goal);
+    $('missions-badge').style.display = anyReady ? '' : 'none';
+  }
+
   // --- CONFIG ---
   const BASE_LANE_COUNT = 3;
   const LANE_WIDTH = 4;
@@ -1335,10 +1486,11 @@
     game.cash += amount;
     if (amount > 0) {
       game.stats.totalEarned += amount;
+      if (game.missions) incMissionStat('earned', amount);
       if (amount >= 5) flashCash();
     }
   }
-  function spendCash(amount) { game.cash -= amount; game.stats.totalSpent += amount; }
+  function spendCash(amount) { game.cash -= amount; game.stats.totalSpent += amount; if (game.missions) incMissionStat('spent', amount); }
 
   // --- PARTICLES ---
   function spawnDeathBurst(position, colorHex, scale = 1) {
@@ -1786,6 +1938,12 @@
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
     addBlopToHolding(ud.rarity, ud.variant || 'none');
     addXp(ud.value / XP_PER_KILL_DIVISOR);
+    // Missions tracking
+    incMissionStat('kills', 1);
+    if (ud.rarity !== 'common') incMissionStat('killsRare', 1);
+    if (ud.rarity === 'mythic') incMissionStat('killsMythic', 1);
+    if (ud.rarity === 'goat') incMissionStat('killsGoat', 1);
+    if (ud.mechanic) incMissionStat('killsVariant', 1);
     removeHpBar(enemy);
     scene.remove(enemy);
     const idx = game.brainrots.indexOf(enemy);
@@ -1996,6 +2154,8 @@
     slot.plant = group;
     game.plants.push(group);
     game.stats.plantsPlaced++;
+    incMissionStat('planted', 1);
+    sfx('plant');
     checkAchievements();
   }
 
@@ -2205,7 +2365,7 @@
     saveGame();
   }
   function trackMutationAcquired(mutation) {
-    if (mutation && mutation !== 'none') game.stats.gotMutation = true;
+    if (mutation && mutation !== 'none') { game.stats.gotMutation = true; incMissionStat('mutationGot', 1); }
     if (mutation === 'neon') game.stats.gotNeon = true;
     if (mutation === 'frozen') game.stats.gotFrozen = true;
   }
@@ -2218,6 +2378,7 @@
     slot.bought = true;
     game.inventory.push({ plantId: slot.plantId, mutation: slot.mutation });
     trackMutationAcquired(slot.mutation);
+    incMissionStat('bought', 1);
     sfx('buy');
     updateHud(); renderShop(); renderInventory();
     checkAchievements(); saveGame();
@@ -2240,6 +2401,7 @@
     game.inventory.push({ plantId: newPlantId, mutation: newMutation });
     trackMutationAcquired(newMutation);
     game.stats.plantsMixed++;
+    incMissionStat('mixed', 1);
     sfx('mix');
     renderInventory(); renderMixer();
     checkAchievements(); saveGame();
@@ -2316,6 +2478,7 @@
         blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none' })),
         achievements: { ...game.achievements },
         stats: { ...game.stats },
+        missions: game.missions ? JSON.parse(JSON.stringify(game.missions)) : null,
         lastSave: Date.now(),
       };
       localStorage.setItem(SAVE_KEY_V5, JSON.stringify(data));
@@ -2378,6 +2541,9 @@
     RARITY_KEYS.forEach(k => { if (!(k in game.collection)) game.collection[k] = 0; });
     game.achievements = data.achievements || {};
     game.stats = Object.assign(game.stats, data.stats || {});
+    if (data.missions) game.missions = data.missions;
+    initMissions();
+    updateMissionsBadge();
     // Blops (format v5: [{rarity, variant}])
     game.blops = (data.blops || [])
       .map(b => typeof b === 'string' ? { rarity: b, variant: 'none' } : { rarity: b.rarity, variant: b.variant || 'none' })
@@ -3208,6 +3374,8 @@
   btnClick('mixer-close', () => $('mixer-modal').classList.add('hidden'));
   btnClick('profile-btn', () => { renderProfile(); $('profile-modal').classList.remove('hidden'); });
   btnClick('profile-close', () => $('profile-modal').classList.add('hidden'));
+  btnClick('missions-btn', () => { initMissions(); renderMissions(); $('missions-modal').classList.remove('hidden'); });
+  btnClick('missions-close', () => $('missions-modal').classList.add('hidden'));
   btnClick('prestige-btn', () => { renderPrestigeModal(); $('prestige-modal').classList.remove('hidden'); });
   btnClick('prestige-cancel', () => $('prestige-modal').classList.add('hidden'));
   btnClick('prestige-confirm', () => {
@@ -3967,6 +4135,8 @@
     renderInventory();
     updatePrestigeButtonVisibility();
     checkAchievements();
+    initMissions();
+    updateMissionsBadge();
     updateHud();
     updateAccountBadge();
     initFirebase();

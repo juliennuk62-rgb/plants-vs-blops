@@ -4,6 +4,64 @@
   <meta charset="UTF-8" />
   <title>Plants vs Blops - Proto v0.7</title>
   <style>
+    /* === TIER 2 : Design tokens (Sprint UI-2) === */
+    :root {
+      /* Backgrounds hierarchy */
+      --bg-0: #0f0d1a;
+      --bg-1: #1a1a22;
+      --bg-2: #2a2a3a;
+      --bg-raised: #2a2a3a;
+      --bg-sunken: #16161f;
+      /* Foregrounds (text) */
+      --fg-pri: #ffffff;
+      --fg-sec: #cccccc;
+      --fg-ter: #888888;
+      --fg-dis: #555555;
+      /* Actions */
+      --accent: #4488cc;
+      --accent-hover: #55a0e0;
+      --success: #66ff99;
+      --danger: #cc4444;
+      --alert: #ff5566;
+      --warning: #ffcc00;
+      /* Rarity gameplay colors (exposé depuis JS aussi) */
+      --rarity-common: #cccccc;
+      --rarity-rare: #4488ff;
+      --rarity-veryrare: #33cc33;
+      --rarity-ultrarare: #aa33cc;
+      --rarity-mythic: #ff6600;
+      --rarity-goat: #ffdd00;
+      /* Typo scale modulaire (ratio ~1.25) */
+      --fs-xs: 11px;
+      --fs-sm: 13px;
+      --fs-md: 15px;
+      --fs-lg: 18px;
+      --fs-xl: 24px;
+      --fs-2xl: 32px;
+      --fs-display: 44px;
+      /* Spacing */
+      --sp-1: 4px;
+      --sp-2: 8px;
+      --sp-3: 12px;
+      --sp-4: 16px;
+      --sp-5: 24px;
+      --sp-6: 32px;
+      /* Radius */
+      --rad-sm: 4px;
+      --rad-md: 8px;
+      --rad-lg: 12px;
+      --rad-pill: 999px;
+      /* Animation tokens */
+      --t-fast: 120ms;
+      --t-base: 240ms;
+      --t-slow: 480ms;
+      --e-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --e-swoosh: cubic-bezier(0.5, 0, 0.2, 1);
+      --e-soft: cubic-bezier(0.4, 0, 0.2, 1);
+      /* Elevation */
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+      --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; font-family: Arial, sans-serif; background: #000; color: #fff; user-select: none; -webkit-tap-highlight-color: transparent; }
     canvas { display: block; }

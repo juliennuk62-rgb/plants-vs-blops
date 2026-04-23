@@ -1429,12 +1429,19 @@
   setInterval(applySkyByHour, 60000);
 
   // === SEASON 2 - Feature #8 : Pluie Réelle (Open-Meteo, keyless) ===
-  const weatherState = { loaded: false, temp: null, isRaining: false, city: null };
+  const weatherState = { loaded: false, temp: null, isRaining: false, isHot: false, city: null, _hotShown: false };
   let rainParticles = null;
 
   function weatherMultiplier() {
     if (!weatherState.loaded) return 1;
-    return weatherState.isRaining ? 1.2 : 1;
+    let m = 1;
+    if (weatherState.isRaining) m *= 1.2;
+    // Feature #9 : Canicule >32°C + entre 14h et 18h = Siesta +50%
+    if (weatherState.isHot) {
+      const h = new Date().getHours();
+      if (h >= 14 && h < 18) m *= 1.5;
+    }
+    return m;
   }
 
   function buildRainParticles() {
@@ -1459,6 +1466,11 @@
     } else if (!weatherState.isRaining && rainParticles) {
       scene.remove(rainParticles);
       rainParticles = null;
+    }
+    // Feature #9 : Canicule hint (une fois)
+    if (weatherState.isHot && !weatherState._hotShown) {
+      weatherState._hotShown = true;
+      if (typeof showHint === 'function') showHint('☀ ' + Math.round(weatherState.temp) + '°C chez toi — Mode Siesta actif 14h-18h (+50%)', 4500);
     }
   }
 
@@ -1494,7 +1506,9 @@
       const c = w.current || {};
       const code = c.weather_code || 0;
       const isRaining = (code >= 51 && code <= 67) || (code >= 80 && code <= 99) || (c.precipitation || 0) > 0.2;
-      const data = { temp: c.temperature_2m, isRaining, city: geo.city || null };
+      const temp = c.temperature_2m;
+      const isHot = typeof temp === 'number' && temp >= 32;
+      const data = { temp, isRaining, isHot, city: geo.city || null };
       try { localStorage.setItem('pvb_weather_cache', JSON.stringify({ at: Date.now(), data })); } catch (e) {}
       Object.assign(weatherState, data, { loaded: true });
       applyWeatherVisuals();

@@ -1518,6 +1518,47 @@
   setTimeout(fetchWeather, 3000);
   setInterval(fetchWeather, 60 * 60 * 1000);
 
+  // === SEASON 2 - Feature #10 : Nocturis (Blop Vampire Nocturne) ===
+  const NOCTURIS = { name: 'Nocturis', hp: 350, size: 1.6, value: 4000, mechanic: 'rage-regen' };
+  const vampireState = { ambientLux: null, darkSince: 0, unlocked: false };
+
+  function initAmbientLightSensor() {
+    if ('AmbientLightSensor' in window) {
+      try {
+        const sensor = new AmbientLightSensor({ frequency: 1 });
+        sensor.addEventListener('reading', () => { vampireState.ambientLux = sensor.illuminance; });
+        sensor.addEventListener('error', () => {});
+        sensor.start();
+      } catch (e) {}
+    }
+  }
+  function checkVampireUnlock() {
+    const h = new Date().getHours();
+    const night = h >= 21 || h < 6;
+    // Si capteur dispo : lux < 10 ; sinon fallback sur l'heure nocturne
+    const dark = vampireState.ambientLux !== null ? vampireState.ambientLux < 10 : night;
+    if (dark) {
+      if (!vampireState.darkSince) vampireState.darkSince = Date.now();
+      if (Date.now() - vampireState.darkSince > 20000 && !vampireState.unlocked) {
+        vampireState.unlocked = true;
+        if (typeof showToast === 'function') showToast('🦇 Un Blop Vampire rôde dans la nuit...', 4000);
+        if (typeof sfx === 'function') sfx('rarity');
+      }
+    } else {
+      vampireState.darkSince = 0;
+      vampireState.unlocked = false;
+    }
+  }
+  initAmbientLightSensor();
+  setInterval(checkVampireUnlock, 5000);
+  function canNocturisSpawn() { return vampireState.unlocked; }
+  function makeVampireAura(size) {
+    return new THREE.Mesh(
+      new THREE.SphereGeometry(size * 1.6, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0x660044, transparent: true, opacity: 0.28, side: THREE.BackSide })
+    );
+  }
+
   // --- ETAT ---
   const game = {
     cash: STARTING_CASH, kills: 0, level: 1, xp: 0, prestige: 0,
@@ -2099,6 +2140,7 @@
     let blopName = blopData.name;
     let blopId = null;
     let isLunar = false;
+    let isVampire = false;
     // Selenis override : rareté GOAT + pleine lune + pas déjà spawn ce cycle
     if (rarityKey === 'goat' && !overrides.noVariant && canSelenisSpawn()) {
       blopData = { hp: SELENIS.hp, size: SELENIS.size, value: SELENIS.value, name: SELENIS.name };
@@ -2109,7 +2151,15 @@
       markSelenisSpawned();
       showToast('🌕 SELENIS ! GOAT de Pleine Lune !', 4500);
     }
-    if (!isLunar && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+    // Nocturis override : rareté ultrarare + vampire unlocked (15% chance)
+    if (!isLunar && rarityKey === 'ultrarare' && !overrides.noVariant && canNocturisSpawn() && Math.random() < 0.15) {
+      blopData = { hp: NOCTURIS.hp, size: NOCTURIS.size, value: NOCTURIS.value, name: NOCTURIS.name };
+      mechanic = NOCTURIS.mechanic;
+      blopName = NOCTURIS.name;
+      blopId = 'nocturis';
+      isVampire = true;
+    }
+    if (!isLunar && !isVampire && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
       const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
       if (pool && pool.length > 0) {
         blopId = pool[Math.floor(Math.random() * pool.length)];
@@ -2149,6 +2199,12 @@
       aura.position.y = blopData.size;
       group.add(aura);
       group.userData.lunarAura = aura;
+    }
+    if (isVampire) {
+      const aura = makeVampireAura(blopData.size);
+      aura.position.y = blopData.size;
+      group.add(aura);
+      group.userData.vampireAura = aura;
     }
     group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);

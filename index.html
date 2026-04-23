@@ -736,21 +736,30 @@
   const RARITY_KEYS = Object.keys(RARITIES);
 
   const MUTATIONS = {
-    none:    { label: null,       weight: 85,  color: '#ffffff', hex: 0xffffff, damageMult: 1   },
-    gold:    { label: 'Gold',     weight: 10,  color: '#ffd700', hex: 0xffd700, damageMult: 2   },
-    diamond: { label: 'Diamond',  weight: 3.5, color: '#00eeff', hex: 0x00eeff, damageMult: 3   },
-    neon:    { label: 'Neon',     weight: 1.2, color: '#ff33ee', hex: 0xff33ee, damageMult: 4.5 },
-    frozen:  { label: 'Frozen',   weight: 0.3, color: '#99eeff', hex: 0x99eeff, damageMult: 4, addSlow: true },
+    none:    { label: null,       weight: 85,   color: '#ffffff', hex: 0xffffff, damageMult: 1   },
+    gold:    { label: 'Gold',     weight: 10,   color: '#ffd700', hex: 0xffd700, damageMult: 2   },
+    diamond: { label: 'Diamond',  weight: 3.5,  color: '#00eeff', hex: 0x00eeff, damageMult: 3   },
+    neon:    { label: 'Neon',     weight: 1.2,  color: '#ff33ee', hex: 0xff33ee, damageMult: 4.5 },
+    frozen:  { label: 'Frozen',   weight: 0.3,  color: '#99eeff', hex: 0x99eeff, damageMult: 4,   addSlow: true },
+    // Sprint 2D : nouvelles mutations
+    toxic:   { label: 'Toxic',    weight: 2.0,  color: '#88ff44', hex: 0x88ff44, damageMult: 2.5, addDot: true, dotDps: 6, dotDur: 3 },
+    chain:   { label: 'Chain',    weight: 1.2,  color: '#33ccff', hex: 0x33ccff, damageMult: 3,   chain: true, chainJumps: 2, chainFalloff: 0.6 },
+    vampire: { label: 'Vampire',  weight: 0.6,  color: '#cc0044', hex: 0xcc0044, damageMult: 3.5, lifesteal: 0.05 },
+    mega:    { label: 'MEGA',     weight: 0.15, color: '#ff6600', hex: 0xff6600, damageMult: 7,   addSlow: true, chain: true, chainJumps: 3, chainFalloff: 0.5 },
   };
   const MUTATION_KEYS = Object.keys(MUTATIONS);
 
   // Variantes de Blops : bonus sur HP et valeur de kill/passif
   const VARIANTS = {
-    none:    { label: null,      weight: 85,   color: '#ffffff', hex: 0xffffff, mult: 1 },
-    bronze:  { label: 'Bronze',  weight: 10,   color: '#cd7f32', hex: 0xcd7f32, mult: 2 },
-    silver:  { label: 'Argent',  weight: 3.5,  color: '#c0c0c0', hex: 0xc0c0c0, mult: 3 },
-    gold:    { label: 'Or',      weight: 1.2,  color: '#ffcc00', hex: 0xffcc00, mult: 4 },
-    diamond: { label: 'Diamant', weight: 0.3,  color: '#66ddff', hex: 0x66ddff, mult: 5 },
+    none:     { label: null,       weight: 82,    color: '#ffffff', hex: 0xffffff, mult: 1   },
+    bronze:   { label: 'Bronze',   weight: 10,    color: '#cd7f32', hex: 0xcd7f32, mult: 2   },
+    silver:   { label: 'Argent',   weight: 3.5,   color: '#c0c0c0', hex: 0xc0c0c0, mult: 3   },
+    gold:     { label: 'Or',       weight: 1.2,   color: '#ffcc00', hex: 0xffcc00, mult: 4   },
+    diamond:  { label: 'Diamant',  weight: 0.3,   color: '#66ddff', hex: 0x66ddff, mult: 5   },
+    // Sprint 2D : nouvelles variantes rares
+    ethereal: { label: 'Ethereal', weight: 1.5,   color: '#aa88ff', hex: 0xaa88ff, mult: 6   },
+    cursed:   { label: 'Cursed',   weight: 1.2,   color: '#660066', hex: 0x660066, mult: 7   },
+    blessed:  { label: 'Blessed',  weight: 0.3,   color: '#ffffee', hex: 0xffffee, mult: 10  },
   };
   const VARIANT_KEYS = Object.keys(VARIANTS);
 
@@ -1964,6 +1973,9 @@
       target, speed: BULLET_SPEED, damage,
       splash: options.splash || 0, slow: options.slow || null,
       dot: options.dot || null,
+      chain: options.chain || null,
+      lifesteal: options.lifesteal || 0,
+      plantGroup: options.plantGroup || null,
       pierce: !!options.pierce,
       piercedTargets: options.pierce ? new Set() : null,
       direction: options.pierce ? dir : null,
@@ -1995,32 +2007,69 @@
     const slow = mut.addSlow
       ? { factor: 0.5, duration: 1.5 }
       : (plant.ability === 'slow' ? { factor: plant.slowFactor, duration: plant.slowDuration } : null);
-    const dot = plant.ability === 'dot-poison'
+    let dot = plant.ability === 'dot-poison'
       ? { dps: plant.dotDmg || 3, duration: plant.dotDur || 4 }
       : null;
+    // Mutation toxic ajoute un DoT
+    if (mut.addDot) dot = { dps: mut.dotDps || 6, duration: mut.dotDur || 3 };
+    // Mutation chain/vampire
+    const chain = mut.chain ? { jumps: mut.chainJumps || 2, falloff: mut.chainFalloff || 0.6 } : null;
+    const lifesteal = mut.lifesteal || 0;
+    const bulletOpts = { slow, dot, chain, lifesteal, plantGroup };
     pd.flashUntil = now + 0.1;
     sfx('shot');
     switch (plant.ability) {
       case 'basic': case 'rapid': case 'cross-lane': case 'slow':
-        spawnBullet(plantGroup, target, damage, { slow, dot }); break;
+        spawnBullet(plantGroup, target, damage, bulletOpts); break;
       case 'dot-poison':
-        spawnBullet(plantGroup, target, damage, { dot }); break;
+        spawnBullet(plantGroup, target, damage, bulletOpts); break;
       case 'splash':
-        spawnBullet(plantGroup, target, damage, { splash: plant.splashRadius, slow, dot }); break;
+        spawnBullet(plantGroup, target, damage, Object.assign({ splash: plant.splashRadius }, bulletOpts)); break;
       case 'burst':
         for (let i = 0; i < plant.burstCount; i++) {
           setTimeout(() => {
-            if (plantGroup.parent && target.parent) spawnBullet(plantGroup, target, damage, { slow, dot });
+            if (plantGroup.parent && target.parent) spawnBullet(plantGroup, target, damage, bulletOpts);
           }, i * 100);
         }
         break;
       case 'pierce':
-        spawnBullet(plantGroup, target, damage, { pierce: true, slow, dot }); break;
+        spawnBullet(plantGroup, target, damage, Object.assign({ pierce: true }, bulletOpts)); break;
       case 'splash-pierce':
-        spawnBullet(plantGroup, target, damage, { pierce: true, splash: plant.splashRadius, slow, dot }); break;
+        spawnBullet(plantGroup, target, damage, Object.assign({ pierce: true, splash: plant.splashRadius }, bulletOpts)); break;
       // coin-aura et buff-aura ne tirent pas (passives)
     }
     pd.lastShot = now;
+  }
+
+  // Chain lightning : saute sur ennemis proches avec falloff
+  function applyChain(origin, damage, jumps, falloff, hitSet) {
+    if (jumps <= 0) return;
+    let best = null, bestDist = Infinity;
+    for (const e of game.brainrots) {
+      if (hitSet.has(e) || !e.parent) continue;
+      const d = e.position.distanceTo(origin);
+      if (d < 4 && d < bestDist) { best = e; bestDist = d; }
+    }
+    if (!best) return;
+    hitSet.add(best);
+    const nextDmg = damage * falloff;
+    // Visuel : petit flash
+    const spark = new THREE.Mesh(
+      new THREE.SphereGeometry(0.25, 6, 6),
+      new THREE.MeshBasicMaterial({ color: 0x33ccff, transparent: true, opacity: 0.9 })
+    );
+    spark.position.copy(best.position);
+    spark.position.y = 1.2;
+    scene.add(spark);
+    setTimeout(() => scene.remove(spark), 150);
+    applyDamage(best, nextDmg);
+    if (best.parent) applyChain(best.position, nextDmg, jumps - 1, falloff, hitSet);
+  }
+
+  // Vampire : soigne / donne $ à la plante qui tue
+  function applyLifesteal(plantGroup, damage, rate) {
+    if (!plantGroup || !plantGroup.parent) return;
+    addCash(damage * rate);
   }
   function applySplash(bullet, hitTarget) {
     const radius = bullet.userData.splash;
@@ -2042,6 +2091,8 @@
           if (b.userData.splash > 0) applySplash(b, e);
           if (b.userData.slow) applySlow(e, b.userData.slow.factor, b.userData.slow.duration, now);
           if (b.userData.dot) applyDot(e, b.userData.dot.dps, b.userData.dot.duration, now);
+          if (b.userData.chain) applyChain(e.position, b.userData.damage, b.userData.chain.jumps, b.userData.chain.falloff, new Set([e]));
+          if (b.userData.lifesteal) applyLifesteal(b.userData.plantGroup, b.userData.damage, b.userData.lifesteal);
         }
       }
       const age = now - b.userData.spawnedAt;
@@ -2059,6 +2110,8 @@
       if (b.userData.splash > 0) applySplash(b, t);
       if (b.userData.slow && t.parent) applySlow(t, b.userData.slow.factor, b.userData.slow.duration, now);
       if (b.userData.dot && t.parent) applyDot(t, b.userData.dot.dps, b.userData.dot.duration, now);
+      if (b.userData.chain) applyChain(t.position, b.userData.damage, b.userData.chain.jumps, b.userData.chain.falloff, new Set([t]));
+      if (b.userData.lifesteal) applyLifesteal(b.userData.plantGroup, b.userData.damage, b.userData.lifesteal);
       scene.remove(b); game.bullets.splice(idx, 1);
     }
   }

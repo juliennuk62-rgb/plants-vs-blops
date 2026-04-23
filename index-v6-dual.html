@@ -1831,7 +1831,7 @@
   // État global du combat campagne
   // game.mode : 'endless' (défaut) | 'campaign'
   // game.campaignActive : { levelId, scheduler, baseHp, startedAt, stats }
-  if (game) game.mode = game.mode || 'endless';
+  // NB : game.mode sera initialisé lazy (au premier tick du loop) car `game` n'existe pas encore ici
 
   class WaveScheduler {
     constructor(level, callbacks) {
@@ -7188,7 +7188,9 @@
     if (now < slowMoUntil) dt = dt * slowMoFactor;
     game.stats.totalPlayTimeMs += dt * 1000;
     brSpawnTimer += dt;
-    // V6 : en mode campagne, c'est le WaveScheduler qui pilote les spawns (pas le random timer)
+    // V6 : init lazy game.mode
+    if (!game.mode) game.mode = 'endless';
+    // en mode campagne, c'est le WaveScheduler qui pilote les spawns (pas le random timer)
     if (game.mode === 'campaign') {
       campaignTick(dt);
     } else if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {

@@ -100,23 +100,34 @@
 
     #top-right {
       position: absolute; top: 10px; right: 10px;
-      display: flex; flex-direction: column; gap: 8px;
+      display: flex; flex-direction: column; gap: 12px;
       z-index: 10;
     }
     .btn {
       background: rgba(30, 60, 100, 0.9); border: 2px solid #4488cc;
       padding: 10px 16px; border-radius: 6px; cursor: pointer;
       font-size: 14px; color: #fff; text-align: center;
-      transition: background 0.2s, transform 0.1s;
+      transition: background var(--t-fast) var(--e-soft), transform var(--t-fast) var(--e-pop);
     }
     .btn:hover { background: rgba(40, 80, 140, 0.95); }
-    .btn:active { transform: scale(0.96); }
+    .btn:active { transform: scale(0.92); }
+    .btn.primary { background: rgba(30, 90, 60, 0.95); border-color: #44cc88; font-weight: 600; }
+    .btn.primary:hover { background: rgba(40, 120, 80, 1); box-shadow: 0 0 16px rgba(68,204,136,0.4); }
+    .btn.alert { background: rgba(140, 40, 60, 0.9); border-color: #ff5566; }
+    .btn.alert:hover { background: rgba(180, 60, 80, 0.95); }
     .btn.danger { background: rgba(120, 30, 30, 0.9); border-color: #cc4444; }
     .btn.danger:hover { background: rgba(160, 40, 40, 0.95); }
     .btn.gold { background: rgba(140, 100, 20, 0.9); border-color: #ffcc44; color: #ffe88c; }
-    .btn.gold:hover { background: rgba(180, 130, 30, 0.95); }
+    .btn.gold:hover { background: rgba(180, 130, 30, 0.95); box-shadow: 0 0 20px rgba(255,221,0,0.4); }
     .btn:disabled { background: #333; border-color: #555; color: #777; cursor: not-allowed; transform: none; }
     .btn.icon { padding: 8px; font-size: 16px; min-width: 38px; }
+    /* Tier 3 : clusters HUD groupés */
+    .hud-group {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 6px; background: rgba(0,0,0,0.35); border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
 
     #inventory {
       position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
@@ -452,21 +463,33 @@
   </div>
 
   <div id="top-right">
-    <div class="btn" id="shop-btn">Boutique (<span id="shop-timer-short">5:00</span>)</div>
-    <div class="btn" id="mixer-btn">Mixer</div>
-    <div class="btn" id="collection-btn">Collection</div>
-    <div class="btn" id="profile-btn">Profil</div>
-    <div class="btn" id="missions-btn">Missions <span id="missions-badge" style="display:none;background:#ff3355;color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-size:11px;">!</span></div>
-    <div class="btn gold" id="prestige-btn" style="display:none;">Prestige</div>
-    <div class="btn" id="account-btn">Compte <span id="account-status" style="margin-left:4px;">📱</span></div>
-    <div class="btn" id="rec-btn" style="background:#aa2233;border-color:#ff5566;" title="Partager les 20 dernières secondes">🎬 Clip</div>
-    <div class="btn" id="memorial-btn" title="Mémorial des plantes retraitées">🕊 Mémorial</div>
-    <div class="btn" id="leaderboard-btn">🏆 Classement</div>
-    <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
-    <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
-    <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
-    <div class="btn icon" id="help-btn" title="Aide">?</div>
-    <div class="btn danger" id="reset-btn">Reset</div>
+    <!-- Groupe 1 : Jeu (actions principales) -->
+    <div class="hud-group">
+      <div class="btn primary" id="shop-btn">🛒 Boutique <span id="shop-timer-short" style="opacity:0.8;">5:00</span></div>
+      <div class="btn" id="mixer-btn">⚗ Mixer</div>
+      <div class="btn" id="collection-btn">📚 Collection</div>
+    </div>
+    <!-- Groupe 2 : Progression -->
+    <div class="hud-group">
+      <div class="btn" id="profile-btn" title="Profil">👤</div>
+      <div class="btn" id="missions-btn" title="Missions">🎯<span id="missions-badge" style="display:none;background:var(--alert);color:#fff;border-radius:var(--rad-pill);padding:1px 5px;margin-left:4px;font-size:10px;">!</span></div>
+      <div class="btn" id="leaderboard-btn" title="Classement">🏆</div>
+      <div class="btn gold" id="prestige-btn" style="display:none;" title="Prestige">✨ Prestige</div>
+    </div>
+    <!-- Groupe 3 : Social -->
+    <div class="hud-group">
+      <div class="btn" id="memorial-btn" title="Mémorial des Braves">🕊</div>
+      <div class="btn" id="account-btn" title="Compte & sauvegarde cloud">☁ <span id="account-status" style="margin-left:2px;">📱</span></div>
+      <div class="btn alert" id="rec-btn" title="Partager les 20 dernières secondes">🎬</div>
+    </div>
+    <!-- Groupe 4 : Dev / Système / Danger -->
+    <div class="hud-group">
+      <div class="btn icon" id="editor-btn" title="Éditeur de map">🛠</div>
+      <div class="btn icon" id="settings-btn" title="Paramètres">⚙</div>
+      <div class="btn icon" id="audio-btn" title="Audio">🔊</div>
+      <div class="btn icon" id="help-btn" title="Aide">?</div>
+      <div class="btn danger" id="reset-btn" title="Reset">↺</div>
+    </div>
   </div>
 
   <div id="inventory">

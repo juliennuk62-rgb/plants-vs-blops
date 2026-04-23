@@ -1895,8 +1895,38 @@
         (err) => { console.warn('Failed load', f, err); res(); });
     })));
     console.log('[HOUSE] preloaded', Object.keys(HOUSE_GLB_CACHE).length, 'GLBs');
-    // Après chargement, génère les thumbnails individuels
+    // Swap les meshes posés (au reload, ils étaient en fallback faute de GLB chargé à temps)
+    refreshPlacedHouseMeshes();
+    // Génère les thumbnails individuels
     generateHouseThumbnails();
+  }
+
+  function refreshPlacedHouseMeshes() {
+    if (!window.gameHouse || !Array.isArray(window.gameHouse.placed)) return;
+    let swapped = 0;
+    window.gameHouse.placed.forEach(p => {
+      const item = BUILD_CATALOG.find(i => i.id === p.itemId);
+      if (!item) return;
+      if (!HOUSE_GLB_CACHE[item.file]) return; // pas de GLB chargé, garde le fallback
+      // Retire l'ancien mesh
+      if (p.mesh) {
+        sceneHouse.remove(p.mesh);
+        try { disposeDeep(p.mesh); } catch (e) {}
+      }
+      // Crée le nouveau avec le vrai GLB
+      const newMesh = houseGetPlacedMesh(item);
+      newMesh.position.set(p.x, p.y, p.z);
+      newMesh.rotation.y = p.rotY || 0;
+      newMesh.scale.setScalar(p.scale || 1);
+      sceneHouse.add(newMesh);
+      p.mesh = newMesh;
+      swapped++;
+    });
+    if (swapped > 0) console.log('[HOUSE] refreshed', swapped, 'placed meshes with real GLB');
+    // Re-sync le ring si un item est sélectionné (son mesh a changé)
+    if (housePlacedSelected && houseSelectionRing) {
+      houseSelectionRing.position.set(housePlacedSelected.x, 0.27, housePlacedSelected.z);
+    }
   }
 
   function houseGetPlacedMesh(item) {

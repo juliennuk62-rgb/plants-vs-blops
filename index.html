@@ -2025,6 +2025,13 @@
       if (ud.rarity === 'goat') triggerSlowMo(0.25, 1.8);
       else if (ud.rarity === 'mythic') triggerSlowMo(0.4, 1.2);
     }
+    // Season 2 : meme face reveal
+    if (typeof showMemeFace === 'function') {
+      if (ud.rarity === 'goat') showMemeFace('gigachad');
+      else if (ud.rarity === 'mythic') showMemeFace('fire');
+      else if (ud.variant && ud.variant !== 'none' && ud.variant !== 'bronze') showMemeFace('sus');
+      else if (ud.mechanic && Math.random() < 0.2) showMemeFace('skibidi');
+    }
     addCash(ud.value);
     game.kills++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
@@ -4005,6 +4012,34 @@
     renderer.domElement.style.transition = 'filter 0.1s ease-out';
     renderer.domElement.style.filter = 'blur(1.5px) saturate(1.6) brightness(1.1)';
     setTimeout(() => { renderer.domElement.style.filter = ''; }, durationSec * 1000);
+  }
+
+  // === SEASON 2 - Feature #3 : Meme Face Reveal ===
+  const MEME_FACES = {
+    gigachad:  { emoji: '💪', label: 'GIGACHAD', color: '#ffcc33', bg: 'rgba(40,30,0,0.9)' },
+    sus:       { emoji: '📮', label: 'SUS',      color: '#ff3377', bg: 'rgba(40,0,20,0.9)' },
+    skibidi:   { emoji: '🚽', label: 'SKIBIDI',  color: '#33ccff', bg: 'rgba(0,20,40,0.9)' },
+    fire:      { emoji: '🔥', label: 'W',        color: '#ff6600', bg: 'rgba(40,10,0,0.9)' },
+    clown:     { emoji: '🤡', label: 'CLOWN',    color: '#ff66cc', bg: 'rgba(20,0,20,0.9)' },
+    bruh:      { emoji: '😑', label: 'BRUH',     color: '#888',    bg: 'rgba(15,15,15,0.9)' },
+  };
+  let lastMemeAt = 0;
+  function showMemeFace(key) {
+    const m = MEME_FACES[key];
+    if (!m) return;
+    const nowMs = performance.now();
+    if (nowMs - lastMemeAt < 800) return;
+    lastMemeAt = nowMs;
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:50%;top:30%;transform:translate(-50%,-50%) scale(0.3);opacity:0;pointer-events:none;z-index:500;background:' + m.bg + ';border:3px solid ' + m.color + ';border-radius:16px;padding:14px 28px;color:' + m.color + ';font-size:32px;font-weight:900;text-shadow:0 0 10px ' + m.color + ';box-shadow:0 0 30px ' + m.color + ';display:flex;gap:10px;align-items:center;transition:all 0.15s cubic-bezier(0.4,2,0.6,1);font-family:Impact,sans-serif;letter-spacing:2px;';
+    el.innerHTML = '<span style="font-size:42px;">' + m.emoji + '</span><span>' + m.label + '</span>';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.opacity = '1';
+      el.style.transform = 'translate(-50%,-50%) scale(1.1) rotate(' + ((Math.random() - 0.5) * 10) + 'deg)';
+    });
+    setTimeout(() => { el.style.opacity = '0'; el.style.transform += ' translateY(-30px)'; }, 900);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 1200);
   }
   function update(dt, now) {
     if (now < slowMoUntil) dt = dt * slowMoFactor;

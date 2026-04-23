@@ -1827,6 +1827,184 @@
     return levelData.waves.reduce((n, wave) => n + (wave.spawns || []).length, 0);
   }
 
+  // === Point 4 : WaveScheduler (moteur de spawn scripté pour campagne) ===
+  // État global du combat campagne
+  // game.mode : 'endless' (défaut) | 'campaign'
+  // game.campaignActive : { levelId, scheduler, baseHp, startedAt, stats }
+  if (game) game.mode = game.mode || 'endless';
+
+  class WaveScheduler {
+    constructor(level, callbacks) {
+      this.level = level;
+      this.waves = level.waves || [];
+      this.cb = callbacks || {};
+      this.t = 0;                    // temps écoulé depuis start
+      this.currentIdx = -1;           // index wave en cours, -1 = pas commencé
+      this.waveStartT = 0;            // temps où la wave courante a commencé
+      this.spawnCursor = 0;           // combien de spawns consommés dans la wave courante
+      this.spawned = [];              // refs aux Blops spawnés (current wave)
+      this.state = 'pending';         // 'pending' | 'spawning' | 'clearing' | 'done'
+      this.nextWaveAfterCleared = 0;  // temps mini à attendre après clear
+      this.totalSpawned = 0;
+    }
+
+    tick(dt) {
+      this.t += dt;
+      if (this.state === 'done') return;
+
+      // Décider si on lance la prochaine wave
+      if (this.state === 'pending' || this.state === 'clearing') {
+        const next = this.waves[this.currentIdx + 1];
+        if (!next) {
+          // Plus de waves à lancer → on attend que la courante soit clear
+          if (this.state === 'clearing' && this._allSpawnedDead()) {
+            this.state = 'done';
+            if (this.cb.onAllCleared) this.cb.onAllCleared();
+          }
+          return;
+        }
+        let shouldStart = false;
+        if (next.triggerAt === 'onPrevCleared') {
+          if (this.state === 'pending') {
+            shouldStart = true; // 1ère wave : onPrevCleared = immédiat
+          } else if (this.state === 'clearing' && this._allSpawnedDead()) {
+            // attendre le delayAfter de la wave précédente
+            const prev = this.waves[this.currentIdx];
+            const delay = (prev && prev.delayAfter) || 0;
+            if (this.t - this.lastClearedAt >= delay) shouldStart = true;
+          }
+        } else if (typeof next.triggerAt === 'number') {
+          if (this.t >= next.triggerAt) shouldStart = true;
+        }
+        if (shouldStart) this._startWave();
+      }
+
+      // Process des spawns de la wave courante
+      if (this.state === 'spawning') {
+        const wave = this.waves[this.currentIdx];
+        const relT = this.t - this.waveStartT;
+        while (this.spawnCursor < wave.spawns.length && wave.spawns[this.spawnCursor].at <= relT) {
+          const sp = wave.spawns[this.spawnCursor];
+          this._fireSpawn(sp);
+          this.spawnCursor++;
+        }
+        if (this.spawnCursor >= wave.spawns.length) {
+          this.state = 'clearing';
+          if (this.cb.onWaveSpawnsDone) this.cb.onWaveSpawnsDone(this.currentIdx);
+        }
+      }
+
+      // Détection fin de wave clear (pour déclencher cb)
+      if (this.state === 'clearing' && !this._cleanupFlag && this._allSpawnedDead()) {
+        this._cleanupFlag = true;
+        this.lastClearedAt = this.t;
+        if (this.cb.onWaveCleared) this.cb.onWaveCleared(this.currentIdx);
+      }
+    }
+
+    _startWave() {
+      this.currentIdx++;
+      this.waveStartT = this.t;
+      this.spawnCursor = 0;
+      this.spawned = [];
+      this._cleanupFlag = false;
+      this.state = 'spawning';
+      if (this.cb.onWaveStart) this.cb.onWaveStart(this.currentIdx, this.waves[this.currentIdx]);
+    }
+
+    _fireSpawn(spawn) {
+      // Délègue au spawner global (utilise spawnBrainrot existant)
+      const enemy = spawnBrainrot(spawn.lane, spawn.rarity, {
+        noVariant: spawn.noVariant !== undefined ? spawn.noVariant : true,
+        hpMult: spawn.hpMult,
+        startZ: spawn.startZ,
+      });
+      if (enemy) {
+        this.spawned.push(enemy);
+        this.totalSpawned++;
+        if (this.cb.onSpawn) this.cb.onSpawn(enemy, spawn);
+      }
+    }
+
+    _allSpawnedDead() {
+      return this.spawned.every(e => !e || !e.parent);
+    }
+
+    currentWaveInfo() {
+      if (this.currentIdx < 0) return { num: 0, total: this.waves.length, state: this.state };
+      return { num: this.currentIdx + 1, total: this.waves.length, state: this.state };
+    }
+  }
+
+  // === Fonctions helpers campagne ===
+  function startCampaignLevel(levelId) {
+    const lv = CAMPAIGN_LEVELS.find(l => l.id === levelId);
+    const data = getLevelData(levelId);
+    if (!lv || !data) return false;
+    // Setup mode
+    game.mode = 'campaign';
+    game.campaignActive = {
+      levelId,
+      level: lv,
+      data,
+      baseHp: 3,          // 3 Blops max avant défaite
+      baseHpMax: 3,
+      startedAt: performance.now(),
+      stats: { blopsKilled: 0, cashSpent: 0, plantsPlaced: 0 },
+      result: null,       // 'win' | 'lose' | null
+    };
+    // Wipe scène actuelle (endless)
+    game.plants.forEach(p => scene.remove(p));
+    game.plants = [];
+    game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
+    game.brainrots = [];
+    game.bullets.forEach(b => scene.remove(b));
+    game.bullets = [];
+    // Override lanes/cash pour ce niveau
+    game._prevCash = game.cash;
+    game.cash = data.startCash;
+    // Crée le scheduler
+    game.campaignActive.scheduler = new WaveScheduler(data, {
+      onWaveStart: (i, w) => console.log('[CAMP] wave', i + 1, 'start'),
+      onWaveCleared: (i) => console.log('[CAMP] wave', i + 1, 'cleared'),
+      onAllCleared: () => console.log('[CAMP] all waves cleared'),
+    });
+    return true;
+  }
+
+  function endCampaignLevel(result) {
+    if (!game.campaignActive) return;
+    game.campaignActive.result = result;
+    game.mode = 'endless';
+    // Restaure cash endless (temporaire : Point 6 gérera les rewards)
+    if (game._prevCash !== undefined) game.cash = game._prevCash;
+    game.campaignActive = null;
+    // Nettoie les Blops/bullets en cours
+    game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
+    game.brainrots = [];
+    game.bullets.forEach(b => scene.remove(b));
+    game.bullets = [];
+  }
+
+  function campaignTick(dt) {
+    if (game.mode !== 'campaign' || !game.campaignActive) return;
+    const ca = game.campaignActive;
+    if (ca.result) return; // déjà terminé
+    ca.scheduler.tick(dt);
+    // Check victoire : all waves done + no blops alive
+    if (ca.scheduler.state === 'done' && game.brainrots.length === 0) {
+      ca.result = 'win';
+      if (typeof onCampaignVictory === 'function') onCampaignVictory();
+    }
+    // Check défaite : un Blop a atteint la base = baseHp -= 1
+    // (l'instance update() gère déjà les Blops qui dépassent la base et les vire)
+    // TODO Point 6 : décrémenter baseHp quand Blop dépasse
+    if (ca.baseHp <= 0) {
+      ca.result = 'lose';
+      if (typeof onCampaignDefeat === 'function') onCampaignDefeat();
+    }
+  }
+
   // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
   // Prix progressifs : on commence par du nature peu cher, buildings plus chers.
   // file = chemin GLB relatif au repo (models/house/...). En attendant de les
@@ -7010,8 +7188,11 @@
     if (now < slowMoUntil) dt = dt * slowMoFactor;
     game.stats.totalPlayTimeMs += dt * 1000;
     brSpawnTimer += dt;
-    if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
-      // V6 : en dual, on spawn plus vite pour alimenter les 2 gardens
+    // V6 : en mode campagne, c'est le WaveScheduler qui pilote les spawns (pas le random timer)
+    if (game.mode === 'campaign') {
+      campaignTick(dt);
+    } else if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
+      // Mode endless : spawn aléatoire classique
       brSpawnTimer = 0;
       const MAX_BLOPS_ON_SCREEN = hasDualGarden() ? 60 : 40;
       if (game.brainrots.length < MAX_BLOPS_ON_SCREEN) {

@@ -1563,10 +1563,16 @@
 
   // --- HP BARS (DOM overlay) ---
   const hpOverlay = document.getElementById('hp-overlay');
+  const MECHANIC_ICONS = {
+    'phase-through': '👻', 'summon-wave': '🌀', 'speed-boost-dying': '💨',
+    'teleport': '✨', 'armored': '🛡', 'heal-nearby': '💚',
+    'shield-phase': '🔷', 'splits-on-death': '🧬', 'rage-regen': '🔥',
+    'invisibility-pulse': '👁',
+  };
   function createHpBar() {
     const el = document.createElement('div');
     el.className = 'hp-bar';
-    el.innerHTML = '<div class="hp-fill"></div>';
+    el.innerHTML = '<div class="hp-fill"></div><div class="mech-icon" style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:14px;text-shadow:0 0 4px #000;pointer-events:none;"></div>';
     hpOverlay.appendChild(el);
     return el;
   }
@@ -1586,6 +1592,12 @@
     const fill = el.firstChild;
     fill.style.width = (pct * 100) + '%';
     fill.className = 'hp-fill' + (pct < 0.25 ? ' low' : pct < 0.5 ? ' mid' : '');
+    // Mechanic icon indicator
+    const iconEl = el.children[1];
+    if (iconEl) {
+      const m = body.userData.mechanic;
+      iconEl.textContent = m && MECHANIC_ICONS[m] ? MECHANIC_ICONS[m] : '';
+    }
   }
   function removeHpBar(body) {
     const el = body.userData.hpBarEl;
@@ -1965,6 +1977,8 @@
     const ud = enemy.userData;
     spawnDeathBurst(enemy.position, RARITIES[ud.rarity].hex, ud.size);
     sfx('kill');
+    if (ud.mechanic) sfx('crit');
+    if (ud.variant && ud.variant !== 'none') sfx('rarity');
     addCash(ud.value);
     game.kills++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;

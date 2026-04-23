@@ -1907,8 +1907,273 @@
       clone.traverse(o => { if (o.isMesh) { o.castShadow = Q === 'high'; o.receiveShadow = Q === 'high'; } });
       return clone;
     }
-    // Fallback si GLB pas chargé (primitive simple)
-    return makeBuildFallback(item.id === 'grass' ? 'sphere_small_green' : 'box_wood');
+    // Fallback PAR item : chaque item a sa géométrie unique
+    return makeRacingFallback(item.id);
+  }
+
+  // === Fallbacks stylisés par item (quand GLB pas chargé) ===
+  function makeRacingFallback(id) {
+    const g = new THREE.Group();
+    const M = (c) => new THREE.MeshStandardMaterial({ color: c });
+    // Catégorie par préfixe/mot-clé
+    if (id === 'treeSmall' || id === 'treeLarge') {
+      const big = id === 'treeLarge';
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(big ? 0.2 : 0.12, big ? 0.25 : 0.15, big ? 0.8 : 0.5, 6), M(0x664422));
+      trunk.position.y = big ? 0.4 : 0.25; trunk.castShadow = true; g.add(trunk);
+      const foliage = new THREE.Mesh(new THREE.ConeGeometry(big ? 1 : 0.6, big ? 2.2 : 1.3, 8), M(0x2f8a2f));
+      foliage.position.y = big ? 1.9 : 1.1; foliage.castShadow = true; g.add(foliage);
+      return g;
+    }
+    if (id === 'grass') {
+      for (let i = 0; i < 5; i++) {
+        const blade = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 4), M(0x55aa44));
+        blade.position.set((Math.random() - 0.5) * 0.4, 0.15, (Math.random() - 0.5) * 0.4);
+        blade.rotation.z = (Math.random() - 0.5) * 0.3;
+        g.add(blade);
+      }
+      return g;
+    }
+    if (id.startsWith('flag') && !id.includes('Checkers')) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.8, 6), M(0x553322));
+      pole.position.y = 0.9; g.add(pole);
+      const color = id === 'flagGreen' ? 0x44cc44 : id === 'flagRed' ? 0xcc3333 : 0x3388cc;
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.03), M(color));
+      cloth.position.set(0.3, 1.55, 0); g.add(cloth);
+      return g;
+    }
+    if (id.startsWith('flagCheckers')) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2, 6), M(0x222222));
+      pole.position.y = 1; g.add(pole);
+      const mini = id === 'flagCheckersSmall';
+      const checker = new THREE.Mesh(new THREE.BoxGeometry(mini ? 0.4 : 0.7, mini ? 0.28 : 0.5, 0.03), M(0xffffff));
+      checker.position.set(mini ? 0.2 : 0.35, mini ? 1.75 : 1.65, 0);
+      g.add(checker);
+      return g;
+    }
+    if (id.startsWith('bannerTower')) {
+      const isGreen = id.endsWith('Green');
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3, 8), M(0x444444));
+      pole.position.y = 1.5; g.add(pole);
+      const banner = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.8, 0.08), M(isGreen ? 0x3aaa3a : 0xcc3333));
+      banner.position.set(0, 2.3, 0); g.add(banner);
+      return g;
+    }
+    if (id.startsWith('grandStand')) {
+      // Gradin = escalier avec toit optionnel
+      const seats = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 2), M(0xbbbbbb));
+      seats.position.set(0, 0.6, 0); seats.castShadow = true; g.add(seats);
+      for (let row = 0; row < 3; row++) {
+        const step = new THREE.Mesh(new THREE.BoxGeometry(3, 0.2, 0.5), M(0x4488cc));
+        step.position.set(0, 0.6 + row * 0.3, -0.5 + row * 0.4);
+        g.add(step);
+      }
+      if (id.includes('Covered') || id.includes('Awning')) {
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.15, 2.4), M(0x886633));
+        roof.position.set(0, 2.5, 0); g.add(roof);
+        for (const x of [-1.4, 1.4]) {
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2, 6), M(0x886633));
+          col.position.set(x, 1.8, 0); g.add(col);
+        }
+      }
+      if (id.includes('Round')) {
+        // transforme en cylindre
+        g.clear();
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 1, 16), M(0xbbbbbb));
+        base.position.y = 0.5; g.add(base);
+        if (id.includes('Covered')) {
+          const roof = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.15, 16), M(0x886633));
+          roof.position.y = 2.3; g.add(roof);
+        }
+      }
+      return g;
+    }
+    if (id.startsWith('pitsGarage')) {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2, 2.5), M(id.includes('Closed') ? 0x777777 : 0xcccccc));
+      body.position.y = 1; body.castShadow = true; g.add(body);
+      if (!id.includes('Closed')) {
+        const opening = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.5, 0.1), M(0x222222));
+        opening.position.set(0, 0.85, 1.3); g.add(opening);
+      }
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.15, 2.7), M(0x666666));
+      roof.position.y = 2.1; g.add(roof);
+      return g;
+    }
+    if (id.startsWith('pitsOffice')) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 2.5), M(0xddeeff));
+      b.position.y = 1.25; b.castShadow = true; g.add(b);
+      // fenêtres
+      for (let i = 0; i < 3; i++) {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.08), M(0x3388cc));
+        w.position.set(-0.9 + i * 0.9, 1.5, 1.3); g.add(w);
+      }
+      if (id.includes('Roof')) {
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.2, 2.7), M(0xcc3333));
+        roof.position.y = 2.6; g.add(roof);
+      }
+      return g;
+    }
+    if (id.startsWith('tent')) {
+      const long = id.includes('Long');
+      const base = new THREE.Mesh(new THREE.BoxGeometry(long ? 3 : 2, 0.1, long ? 2.5 : 2), M(0xccbb99));
+      base.position.y = 0.05; g.add(base);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(long ? 1.7 : 1.3, 1.5, 4), M(id.includes('Roof') ? 0x8833aa : 0x3388cc));
+      roof.rotation.y = Math.PI / 4;
+      roof.position.y = 1.4;
+      g.add(roof);
+      if (id.includes('Closed')) {
+        const front = new THREE.Mesh(new THREE.BoxGeometry(long ? 3 : 2, 1, 0.05), M(0xaa9977));
+        front.position.set(0, 0.55, (long ? 2.5 : 2) / 2); g.add(front);
+      }
+      return g;
+    }
+    if (id.startsWith('raceCar')) {
+      const color = { raceCarRed: 0xcc3333, raceCarGreen: 0x44aa44, raceCarOrange: 0xff8833, raceCarWhite: 0xeeeeee }[id] || 0xcc3333;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1, 0.45, 2), M(color));
+      body.position.y = 0.45; body.castShadow = true; g.add(body);
+      const cockpit = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.7), M(0x222266));
+      cockpit.position.set(0, 0.8, 0); g.add(cockpit);
+      for (const [x, z] of [[-0.5,-0.7],[0.5,-0.7],[-0.5,0.7],[0.5,0.7]]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.18, 12), M(0x222222));
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(x, 0.22, z); g.add(wheel);
+      }
+      return g;
+    }
+    if (id.startsWith('light')) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, id.includes('Post') ? 2.2 : 1.2, 6), M(0x333333));
+      pole.position.y = id.includes('Post') ? 1.1 : 0.6; g.add(pole);
+      const color = id.includes('Red') ? 0xff3333 : id === 'lightColored' ? 0xff99ff : 0xffffaa;
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.5 }));
+      bulb.position.y = id.includes('Post') ? 2.3 : 1.3; g.add(bulb);
+      if (id === 'lightRedDouble') {
+        const bulb2 = bulb.clone(); bulb2.position.set(0.3, 2.3, 0); g.add(bulb2);
+      }
+      return g;
+    }
+    if (id.startsWith('road') || id === 'ramp') {
+      const isCorner = id.includes('Corner') || id.includes('Curved');
+      const isCross = id.includes('Crossing') || id.includes('Cross');
+      const isLong = id.includes('Long');
+      const isSplit = id.includes('Split');
+      const asphalt = new THREE.Mesh(
+        new THREE.BoxGeometry(isCross ? 2.4 : 2, 0.08, isLong ? 4 : 2),
+        M(0x333333)
+      );
+      asphalt.position.y = 0.04; g.add(asphalt);
+      // Lignes blanches
+      const lineCount = isLong ? 4 : 2;
+      for (let i = 0; i < lineCount; i++) {
+        const line = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 0.4), M(0xffffff));
+        line.position.set(0, 0.085, -0.8 + i * (isLong ? 1.2 : 1.6));
+        g.add(line);
+      }
+      if (id.includes('Ramp')) {
+        asphalt.rotation.x = -Math.PI / 12;
+      }
+      if (isCorner) {
+        asphalt.rotation.y = Math.PI / 6;
+      }
+      if (id.includes('Start')) {
+        const checkers = new THREE.Mesh(new THREE.BoxGeometry(2, 0.02, 0.4), M(0xffffff));
+        checkers.position.set(0, 0.09, 0); g.add(checkers);
+      }
+      if (id.includes('Arrow')) {
+        const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 3), M(0xffff44));
+        arrow.rotation.x = -Math.PI / 2;
+        arrow.position.set(0, 0.1, 0); g.add(arrow);
+      }
+      return g;
+    }
+    if (id.startsWith('barrier')) {
+      const color = id === 'barrierRed' ? 0xcc3333 : id === 'barrierWall' ? 0x888888 : 0xeeeeee;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.5, id === 'barrierWall' ? 1.2 : 0.4, 0.2), M(color));
+      b.position.y = id === 'barrierWall' ? 0.6 : 0.2; g.add(b);
+      return g;
+    }
+    if (id.startsWith('fence')) {
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.08), M(0xddcc88));
+      top.position.y = 0.75; g.add(top);
+      for (const x of [-0.6, 0, 0.6]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), M(0xddcc88));
+        post.position.set(x, 0.4, 0); g.add(post);
+      }
+      if (id === 'fenceCurved') g.rotation.y = 0.2;
+      return g;
+    }
+    if (id === 'rail' || id === 'railDouble') {
+      const r1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.06), M(0xaaaaaa));
+      r1.position.y = 0.4; g.add(r1);
+      for (const x of [-0.7, 0, 0.7]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 0.05), M(0x666666));
+        post.position.set(x, 0.3, 0); g.add(post);
+      }
+      if (id === 'railDouble') {
+        const r2 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.06), M(0xaaaaaa));
+        r2.position.set(0, 0.4, 0.3); g.add(r2);
+      }
+      return g;
+    }
+    if (id === 'pylon') {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 8), M(0xff6600));
+      cone.position.y = 0.3; g.add(cone);
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.04, 12), M(0xffffff));
+      ring.position.y = 0.4; g.add(ring);
+      return g;
+    }
+    if (id.startsWith('billboard')) {
+      const big = !id.includes('Low');
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, big ? 2 : 1, 6), M(0x444444));
+      pole.position.y = big ? 1 : 0.5; g.add(pole);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 0.08), M(0x4488cc));
+      panel.position.y = big ? 2.4 : 1.2; g.add(panel);
+      if (id.includes('Double')) {
+        const panel2 = panel.clone(); panel2.position.y -= 1.4; g.add(panel2);
+      }
+      return g;
+    }
+    if (id.startsWith('overhead')) {
+      const totalW = id.includes('Round') ? 4 : 5;
+      for (const s of [-1, 1]) {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3, 0.3), M(0x555555));
+        pillar.position.set(s * totalW / 2, 1.5, 0); g.add(pillar);
+      }
+      const top = new THREE.Mesh(
+        id.includes('Round') ? new THREE.CylinderGeometry(0.3, 0.3, totalW, 10) : new THREE.BoxGeometry(totalW, 0.4, 0.5),
+        M(id.includes('Colored') ? 0xff3366 : 0x666666)
+      );
+      top.rotation.z = id.includes('Round') ? Math.PI / 2 : 0;
+      top.position.y = 3.2; g.add(top);
+      if (id.includes('Lights')) {
+        for (let i = -2; i <= 2; i++) {
+          const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshStandardMaterial({ color: 0xffdd66, emissive: 0xffaa22, emissiveIntensity: 1.2 }));
+          bulb.position.set(i, 3, 0); g.add(bulb);
+        }
+      }
+      return g;
+    }
+    if (id === 'radarEquipment') {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1, 0.4, 1), M(0x555555));
+      base.position.y = 0.2; g.add(base);
+      const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.4, 0.2, 12), M(0xaaaaaa));
+      dish.position.y = 0.7; dish.rotation.x = 0.5; g.add(dish);
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 6), M(0xdddddd));
+      antenna.position.y = 1; g.add(antenna);
+      return g;
+    }
+    if (id === 'camera_exclusive') {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.5), M(0x222222));
+      body.position.y = 1.5; g.add(body);
+      const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.2, 10), M(0x444488));
+      lens.rotation.z = Math.PI / 2;
+      lens.position.set(0.3, 1.5, 0); g.add(lens);
+      const tripod = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), M(0x333333));
+      tripod.position.y = 0.7; g.add(tripod);
+      return g;
+    }
+    // Fallback générique
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), M(0x999999));
+    box.position.y = 0.4; g.add(box);
+    return g;
   }
 
   // === Thumbnails par item (snapshot 3D 96×96) ===

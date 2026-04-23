@@ -1469,13 +1469,13 @@
 
   // --- CIEL VIVANT (Season 2) : skybox suit l'heure locale ---
   const SKY_PRESETS = [
-    { h: 5,  sky: 0x2a1f4a, fog: 0x2a1f4a, ambI: 0.25, sunI: 0.3,  sunC: 0x6677aa, ambC: 0x8899ff, name: 'nuit' },
-    { h: 6,  sky: 0xff9977, fog: 0xffaa99, ambI: 0.45, sunI: 0.6,  sunC: 0xffbb88, ambC: 0xffddcc, name: 'aube' },
-    { h: 8,  sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.55, sunI: 0.85, sunC: 0xffffff, ambC: 0xffffff, name: 'jour' },
-    { h: 17, sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.55, sunI: 0.85, sunC: 0xffffff, ambC: 0xffffff, name: 'jour' },
-    { h: 18, sky: 0xff7755, fog: 0xffaa77, ambI: 0.4,  sunI: 0.7,  sunC: 0xff8844, ambC: 0xff9966, name: 'crépuscule' },
-    { h: 20, sky: 0x1a1744, fog: 0x2a1f5a, ambI: 0.3,  sunI: 0.35, sunC: 0x6677aa, ambC: 0x8899ff, name: 'nuit' },
-    { h: 23, sky: 0x0f1035, fog: 0x1a1a45, ambI: 0.25, sunI: 0.3,  sunC: 0x5566aa, ambC: 0x7788dd, name: 'nuit profonde' },
+    { h: 5,  sky: 0x4a3f6a, fog: 0x4a3f6a, ambI: 0.55, sunI: 0.55, sunC: 0x99aaff, ambC: 0xaabbff, name: 'nuit' },
+    { h: 6,  sky: 0xff9977, fog: 0xffaa99, ambI: 0.6,  sunI: 0.75, sunC: 0xffbb88, ambC: 0xffddcc, name: 'aube' },
+    { h: 8,  sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.65, sunI: 0.95, sunC: 0xffffff, ambC: 0xffffff, name: 'jour' },
+    { h: 17, sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.65, sunI: 0.95, sunC: 0xffffff, ambC: 0xffffff, name: 'jour' },
+    { h: 18, sky: 0xff7755, fog: 0xffaa77, ambI: 0.55, sunI: 0.8,  sunC: 0xff8844, ambC: 0xff9966, name: 'crépuscule' },
+    { h: 20, sky: 0x3a3474, fog: 0x3a3474, ambI: 0.55, sunI: 0.6,  sunC: 0x99aaff, ambC: 0xaabbff, name: 'nuit' },
+    { h: 23, sky: 0x2f3055, fog: 0x2f3055, ambI: 0.55, sunI: 0.55, sunC: 0x99aaff, ambC: 0xaabbff, name: 'nuit profonde' },
   ];
   function lerpHex(a, b, t) {
     const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;

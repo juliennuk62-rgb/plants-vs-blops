@@ -2020,6 +2020,11 @@
     sfx('kill');
     if (ud.mechanic) sfx('crit');
     if (ud.variant && ud.variant !== 'none') sfx('rarity');
+    // Season 2 : slow-mo cinématique sur kill Mythique/GOAT
+    if (typeof triggerSlowMo === 'function') {
+      if (ud.rarity === 'goat') triggerSlowMo(0.25, 1.8);
+      else if (ud.rarity === 'mythic') triggerSlowMo(0.4, 1.2);
+    }
     addCash(ud.value);
     game.kills++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
@@ -3991,7 +3996,18 @@
   // --- GAME LOOP ---
   const clock = new THREE.Clock();
   let brSpawnTimer = 0;
+  // === SEASON 2 - Feature #2 : Slow-Mo GOAT Kill ===
+  let slowMoUntil = 0;
+  let slowMoFactor = 1;
+  function triggerSlowMo(factor, durationSec) {
+    slowMoFactor = factor;
+    slowMoUntil = clock.getElapsedTime() + durationSec;
+    renderer.domElement.style.transition = 'filter 0.1s ease-out';
+    renderer.domElement.style.filter = 'blur(1.5px) saturate(1.6) brightness(1.1)';
+    setTimeout(() => { renderer.domElement.style.filter = ''; }, durationSec * 1000);
+  }
   function update(dt, now) {
+    if (now < slowMoUntil) dt = dt * slowMoFactor;
     game.stats.totalPlayTimeMs += dt * 1000;
     brSpawnTimer += dt;
     if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {

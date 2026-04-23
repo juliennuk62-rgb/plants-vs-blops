@@ -1888,13 +1888,57 @@
     }
   }
 
+  // === SEASON 2 - Feature #5 : Selenis (GOAT de Pleine Lune) ===
+  const SELENIS = { name: 'Selenis', hp: 5000, size: 2.4, value: 120000, mechanic: 'rage-regen' };
+  function moonPhase01() {
+    const d = new Date();
+    const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+    const r = y % 100;
+    const base = (m < 3) ? [0, 2, 0][m] : [0, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6][m - 3];
+    const k = Math.floor(r * 0.25) + day + base;
+    return ((k % 30) / 29.53);
+  }
+  function isFullMoonNight() {
+    const p = moonPhase01();
+    const h = new Date().getHours();
+    const nearFull = Math.abs(p - 0.5) < 0.1;
+    const night = h >= 20 || h < 6;
+    return nearFull && night;
+  }
+  function canSelenisSpawn() {
+    if (!isFullMoonNight()) return false;
+    const cycleKey = 'pvb_selenis_' + Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 29.53));
+    return localStorage.getItem(cycleKey) !== '1';
+  }
+  function markSelenisSpawned() {
+    const cycleKey = 'pvb_selenis_' + Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 29.53));
+    try { localStorage.setItem(cycleKey, '1'); } catch (e) {}
+  }
+  function makeLunarAura(size) {
+    return new THREE.Mesh(
+      new THREE.SphereGeometry(size * 1.8, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xccccff, transparent: true, opacity: 0.18, side: THREE.BackSide })
+    );
+  }
+
   function spawnBrainrot(laneIdx, rarityKey, overrides) {
     overrides = overrides || {};
     let blopData = BRAINROTS[rarityKey];
     let mechanic = null;
     let blopName = blopData.name;
     let blopId = null;
-    if (!overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+    let isLunar = false;
+    // Selenis override : rareté GOAT + pleine lune + pas déjà spawn ce cycle
+    if (rarityKey === 'goat' && !overrides.noVariant && canSelenisSpawn()) {
+      blopData = { hp: SELENIS.hp, size: SELENIS.size, value: SELENIS.value, name: SELENIS.name };
+      mechanic = SELENIS.mechanic;
+      blopName = SELENIS.name;
+      blopId = 'selenis';
+      isLunar = true;
+      markSelenisSpawned();
+      showToast('🌕 SELENIS ! GOAT de Pleine Lune !', 4500);
+    }
+    if (!isLunar && !overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
       const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
       if (pool && pool.length > 0) {
         blopId = pool[Math.floor(Math.random() * pool.length)];
@@ -1929,6 +1973,12 @@
       invisible: false,
     });
     addVariantRing(group, variantKey, blopData.size);
+    if (isLunar) {
+      const aura = makeLunarAura(blopData.size);
+      aura.position.y = blopData.size;
+      group.add(aura);
+      group.userData.lunarAura = aura;
+    }
     group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);
     game.brainrots.push(group);

@@ -2198,16 +2198,162 @@
     }
   }
 
-  // Point 5 : résultat (placeholder, Point 6 fera le vrai écran)
+  // === Point 6 : Évaluation objectifs étoiles ===
+  function evaluateStarGoals(ca, win) {
+    if (!win) return 0;
+    const elapsed = (performance.now() - ca.startedAt) / 1000;
+    let stars = 0;
+    for (const g of ca.data.starGoals) {
+      let achieved = false;
+      if (g.id === 'clear') achieved = true;
+      else if (g.id === 'noDamage') achieved = ca.baseHp === ca.baseHpMax;
+      else if (g.id === 'quick') achieved = elapsed < 90;
+      else if (g.id === 'cheap') achieved = ca.stats.cashSpent < (ca.data.starGoals.find(sg => sg.id === 'cheap')?.limit || 700);
+      if (achieved) stars++;
+    }
+    return stars;
+  }
+
+  // === Point 6 : Modal résultat victoire/défaite ===
   function showCampaignResult(win) {
     const ca = game.campaignActive;
     if (!ca) return;
-    const msg = win ? '🏆 VICTOIRE ! ' + ca.level.name : '💀 Défaite... Ta base est tombée.';
-    showToast(msg, 4000);
-    setTimeout(() => {
+    const lv = ca.level;
+    const data = ca.data;
+    const elapsed = (performance.now() - ca.startedAt) / 1000;
+    const stars = evaluateStarGoals(ca, win);
+    const prevStars = gameCampaign.stars[lv.id] || 0;
+    const newBest = stars > prevStars;
+
+    // Applique progression
+    if (win) {
+      gameCampaign.completed[lv.id] = true;
+      if (stars > prevStars) gameCampaign.stars[lv.id] = stars;
+      // Unlock niveau suivant
+      const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === lv.id);
+      if (idx >= 0 && idx < CAMPAIGN_LEVELS.length - 1) {
+        const nextId = CAMPAIGN_LEVELS[idx + 1].id;
+        if (!gameCampaign.completed[nextId]) gameCampaign.highestUnlocked = nextId;
+      }
+      // Rewards (cash ajouté à endless après retour)
+      ca._rewardCash = (data.rewards.cash || 0);
+      if (!prevStars && data.rewards.firstClearBonus) ca._rewardCash += data.rewards.firstClearBonus;
+      // Unlock plantes (persisté dans game.campaign.unlocks)
+      if (data.rewards.unlocks) {
+        gameCampaign.unlocks = gameCampaign.unlocks || [];
+        data.rewards.unlocks.forEach(id => {
+          if (!gameCampaign.unlocks.includes(id)) gameCampaign.unlocks.push(id);
+        });
+      }
+    }
+
+    // Build modal
+    const existing = document.getElementById('camp-result-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'camp-result-modal';
+    modal.className = 'modal';
+    modal.style.zIndex = '9999';
+    const color = win ? '#ffcc33' : '#ff3366';
+    const bgGrad = win ? 'linear-gradient(135deg,#1a2a1a,#0f0d1a)' : 'linear-gradient(135deg,#2a1a1a,#0f0d1a)';
+    const title = win ? '🏆 VICTOIRE' : '💀 DÉFAITE';
+    const subtitle = win ? lv.name + ' — terminé !' : 'Ta base est tombée...';
+    let starsHtml = '';
+    for (let i = 0; i < 3; i++) {
+      const earned = i < stars;
+      starsHtml += `<span style="font-size:56px;margin:0 4px;color:${earned ? '#ffdd00' : '#555'};text-shadow:${earned ? '0 0 20px #ffcc00' : 'none'};display:inline-block;transition:transform 0.4s cubic-bezier(.2,1.6,.4,1);transform:scale(${earned ? 1 : 0.7});">★</span>`;
+    }
+    const timeStr = Math.floor(elapsed / 60) + ':' + String(Math.floor(elapsed % 60)).padStart(2, '0');
+    const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === lv.id);
+    const hasNext = idx >= 0 && idx < CAMPAIGN_LEVELS.length - 1;
+    const nextData = hasNext ? getLevelData(CAMPAIGN_LEVELS[idx + 1].id) : null;
+    const canPlayNext = win && hasNext;
+
+    modal.innerHTML = `
+      <div class="modal-content modal-content--md" style="background:${bgGrad};border:2px solid ${color};box-shadow:0 0 40px ${color}88;text-align:center;padding:28px 24px;">
+        <div style="font-family:var(--font-display,sans-serif);font-size:42px;font-weight:900;color:${color};text-shadow:0 0 15px ${color};letter-spacing:3px;">${title}</div>
+        <div style="color:#ccc;margin-top:4px;font-size:16px;">${subtitle}</div>
+        <div style="margin:24px 0;">${starsHtml}</div>
+        ${win && newBest ? `<div style="color:#66ff99;font-weight:700;font-size:14px;margin-bottom:14px;">✨ Nouveau meilleur score !</div>` : ''}
+        <div style="background:rgba(0,0,0,0.4);padding:12px;border-radius:8px;margin-bottom:14px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;text-align:left;">
+            <div>⏱ Temps : <strong>${timeStr}</strong></div>
+            <div>👾 Blops tués : <strong>${ca.stats.blopsKilled}</strong></div>
+            <div>❤️ Base : <strong style="color:${ca.baseHp === ca.baseHpMax ? '#66ff99' : '#ffaa33'};">${ca.baseHp}/${ca.baseHpMax}</strong></div>
+            <div>💸 Dépensé : <strong>${ca.stats.cashSpent}$</strong></div>
+          </div>
+        </div>
+        ${win && ca._rewardCash ? `<div style="background:rgba(255,204,51,0.15);border:1px solid ${color};padding:10px;border-radius:8px;margin-bottom:14px;font-size:14px;">
+          🎁 Récompense : <strong style="color:#ffcc33;font-size:16px;">+${ca._rewardCash}$</strong>
+          ${data.rewards.unlocks && data.rewards.unlocks.length ? `<br>🔓 Débloqué : ${data.rewards.unlocks.map(id => PLANTS[id]?.name || id).join(', ')}` : ''}
+        </div>` : ''}
+        ${win && !hasNext ? `<div style="color:#ffcc33;font-weight:700;margin-bottom:14px;">🏆 Tu as terminé l'aventure ! Félicitations !</div>` : ''}
+
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <div class="btn" id="camp-res-retry" style="padding:10px 18px;">🔄 Rejouer</div>
+          <div class="btn" id="camp-res-map" style="padding:10px 18px;">🗺 Carte</div>
+          ${canPlayNext ? `<div class="btn gold" id="camp-res-next" style="padding:10px 22px;font-size:15px;">▶ Niveau suivant</div>` : ''}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeAndGoMap = () => {
+      modal.remove();
       endCampaignLevel(win ? 'win' : 'lose');
+      // Donne le cash reward
+      if (win && ca._rewardCash) game.cash += ca._rewardCash;
       setActiveTab('campaign');
-    }, 2500);
+      renderCampaignMap();
+      updateHud();
+      saveGame();
+    };
+
+    document.getElementById('camp-res-retry').onclick = () => {
+      sfx && sfx('click');
+      const levelId = lv.id;
+      modal.remove();
+      endCampaignLevel(win ? 'win' : 'retry');
+      if (win && ca._rewardCash) game.cash += ca._rewardCash;
+      updateHud(); saveGame();
+      // Relance
+      startCampaignLevel(levelId);
+    };
+    document.getElementById('camp-res-map').onclick = () => { sfx && sfx('click'); closeAndGoMap(); };
+    if (canPlayNext) {
+      document.getElementById('camp-res-next').onclick = () => {
+        sfx && sfx('click');
+        const nextId = CAMPAIGN_LEVELS[idx + 1].id;
+        const nextLvData = getLevelData(nextId);
+        modal.remove();
+        endCampaignLevel('win');
+        if (ca._rewardCash) game.cash += ca._rewardCash;
+        updateHud(); saveGame();
+        if (nextLvData) {
+          startCampaignLevel(nextId);
+        } else {
+          showHint('⚠️ Niveau ' + nextId + ' pas encore implémenté', 2500);
+          setActiveTab('campaign');
+          renderCampaignMap();
+        }
+      };
+    }
+
+    // Animation d'entrée des étoiles
+    if (win && stars > 0) {
+      setTimeout(() => {
+        const starEls = modal.querySelectorAll('.modal-content span');
+        starEls.forEach((el, i) => {
+          setTimeout(() => {
+            el.style.transform = 'scale(1.2)';
+            sfx && sfx('coin');
+            setTimeout(() => { el.style.transform = 'scale(1)'; }, 200);
+          }, i * 300);
+        });
+      }, 200);
+    }
+
+    sfx && sfx(win ? 'reward' : 'error');
   }
 
   // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
@@ -6880,8 +7026,22 @@
       const slot = hitSlot(e);
       if (slot && !slot.plant) {
         const seed = game.inventory[game.selectedSeedIdx];
-        game.inventory.splice(game.selectedSeedIdx, 1);
-        placePlant(seed, slot);
+        // En campagne : le cash sert pour placer (PvZ-style), les graines sont infinies
+        if (game.mode === 'campaign' && game.campaignActive) {
+          const plant = PLANTS[seed.plantId];
+          if (game.cash < plant.price) {
+            showHint('Pas assez de cash pour ' + plant.name + ' (' + plant.price + '$)', 2500);
+            sfx && sfx('error');
+            return;
+          }
+          game.cash -= plant.price;
+          game.campaignActive.stats.cashSpent += plant.price;
+          placePlant(seed, slot);
+          // Pas de splice : graines infinies en campagne
+        } else {
+          game.inventory.splice(game.selectedSeedIdx, 1);
+          placePlant(seed, slot);
+        }
         sfx('click'); cancelPlacement(); updateHud(); saveGame();
       }
       return;

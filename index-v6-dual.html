@@ -1780,11 +1780,26 @@
   const slots = [];
 
   // === V6 DUAL GARDEN ===
-  const DUAL_GARDEN_PRESTIGE = 10; // règle officielle : dual mode débloque à prestige 10
-  const GARDEN_SPACING = 10;       // écart horizontal entre les 2 jardins (en unités monde)
-  // Plus de FORCE_DUAL : les règles prestige sont respectées strictement.
-  // Pour tester le dual mode, utilise le bouton "P10" du panel admin ⚡
+  const DUAL_GARDEN_PRESTIGE = 5;  // à partir de P5 : garden 1 gèle + garden 2 apparaît
+  const GARDEN_SPACING = 10;       // écart horizontal entre les 2 jardins
+  // Règle : G1 frozen au nb de lanes qu'il avait à P(DUAL_GARDEN_PRESTIGE - 1),
+  // puis G2 est créé à P(DUAL) avec BASE_LANE_COUNT lanes, et +1 lane à G2 par prestige.
   function hasDualGarden() { return game.prestige >= DUAL_GARDEN_PRESTIGE; }
+  // Lanes par garden : tableau [lanesG1, lanesG2]
+  function lanesPerGardenArr() {
+    if (!hasDualGarden()) return [BASE_LANE_COUNT + game.prestige];
+    // G1 frozen : BASE + (DUAL_GARDEN_PRESTIGE - 1) = 3 + 4 = 7 lanes (pour DUAL=5)
+    const g1Frozen = BASE_LANE_COUNT + (DUAL_GARDEN_PRESTIGE - 1);
+    // G2 : commence à BASE à P=DUAL, +1 par prestige au-delà
+    const g2 = BASE_LANE_COUNT + (game.prestige - DUAL_GARDEN_PRESTIGE);
+    return [g1Frozen, g2];
+  }
+  function lanesInGarden(gardenIdx) { return lanesPerGardenArr()[gardenIdx] || 0; }
+  // Compat : fallback pour les vieux call-sites qui supposent même count dans les 2 gardens
+  function lanesPerGarden() {
+    const arr = lanesPerGardenArr();
+    return Math.max(...arr);
+  }
   console.log('[V6] DUAL_GARDEN_PRESTIGE:', DUAL_GARDEN_PRESTIGE);
   // Badge top-center dynamique : affiche le mode actuel
   window.addEventListener('DOMContentLoaded', () => {
@@ -2090,18 +2105,33 @@
     // → P10 = 6+6 (12 total, continuité avec P9 solo), P11 = 7+7, etc.
     return 6 + (game.prestige - DUAL_GARDEN_PRESTIGE);
   }
-  function currentLaneCount() { return lanesPerGarden() * gardenCount(); }
+  function currentLaneCount() {
+    const arr = lanesPerGardenArr();
+    return arr.reduce((s, n) => s + n, 0);
+  }
   function playfieldWidth() {
-    const lanesW = lanesPerGarden() * LANE_WIDTH;
-    return hasDualGarden() ? (lanesW * 2 + GARDEN_SPACING) : lanesW;
+    const arr = lanesPerGardenArr();
+    if (arr.length === 1) return arr[0] * LANE_WIDTH;
+    return arr[0] * LANE_WIDTH + GARDEN_SPACING + arr[1] * LANE_WIDTH;
   }
-  // Coordonnée X centrale d'un garden (offset gauche/droite en dual)
+  // Coordonnée X centrale d'un garden (prend en compte largeurs asymétriques)
   function gardenCenterX(gardenIdx) {
-    if (!hasDualGarden()) return 0;
-    const half = (lanesPerGarden() * LANE_WIDTH + GARDEN_SPACING) / 2;
-    return gardenIdx === 0 ? -half : half;
+    const arr = lanesPerGardenArr();
+    if (arr.length === 1) return 0;
+    const w1 = arr[0] * LANE_WIDTH, w2 = arr[1] * LANE_WIDTH;
+    const total = w1 + GARDEN_SPACING + w2;
+    return gardenIdx === 0 ? (-total / 2 + w1 / 2) : (total / 2 - w2 / 2);
   }
-  // Capacity parc : 15 en solo, 30 en dual (30 slots total)
+  // Helpers : convertir un laneIdx global en (gardenIdx, localLane)
+  function gardenOfLane(laneIdx) {
+    const n1 = lanesInGarden(0);
+    return laneIdx < n1 ? 0 : 1;
+  }
+  function localLaneOf(laneIdx) {
+    const n1 = lanesInGarden(0);
+    return laneIdx < n1 ? laneIdx : laneIdx - n1;
+  }
+  // Capacity parc : 15 en solo, 30 en dual
   function parcCapacity() { return hasDualGarden() ? 30 : PARC_CAPACITY; }
 
   function setupCamera() {
@@ -2135,17 +2165,18 @@
   }
 
   function buildTerrain() {
-    const perGarden = lanesPerGarden();
-    const nGardens = gardenCount();
-    for (let g = 0; g < nGardens; g++) {
-      buildOneGarden(g, perGarden);
+    const arr = lanesPerGardenArr();
+    let globalStart = 0;
+    for (let g = 0; g < arr.length; g++) {
+      buildOneGarden(g, arr[g], globalStart);
+      globalStart += arr[g];
     }
     buildSharedParcFloor();
-    // Décorations bakées (une par lane si perLane, sinon position fixe)
     spawnBakedDecorations();
   }
 
-  function buildOneGarden(gardenIdx, perGarden) {
+  function buildOneGarden(gardenIdx, perGarden, globalStart) {
+    if (globalStart === undefined) globalStart = gardenIdx * perGarden;
     const offsetX = gardenCenterX(gardenIdx);
     const laneColors = [0x6abf4e, 0x5aaf3e];
     for (let i = 0; i < perGarden; i++) {
@@ -2218,9 +2249,9 @@
     const spawnLight = new THREE.PointLight(0xff3322, 0.6, 10);
     spawnLight.position.set(offsetX, 2, -LANE_LENGTH / 2 - 0.75);
     scene.add(spawnLight); terrainObjects.push(spawnLight);
-    // Slots de ce garden (laneIdx GLOBAL = gardenIdx * perGarden + localIdx)
+    // Slots : laneIdx GLOBAL = globalStart + localLane (compatible gardens asymétriques)
     for (let localLane = 0; localLane < perGarden; localLane++) {
-      const globalLane = gardenIdx * perGarden + localLane;
+      const globalLane = globalStart + localLane;
       const laneX = offsetX + (localLane - (perGarden - 1) / 2) * LANE_WIDTH;
       for (let slotIdx = 0; slotIdx < SLOTS_PER_LANE; slotIdx++) {
         const z = -LANE_LENGTH / 2 + (slotIdx + 0.5) * SLOT_DEPTH;
@@ -2389,6 +2420,23 @@
   function spendCash(amount) { game.cash -= amount; game.stats.totalSpent += amount; if (game.missions) incMissionStat('spent', amount); }
 
   // --- PARTICLES ---
+  // Utility : free GPU memory on mesh removal (geometry + material)
+  function disposeDeep(obj) {
+    if (!obj) return;
+    obj.traverse(o => {
+      if (o.geometry) { try { o.geometry.dispose(); } catch (e) {} }
+      if (o.material) {
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach(m => { try { m.dispose(); } catch (e) {} });
+      }
+    });
+  }
+  function sceneRemoveAndDispose(obj) {
+    if (!obj) return;
+    scene.remove(obj);
+    disposeDeep(obj);
+  }
+
   function spawnDeathBurst(position, colorHex, scale = 1) {
     for (let i = 0; i < 8; i++) {
       const p = new THREE.Mesh(
@@ -2419,7 +2467,7 @@
       p.userData.velocity.y -= 12 * dt;
       if (p.material) p.material.opacity = Math.max(0, p.userData.life / p.userData.maxLife);
       if (p.userData.life <= 0) {
-        scene.remove(p);
+        sceneRemoveAndDispose(p);
         game.particles.splice(i, 1);
       }
     }
@@ -2428,30 +2476,59 @@
   // --- HP BARS (DOM overlay) ---
   const hpOverlay = document.getElementById('hp-overlay');
 
-  // === TIER 1 UI : Damage numbers flottants + red flash hit ===
+  // === TIER 1 UI : Damage numbers flottants (POOLED) + red flash hit ===
+  const DMG_POOL_SIZE = 30;
+  const dmgPool = [];
+  let dmgPoolIdx = 0;
+  // Rate-limit : max 30 damage numbers simultanés (sinon on skip)
+  let dmgActiveCount = 0;
+  const DMG_MAX_ACTIVE = 30;
+  function _getDmgEl() {
+    if (dmgPool.length < DMG_POOL_SIZE) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;pointer-events:none;z-index:600;will-change:transform,opacity;display:none;';
+      document.body.appendChild(el);
+      dmgPool.push(el);
+      return el;
+    }
+    const el = dmgPool[dmgPoolIdx];
+    dmgPoolIdx = (dmgPoolIdx + 1) % DMG_POOL_SIZE;
+    return el;
+  }
   function spawnDamageNumber(enemy, damage, opts) {
     opts = opts || {};
     if (!enemy || !enemy.position) return;
+    if (dmgActiveCount >= DMG_MAX_ACTIVE) return; // rate limit
     const pos = enemy.position.clone();
     pos.y += enemy.userData.size * 1.6;
     pos.project(camera);
     if (pos.z > 1 || pos.z < -1) return;
     const x = (pos.x + 1) / 2 * innerWidth;
     const y = (-pos.y + 1) / 2 * innerHeight;
-    const el = document.createElement('div');
+    const el = _getDmgEl();
     const val = Math.max(1, Math.round(damage));
     const color = opts.crit ? '#ffdd33' : (opts.armored ? '#88aaff' : '#ffffff');
     const size = opts.crit ? '22px' : '16px';
     const weight = opts.crit ? '900' : '700';
     const prefix = opts.crit ? '' : '-';
     el.textContent = prefix + val + (opts.crit ? '!' : '');
-    el.style.cssText = 'position:fixed;left:' + (x + (Math.random() - 0.5) * 20) + 'px;top:' + y + 'px;color:' + color + ';font-size:' + size + ';font-weight:' + weight + ';text-shadow:0 0 4px #000,1px 1px 0 #000;pointer-events:none;z-index:600;transition:transform 0.7s cubic-bezier(.2,.8,.3,1),opacity 0.7s ease-out;transform:translate(-50%,0);will-change:transform,opacity;';
-    document.body.appendChild(el);
-    requestAnimationFrame(() => {
-      el.style.transform = 'translate(-50%,-60px) scale(' + (opts.crit ? 1.3 : 1) + ')';
-      el.style.opacity = '0';
-    });
-    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 750);
+    el.style.display = 'block';
+    el.style.left = (x + (Math.random() - 0.5) * 20) + 'px';
+    el.style.top = y + 'px';
+    el.style.color = color;
+    el.style.fontSize = size;
+    el.style.fontWeight = weight;
+    el.style.textShadow = '0 0 4px #000,1px 1px 0 #000';
+    el.style.transition = 'none';
+    el.style.transform = 'translate(-50%,0)';
+    el.style.opacity = '1';
+    dmgActiveCount++;
+    // Force reflow for transition restart
+    void el.offsetWidth;
+    el.style.transition = 'transform 0.7s cubic-bezier(.2,.8,.3,1),opacity 0.7s ease-out';
+    el.style.transform = 'translate(-50%,-60px) scale(' + (opts.crit ? 1.3 : 1) + ')';
+    el.style.opacity = '0';
+    setTimeout(() => { el.style.display = 'none'; dmgActiveCount = Math.max(0, dmgActiveCount - 1); }, 720);
   }
 
   function flashEnemyHit(enemy) {
@@ -2499,10 +2576,12 @@
   function updateHpBar(body) {
     const el = body.userData.hpBarEl;
     if (!el) return;
+    // Opt : skip si HP full (pas de dégâts encore) ET scale grow en cours (naissance)
+    if (body.userData.hp === body.userData.maxHp && body.scale.x < 1) { el.style.display = 'none'; return; }
     const pos = body.position.clone();
     pos.y += body.userData.size * 1.3 + 0.4;
     pos.project(camera);
-    if (pos.z > 1 || pos.z < -1) { el.style.display = 'none'; return; }
+    if (pos.z > 1 || pos.z < -1 || Math.abs(pos.x) > 1.2 || Math.abs(pos.y) > 1.2) { el.style.display = 'none'; return; }
     el.style.display = 'block';
     const x = (pos.x + 1) / 2 * innerWidth;
     const y = (-pos.y + 1) / 2 * innerHeight;
@@ -2897,12 +2976,12 @@
     }
     const variantKey = pickVariant();
     const variant = VARIANTS[variantKey];
-    const perGarden = lanesPerGarden();
-    const gardenIdx = Math.floor(laneIdx / perGarden);
-    const localLane = laneIdx % perGarden;
+    const gardenIdx = gardenOfLane(laneIdx);
+    const localLane = localLaneOf(laneIdx);
+    const perGardenLocal = lanesInGarden(gardenIdx);
     const offsetX = gardenCenterX(gardenIdx);
     const group = createBlopMesh(rarityKey, 1);
-    const spawnX = offsetX + (localLane - (perGarden - 1) / 2) * LANE_WIDTH;
+    const spawnX = offsetX + (localLane - (perGardenLocal - 1) / 2) * LANE_WIDTH;
     group.position.set(spawnX, 0.1, overrides.startZ !== undefined ? overrides.startZ : -LANE_LENGTH / 2);
     const hpMult = overrides.hpMult || 1;
     const effectiveHp = blopData.hp * variant.mult * hpMult;
@@ -3497,14 +3576,11 @@
     const plantData = plantGroup.userData;
     const plant = PLANTS[plantData.plantId];
     // V6 : une plante ne vise que les Blops de SON garden
-    const perGarden = lanesPerGarden();
-    const plantGarden = Math.floor(plantData.lane / perGarden);
+    const plantGarden = gardenOfLane(plantData.lane);
     if (plant.ability === 'cross-lane') {
       let best = null, bestDist = Infinity;
       for (const e of game.brainrots) {
-        // Filter : même garden uniquement
-        const eGarden = Math.floor(e.userData.lane / perGarden);
-        if (eGarden !== plantGarden) continue;
+        if (gardenOfLane(e.userData.lane) !== plantGarden) continue;
         const d = plantGroup.position.distanceToSquared(e.position);
         if (d < bestDist) { bestDist = d; best = e; }
       }
@@ -3659,12 +3735,12 @@
       }
       const age = now - b.userData.spawnedAt;
       if (age > 3 || Math.abs(b.position.z) > LANE_LENGTH || Math.abs(b.position.x) > 30) {
-        scene.remove(b); game.bullets.splice(idx, 1);
+        sceneRemoveAndDispose(b); game.bullets.splice(idx, 1);
       }
       return;
     }
     const t = b.userData.target;
-    if (!t || !t.parent) { scene.remove(b); game.bullets.splice(idx, 1); return; }
+    if (!t || !t.parent) { sceneRemoveAndDispose(b); game.bullets.splice(idx, 1); return; }
     const dir = new THREE.Vector3().subVectors(t.position, b.position).normalize();
     b.position.addScaledVector(dir, b.userData.speed * dt);
     if (b.position.distanceTo(t.position) < 0.9 * t.userData.size) {
@@ -3674,7 +3750,7 @@
       if (b.userData.dot && t.parent) applyDot(t, b.userData.dot.dps, b.userData.dot.duration, now);
       if (b.userData.chain) applyChain(t.position, b.userData.damage, b.userData.chain.jumps, b.userData.chain.falloff, new Set([t]));
       if (b.userData.lifesteal) applyLifesteal(b.userData.plantGroup, b.userData.damage, b.userData.lifesteal);
-      scene.remove(b); game.bullets.splice(idx, 1);
+      sceneRemoveAndDispose(b); game.bullets.splice(idx, 1);
     }
   }
 
@@ -5474,10 +5550,13 @@
     if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
       // V6 : en dual, on spawn plus vite pour alimenter les 2 gardens
       brSpawnTimer = 0;
-      const spawnsPerTick = hasDualGarden() ? 2 : 1;
-      for (let sp = 0; sp < spawnsPerTick; sp++) {
-        const lane = Math.floor(Math.random() * currentLaneCount());
-        spawnBrainrot(lane, pickRarity());
+      const MAX_BLOPS_ON_SCREEN = hasDualGarden() ? 60 : 40;
+      if (game.brainrots.length < MAX_BLOPS_ON_SCREEN) {
+        const spawnsPerTick = hasDualGarden() ? 2 : 1;
+        for (let sp = 0; sp < spawnsPerTick; sp++) {
+          const lane = Math.floor(Math.random() * currentLaneCount());
+          spawnBrainrot(lane, pickRarity());
+        }
       }
     }
     game.shopTimer -= dt;

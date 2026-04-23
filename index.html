@@ -721,8 +721,85 @@
     mix: () => { [500, 700, 900, 1100].forEach((f, i) => playTone(f, 0.1, 0.06, 'sine', i * 0.05)); },
     prestige: () => { [262, 330, 392, 523, 659, 784, 1047].forEach((f, i) => playTone(f, 0.3, 0.12, 'sine', i * 0.12)); },
     sell: () => { playTone(300, 0.06, 0.04, 'sine'); },
+    // Sprint 2E : nouveaux SFX
+    hit:    () => playTone(180, 0.04, 0.03, 'sawtooth'),
+    crit:   () => { playTone(1200, 0.06, 0.08, 'square'); playTone(1800, 0.08, 0.06, 'sine', 0.02); },
+    rarity: () => { [659, 880, 1319].forEach((f, i) => playTone(f, 0.15, 0.08, 'sine', i * 0.06)); },
+    error:  () => { playTone(160, 0.1, 0.06, 'square'); },
+    plant:  () => { playTone(520, 0.08, 0.07, 'sine'); playTone(780, 0.1, 0.05, 'triangle', 0.04); },
+    spawn:  () => playTone(140, 0.12, 0.04, 'sine'),
+    coin:   () => { playTone(1047, 0.06, 0.04, 'sine'); playTone(1568, 0.05, 0.03, 'sine', 0.03); },
+    reward: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => playTone(f, 0.12, 0.07, 'triangle', i * 0.05)); },
   };
   function sfx(name) { if (audioEnabled && SFX[name]) SFX[name](); }
+
+  // --- MUSIQUE AMBIANCE : boucle arpège générée ---
+  let musicEnabled = true;
+  let musicNodes = null;
+  const MUSIC_SCALE = [220, 277.18, 329.63, 392, 440, 523.25, 587.33, 659.25]; // Am pentatonique
+  const MUSIC_BASS  = [55, 73.42, 82.41, 98]; // A1-G2
+  let musicStep = 0;
+  let musicTimer = null;
+
+  function startMusic() {
+    if (!audioCtx || !musicEnabled || musicTimer) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.035;
+    masterGain.connect(audioCtx.destination);
+    // Léger filtre passe-bas pour feutrer
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1600;
+    filter.connect(masterGain);
+    musicNodes = { masterGain, filter };
+    const tick = () => {
+      if (!musicEnabled || !audioCtx) return;
+      const t = audioCtx.currentTime;
+      const dur = 0.45;
+      // Note mélodie
+      const noteIdx = (Math.floor(Math.random() * 8));
+      const freq = MUSIC_SCALE[noteIdx];
+      const osc = audioCtx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.5, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g).connect(filter);
+      osc.start(t); osc.stop(t + dur);
+      // Basse tous les 4 steps
+      if (musicStep % 4 === 0) {
+        const bassFreq = MUSIC_BASS[Math.floor(musicStep / 4) % MUSIC_BASS.length];
+        const bosc = audioCtx.createOscillator();
+        bosc.type = 'sawtooth';
+        bosc.frequency.setValueAtTime(bassFreq, t);
+        const bg = audioCtx.createGain();
+        bg.gain.setValueAtTime(0, t);
+        bg.gain.linearRampToValueAtTime(0.7, t + 0.02);
+        bg.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+        bosc.connect(bg).connect(filter);
+        bosc.start(t); bosc.stop(t + 1.2);
+      }
+      musicStep++;
+    };
+    tick();
+    musicTimer = setInterval(tick, 450);
+  }
+  function stopMusic() {
+    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+    if (musicNodes) {
+      try { musicNodes.masterGain.disconnect(); musicNodes.filter.disconnect(); } catch (e) {}
+      musicNodes = null;
+    }
+  }
+  function toggleMusic() {
+    musicEnabled = !musicEnabled;
+    if (musicEnabled) startMusic(); else stopMusic();
+    try { localStorage.setItem('pvb_music', musicEnabled ? '1' : '0'); } catch (e) {}
+  }
+  try { musicEnabled = localStorage.getItem('pvb_music') !== '0'; } catch (e) {}
 
   // --- RARETES ---
   const RARITIES = {
@@ -3113,6 +3190,7 @@
   });
   const initOnce = () => {
     initAudio();
+    if (musicEnabled) startMusic();
     document.removeEventListener('click', initOnce);
     document.removeEventListener('keydown', initOnce);
     document.removeEventListener('touchstart', initOnce);
@@ -3400,11 +3478,20 @@
 
   const savedAudio = localStorage.getItem(AUDIO_KEY);
   if (savedAudio === 'off') audioEnabled = false;
-  $('audio-btn').textContent = audioEnabled ? '🔊' : '🔇';
+  function refreshAudioBtn() {
+    const icon = !audioEnabled ? '🔇' : (musicEnabled ? '🔊' : '🔉');
+    $('audio-btn').textContent = icon;
+    $('audio-btn').title = !audioEnabled ? 'Muet' : (musicEnabled ? 'SFX + Musique' : 'SFX seulement (clic droit pour musique)');
+  }
+  refreshAudioBtn();
+  // Clic : cycle SFX+Musique / SFX seulement / Muet
   $('audio-btn').onclick = () => {
-    audioEnabled = !audioEnabled;
+    if (!audioEnabled) { audioEnabled = true; musicEnabled = true; if (musicEnabled) startMusic(); }
+    else if (musicEnabled) { musicEnabled = false; stopMusic(); }
+    else { audioEnabled = false; musicEnabled = false; }
     localStorage.setItem(AUDIO_KEY, audioEnabled ? 'on' : 'off');
-    $('audio-btn').textContent = audioEnabled ? '🔊' : '🔇';
+    try { localStorage.setItem('pvb_music', musicEnabled ? '1' : '0'); } catch (e) {}
+    refreshAudioBtn();
     if (audioEnabled) sfx('click');
   };
   $('tut-skip').onclick = () => finishTutorial();

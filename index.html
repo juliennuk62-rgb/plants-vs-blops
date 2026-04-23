@@ -154,26 +154,50 @@
       background: rgba(0,0,0,0.75);
       display: flex; align-items: center; justify-content: center;
       z-index: 100;
-      animation: modalFadeIn 0.18s ease-out;
+      animation: modalFadeIn var(--t-base) var(--e-soft);
     }
+    .modal.closing { animation: modalFadeOut var(--t-fast) var(--e-soft) forwards; pointer-events: none; }
+    .modal.closing .modal-content { animation: modalPopOut var(--t-fast) var(--e-soft) forwards; }
     @keyframes modalFadeIn {
       from { opacity: 0; }
       to   { opacity: 1; }
     }
+    @keyframes modalFadeOut {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
     .modal.hidden { display: none; }
     .modal-content {
-      background: #1e1e2e; padding: 24px; border-radius: 12px;
+      position: relative;
+      background: var(--bg-0, #1e1e2e); padding: var(--sp-5, 24px); border-radius: var(--rad-lg, 12px);
       max-width: 820px; max-height: 88vh; overflow-y: auto;
-      border: 2px solid #4488cc;
+      border: 2px solid var(--accent, #4488cc);
       width: 92%;
-      animation: modalPop 0.2s ease-out;
+      animation: modalPop var(--t-base) var(--e-pop);
+      box-shadow: var(--shadow-lg);
     }
     @keyframes modalPop {
       from { transform: scale(0.92); opacity: 0; }
       to   { transform: scale(1); opacity: 1; }
     }
-    .modal-title { font-size: 22px; margin-bottom: 16px; text-align: center; }
+    @keyframes modalPopOut {
+      from { transform: scale(1); opacity: 1; }
+      to   { transform: scale(0.94); opacity: 0; }
+    }
+    .modal-title { font-size: var(--fs-xl, 22px); margin-bottom: var(--sp-4, 16px); text-align: center; padding-right: 40px; }
     .modal-close { margin-top: 20px; text-align: center; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    /* Bouton × absolue top-right de chaque modale (injecté auto en JS) */
+    .modal-x {
+      position: absolute; top: 10px; right: 10px;
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.08); color: var(--fg-pri, #fff);
+      cursor: pointer; border: none; font-size: 20px; font-weight: 700;
+      transition: background var(--t-fast) var(--e-soft), transform var(--t-fast) var(--e-pop);
+      z-index: 10;
+    }
+    .modal-x:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+    .modal-x:active { transform: scale(0.92); }
 
     h3 { margin: 18px 0 8px 0; font-size: 15px; color: #66ccff; border-bottom: 1px solid #333; padding-bottom: 4px; }
     .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -4348,6 +4372,30 @@
   document.addEventListener('touchstart', initOnce);
 
   const btnClick = (id, fn) => { $(id).onclick = () => { sfx('click'); fn(); }; };
+
+  // === TIER 2 : Fermeture modale animée + bouton × auto-injecté ===
+  function closeModal(modalEl) {
+    if (!modalEl || modalEl.classList.contains('hidden')) return;
+    modalEl.classList.add('closing');
+    setTimeout(() => {
+      modalEl.classList.remove('closing');
+      modalEl.classList.add('hidden');
+    }, 120);
+  }
+  // Injecte un bouton × top-right dans chaque .modal-content et bind le close
+  document.querySelectorAll('.modal').forEach(modal => {
+    const content = modal.querySelector('.modal-content');
+    if (!content) return;
+    if (content.querySelector('.modal-x')) return;
+    const x = document.createElement('button');
+    x.className = 'modal-x';
+    x.setAttribute('aria-label', 'Fermer');
+    x.textContent = '×';
+    x.onclick = e => { e.stopPropagation(); sfx('click'); closeModal(modal); };
+    content.insertBefore(x, content.firstChild);
+    // Clic sur overlay (hors content) = close
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(modal); });
+  });
   btnClick('rec-btn', shareClip);
   btnClick('fiche-close', () => $('blop-fiche-modal').classList.add('hidden'));
   btnClick('memorial-btn', () => { renderMemorial(); $('memorial-modal').classList.remove('hidden'); });

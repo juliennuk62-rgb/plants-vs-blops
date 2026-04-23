@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0f0d1a" />
   <title>Plants vs Blops - Proto v0.7</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3457,6 +3459,7 @@
         plants: game.plants.map(p => ({
           plantId: p.userData.plantId, mutation: p.userData.mutation,
           laneIdx: p.userData.slot.laneIdx, slotIdx: p.userData.slot.slotIdx,
+          killCount: p.userData.killCount || 0,
         })),
         shop: game.shop.map(s => ({ plantId: s.plantId, mutation: s.mutation, bought: s.bought })),
         shopTimer: game.shopTimer,
@@ -3492,7 +3495,9 @@
       try {
         const d = JSON.parse(raw);
         if (d.v === 4) {
-          d.blops = (d.blops || []).map(r => ({ rarity: typeof r === 'string' ? r : r.rarity, variant: 'none' }));
+          d.blops = (d.blops || []).map(r => typeof r === 'string'
+            ? { rarity: r, variant: 'none', persona: null, blopId: null }
+            : { rarity: r.rarity, variant: r.variant || 'none', persona: r.persona || null, blopId: r.blopId || null });
           d.v = 5;
           return d;
         }
@@ -3546,7 +3551,10 @@
     (data.plants || []).forEach(p => {
       if (!PLANTS[p.plantId]) return;
       const slot = slots.find(s => s.laneIdx === p.laneIdx && s.slotIdx === p.slotIdx);
-      if (slot && !slot.plant) placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
+      if (slot && !slot.plant) {
+        placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
+        if (slot.plant && slot.plant.userData) slot.plant.userData.killCount = p.killCount || 0;
+      }
     });
     game.stats.plantsPlaced = data.stats?.plantsPlaced ?? game.stats.plantsPlaced;
     // Offline earnings
@@ -3789,7 +3797,7 @@
       const saved = localStorage.getItem('pvb_lb_name') || game.lbName || '';
       if ($('leaderboard-name')) $('leaderboard-name').value = saved;
     } catch {}
-    $('leaderboard-modal').classList.remove('hidden');
+    openModal('leaderboard-modal');
     renderLeaderboard(currentLbCat || 'kills');
   }
 
@@ -4111,7 +4119,7 @@
         <div class="shop-icon">${PLANT_ICONS[plantId] || '🌱'}</div>
         <div class="shop-rarity" style="color:${r.color};">${r.label}</div>
         <div class="shop-name">${p.name}${countBadge}</div>
-        ${mut.label ? `<div class="shop-mutation" style="color:${mut.color};">${MUTATION_ICONS[slot.mutation] || '✨'} ${mut.label} ×${mut.damageMult}</div>` : ''}
+        ${mut.label ? `<div class="shop-mutation" style="color:${mut.color};">${MUTATION_ICONS[variant.mutation] || '✨'} ${mut.label} ×${mut.damageMult}</div>` : ''}
         <div class="shop-stats">DMG ${(p.damage * mut.damageMult).toFixed(0)} • ${p.cooldown}s</div>
         <div class="shop-ability">${ABILITY_LABELS[p.ability] || p.ability}</div>
         <div class="price">${fmtNumber(p.price)}$</div>
@@ -4413,7 +4421,7 @@
     if (localStorage.getItem(TUTORIAL_KEY)) return;
     tutStep = 0;
     renderTutorial();
-    $('tutorial-modal').classList.remove('hidden');
+    openModal('tutorial-modal');
   }
   function renderTutorial() {
     const s = TUTORIAL[tutStep];
@@ -4426,7 +4434,7 @@
   }
   function finishTutorial() {
     localStorage.setItem(TUTORIAL_KEY, '1');
-    $('tutorial-modal').classList.add('hidden');
+    closeModal($('tutorial-modal'));
   }
 
   // --- RAYCASTER ---
@@ -4587,6 +4595,13 @@
       modalEl.classList.add('hidden');
     }, 120);
   }
+  // openModal : enlève 'hidden' ET 'closing' (défense contre état bloqué pointer-events:none)
+  function openModal(id) {
+    const m = typeof id === 'string' ? document.getElementById(id) : id;
+    if (!m) return;
+    m.classList.remove('closing');
+    m.classList.remove('hidden');
+  }
   // Injecte un bouton × top-right dans chaque .modal-content et bind le close
   document.querySelectorAll('.modal').forEach(modal => {
     const content = modal.querySelector('.modal-content');
@@ -4602,9 +4617,9 @@
     modal.addEventListener('click', e => { if (e.target === modal) closeModal(modal); });
   });
   btnClick('rec-btn', shareClip);
-  btnClick('fiche-close', () => $('blop-fiche-modal').classList.add('hidden'));
-  btnClick('memorial-btn', () => { renderMemorial(); $('memorial-modal').classList.remove('hidden'); });
-  btnClick('memorial-close', () => $('memorial-modal').classList.add('hidden'));
+  btnClick('fiche-close', () => closeModal($('blop-fiche-modal')));
+  btnClick('memorial-btn', () => { renderMemorial(); openModal('memorial-modal'); });
+  btnClick('memorial-close', () => closeModal($('memorial-modal')));
 
   function renderMemorial() {
     const mem = game.memorial || [];
@@ -4652,20 +4667,20 @@
       body += '</div>';
     }
     $('fiche-body').innerHTML = body;
-    $('blop-fiche-modal').classList.remove('hidden');
+    openModal('blop-fiche-modal');
   }
-  btnClick('shop-btn', () => { renderShop(); $('shop-modal').classList.remove('hidden'); });
-  btnClick('shop-close', () => $('shop-modal').classList.add('hidden'));
-  btnClick('collection-btn', () => { renderCollection(); $('collection-modal').classList.remove('hidden'); });
-  btnClick('collection-close', () => $('collection-modal').classList.add('hidden'));
-  btnClick('mixer-btn', () => { renderMixer(); $('mixer-modal').classList.remove('hidden'); });
-  btnClick('mixer-close', () => $('mixer-modal').classList.add('hidden'));
-  btnClick('profile-btn', () => { renderProfile(); $('profile-modal').classList.remove('hidden'); });
-  btnClick('profile-close', () => $('profile-modal').classList.add('hidden'));
-  btnClick('missions-btn', () => { initMissions(); renderMissions(); $('missions-modal').classList.remove('hidden'); });
-  btnClick('missions-close', () => $('missions-modal').classList.add('hidden'));
+  btnClick('shop-btn', () => { renderShop(); openModal('shop-modal'); });
+  btnClick('shop-close', () => closeModal($('shop-modal')));
+  btnClick('collection-btn', () => { renderCollection(); openModal('collection-modal'); });
+  btnClick('collection-close', () => closeModal($('collection-modal')));
+  btnClick('mixer-btn', () => { renderMixer(); openModal('mixer-modal'); });
+  btnClick('mixer-close', () => closeModal($('mixer-modal')));
+  btnClick('profile-btn', () => { renderProfile(); openModal('profile-modal'); });
+  btnClick('profile-close', () => closeModal($('profile-modal')));
+  btnClick('missions-btn', () => { initMissions(); renderMissions(); openModal('missions-modal'); });
+  btnClick('missions-close', () => closeModal($('missions-modal')));
   btnClick('leaderboard-btn', openLeaderboard);
-  btnClick('leaderboard-close', () => $('leaderboard-modal').classList.add('hidden'));
+  btnClick('leaderboard-close', () => closeModal($('leaderboard-modal')));
   btnClick('leaderboard-submit', submitLeaderboardScore);
   btnClick('referral-copy', () => {
     const link = getMyReferralLink();
@@ -4679,22 +4694,22 @@
   document.querySelectorAll('.lb-tab').forEach(el => {
     el.addEventListener('click', () => renderLeaderboard(el.dataset.cat));
   });
-  btnClick('prestige-btn', () => { renderPrestigeModal(); $('prestige-modal').classList.remove('hidden'); });
-  btnClick('prestige-cancel', () => $('prestige-modal').classList.add('hidden'));
+  btnClick('prestige-btn', () => { renderPrestigeModal(); openModal('prestige-modal'); });
+  btnClick('prestige-cancel', () => closeModal($('prestige-modal')));
   btnClick('prestige-confirm', () => {
     if (!canPrestige()) return;
-    $('prestige-modal').classList.add('hidden');
+    closeModal($('prestige-modal'));
     doPrestige();
   });
-  btnClick('reset-btn', () => $('reset-modal').classList.remove('hidden'));
-  btnClick('reset-cancel', () => $('reset-modal').classList.add('hidden'));
+  btnClick('reset-btn', () => openModal('reset-modal'));
+  btnClick('reset-cancel', () => closeModal($('reset-modal')));
   btnClick('reset-confirm', () => resetGame());
-  btnClick('welcome-close', () => $('welcome-modal').classList.add('hidden'));
+  btnClick('welcome-close', () => closeModal($('welcome-modal')));
   btnClick('help-btn', () => { localStorage.removeItem(TUTORIAL_KEY); showTutorial(); });
 
   // Account modal
-  btnClick('account-btn', () => { renderAccountModal(); $('account-modal').classList.remove('hidden'); });
-  btnClick('account-close', () => $('account-modal').classList.add('hidden'));
+  btnClick('account-btn', () => { renderAccountModal(); openModal('account-modal'); });
+  btnClick('account-close', () => closeModal($('account-modal')));
   $('account-google-btn').onclick = () => linkOrSignInGoogle();
   $('account-signout-btn').onclick = () => signOutCloud();
 
@@ -4715,11 +4730,11 @@
       sel.addEventListener('change', () => setBgmTrack(sel.value));
     }
     if (sel) sel.value = currentBgmId;
-    $('settings-modal').classList.remove('hidden');
+    openModal('settings-modal');
   });
-  btnClick('settings-close', () => $('settings-modal').classList.add('hidden'));
-  btnClick('privacy-btn', () => $('privacy-modal').classList.remove('hidden'));
-  btnClick('privacy-close', () => $('privacy-modal').classList.add('hidden'));
+  btnClick('settings-close', () => closeModal($('settings-modal')));
+  btnClick('privacy-btn', () => openModal('privacy-modal'));
+  btnClick('privacy-close', () => closeModal($('privacy-modal')));
   $('webhook-save').onclick = () => {
     const url = $('webhook-url').value.trim();
     const enabled = $('webhook-enabled').checked;
@@ -5504,7 +5519,7 @@
     if (offlineResult && offlineResult.earned >= 1) {
       $('welcome-time').textContent = fmtDuration(offlineResult.elapsedSec);
       $('welcome-earned').textContent = fmtNumber(offlineResult.earned);
-      $('welcome-modal').classList.remove('hidden');
+      openModal('welcome-modal');
     } else if (!savedData) {
       showTutorial();
     }

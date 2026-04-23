@@ -2553,10 +2553,11 @@
   function buildCampaignMapUI() {
     const overlay = document.createElement('div');
     overlay.id = 'campaign-map';
-    overlay.style.cssText = 'position:fixed;inset:0;display:none;z-index:200;background:linear-gradient(180deg,#8fd8ff 0%,#b6f0a6 65%,#87c4ff 100%);overflow-y:auto;padding:80px 20px 40px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:linear-gradient(180deg,#8fd8ff 0%,#b6f0a6 65%,#87c4ff 100%);overflow-y:auto;padding:80px 20px 40px;';
     document.body.appendChild(overlay);
     const st = document.createElement('style');
     st.textContent = `
+      #campaign-map { display:none; }
       body.tab-campaign #campaign-map { display:block; }
       .camp-world { max-width: 960px; margin: 0 auto 40px; }
       .camp-world-header {

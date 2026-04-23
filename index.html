@@ -3391,17 +3391,35 @@
     sfx('prestige');
     game.prestige++;
     game.cash = STARTING_CASH;
+    // Sauvegarde les plantes placées AVANT rebuild
+    const savedPlants = game.plants.map(p => ({
+      plantId: p.userData.plantId,
+      mutation: p.userData.mutation,
+      laneIdx: p.userData.slot ? p.userData.slot.laneIdx : 0,
+      slotIdx: p.userData.slot ? p.userData.slot.slotIdx : 0,
+      killCount: p.userData.killCount || 0,
+    }));
     game.inventory = [];
-    // Remove plants + brainrots
+    // Remove plants (meshes) + brainrots
     game.plants.forEach(p => scene.remove(p));
     game.plants = [];
     game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
     game.brainrots = [];
     cancelPlacement(); cancelMoveMode();
-    // Rebuild terrain with new lane count
+    // Rebuild terrain avec +1 lane
     rebuildTerrain();
+    // Replace plants sur les nouveaux slots (plantes conservées au prestige)
+    let restored = 0;
+    savedPlants.forEach(p => {
+      const slot = slots.find(s => s.laneIdx === p.laneIdx && s.slotIdx === p.slotIdx);
+      if (slot && !slot.plant && PLANTS[p.plantId]) {
+        placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
+        if (slot.plant && slot.plant.userData) slot.plant.userData.killCount = p.killCount;
+        restored++;
+      }
+    });
     rollShop();
-    showToast(`✨ PRESTIGE ${game.prestige} — +1 lane !`, 4000);
+    showToast(`✨ PRESTIGE ${game.prestige} — +1 lane, ${restored} plante(s) conservée(s) !`, 4000);
     checkAchievements();
     updatePrestigeButtonVisibility();
     updateHud();

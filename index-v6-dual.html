@@ -1941,49 +1941,139 @@
     const lv = CAMPAIGN_LEVELS.find(l => l.id === levelId);
     const data = getLevelData(levelId);
     if (!lv || !data) return false;
-    // Setup mode
+
+    // Snapshot endless state (pour restaurer après)
+    game._endlessSnapshot = {
+      cash: game.cash,
+      inventory: game.inventory.slice(),
+      plants: game.plants.map(p => ({
+        plantId: p.userData.plantId,
+        mutation: p.userData.mutation,
+        laneIdx: p.userData.slot.laneIdx,
+        slotIdx: p.userData.slot.slotIdx,
+        killCount: p.userData.killCount || 0,
+      })),
+    };
+
+    // Setup campaign
     game.mode = 'campaign';
     game.campaignActive = {
-      levelId,
-      level: lv,
-      data,
-      baseHp: 3,          // 3 Blops max avant défaite
-      baseHpMax: 3,
+      levelId, level: lv, data,
+      baseHp: 3, baseHpMax: 3,
       startedAt: performance.now(),
-      stats: { blopsKilled: 0, cashSpent: 0, plantsPlaced: 0 },
-      result: null,       // 'win' | 'lose' | null
+      stats: { blopsKilled: 0, cashSpent: 0, plantsPlaced: 0, baseReached: 0 },
+      result: null,
     };
-    // Wipe scène actuelle (endless)
+
+    // Wipe scène
     game.plants.forEach(p => scene.remove(p));
     game.plants = [];
     game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
     game.brainrots = [];
     game.bullets.forEach(b => scene.remove(b));
     game.bullets = [];
-    // Override lanes/cash pour ce niveau
-    game._prevCash = game.cash;
+    game.selectedSeedIdx = null;
+
+    // Override cash + inventaire (50 copies de chaque plante du pool = pool quasi-infini pour V1)
     game.cash = data.startCash;
-    // Crée le scheduler
+    game.inventory = [];
+    for (const pid of data.plantPool) {
+      for (let i = 0; i < 50; i++) {
+        game.inventory.push({ plantId: pid, mutation: 'none' });
+      }
+    }
+
+    // Rebuild terrain avec les lanes du niveau
+    rebuildTerrain();
+
+    // Scheduler
     game.campaignActive.scheduler = new WaveScheduler(data, {
-      onWaveStart: (i, w) => console.log('[CAMP] wave', i + 1, 'start'),
-      onWaveCleared: (i) => console.log('[CAMP] wave', i + 1, 'cleared'),
-      onAllCleared: () => console.log('[CAMP] all waves cleared'),
+      onWaveStart: (i, w) => showHint('🌀 Vague ' + (i + 1) + '/' + data.waves.length, 2500),
+      onWaveCleared: (i) => { if (i < data.waves.length - 1) showHint('✅ Vague ' + (i + 1) + ' nettoyée !', 2000); },
+      onAllCleared: () => {/* géré dans campaignTick */},
     });
+
+    // UI
+    buildCampaignHUD();
+    renderInventory();
+    updateHud();
     return true;
   }
 
   function endCampaignLevel(result) {
     if (!game.campaignActive) return;
-    game.campaignActive.result = result;
+    game.campaignActive.result = result || 'cancel';
     game.mode = 'endless';
-    // Restaure cash endless (temporaire : Point 6 gérera les rewards)
-    if (game._prevCash !== undefined) game.cash = game._prevCash;
-    game.campaignActive = null;
-    // Nettoie les Blops/bullets en cours
+
+    // Nettoie scène campagne
+    game.plants.forEach(p => scene.remove(p));
+    game.plants = [];
     game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
     game.brainrots = [];
     game.bullets.forEach(b => scene.remove(b));
     game.bullets = [];
+    game.selectedSeedIdx = null;
+
+    // Restaure endless state
+    if (game._endlessSnapshot) {
+      game.cash = game._endlessSnapshot.cash;
+      game.inventory = game._endlessSnapshot.inventory;
+      rebuildTerrain();
+      game._endlessSnapshot.plants.forEach(p => {
+        const slot = slots.find(s => s.laneIdx === p.laneIdx && s.slotIdx === p.slotIdx);
+        if (slot && !slot.plant && PLANTS[p.plantId]) {
+          placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
+          if (slot.plant) slot.plant.userData.killCount = p.killCount || 0;
+        }
+      });
+      game._endlessSnapshot = null;
+    }
+
+    game.campaignActive = null;
+    removeCampaignHUD();
+    renderInventory();
+    updateHud();
+  }
+
+  // === Point 5 : HUD overlay pendant un niveau campagne ===
+  function buildCampaignHUD() {
+    removeCampaignHUD();
+    const hud = document.createElement('div');
+    hud.id = 'campaign-hud';
+    hud.style.cssText = 'position:fixed;top:96px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.82);padding:10px 18px;border-radius:12px;z-index:400;color:#fff;font-family:var(--font-display,sans-serif);display:flex;gap:14px;align-items:center;border:2px solid #ffcc33;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+    hud.innerHTML = `
+      <div style="font-size:14px;"><span id="camp-hud-title" style="color:#ffcc33;font-weight:700;"></span></div>
+      <div style="width:1px;height:24px;background:#444;"></div>
+      <div style="font-size:13px;">🌀 <span id="camp-hud-wave">-</span></div>
+      <div style="width:1px;height:24px;background:#444;"></div>
+      <div style="font-size:13px;">❤️ <span id="camp-hud-hp">3/3</span></div>
+      <div style="width:1px;height:24px;background:#444;"></div>
+      <button id="camp-abandon-btn" style="background:#cc3333;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;">❌ Abandonner</button>
+    `;
+    document.body.appendChild(hud);
+    document.getElementById('camp-abandon-btn').onclick = () => {
+      if (!confirm('Abandonner le niveau et retourner à la carte ?')) return;
+      sfx && sfx('click');
+      endCampaignLevel('cancel');
+      setActiveTab('campaign');
+    };
+    updateCampaignHUD();
+  }
+  function removeCampaignHUD() {
+    const h = document.getElementById('campaign-hud');
+    if (h) h.remove();
+  }
+  function updateCampaignHUD() {
+    if (!game.campaignActive) return;
+    const ca = game.campaignActive;
+    const title = document.getElementById('camp-hud-title');
+    const wave = document.getElementById('camp-hud-wave');
+    const hp = document.getElementById('camp-hud-hp');
+    if (!title) return;
+    title.textContent = '📖 ' + ca.level.world + '-' + ca.level.idx + ' ' + ca.level.name;
+    const w = ca.scheduler.currentWaveInfo();
+    wave.textContent = w.num + '/' + w.total;
+    hp.textContent = ca.baseHp + '/' + ca.baseHpMax;
   }
 
   function campaignTick(dt) {
@@ -1991,18 +2081,29 @@
     const ca = game.campaignActive;
     if (ca.result) return; // déjà terminé
     ca.scheduler.tick(dt);
-    // Check victoire : all waves done + no blops alive
+    updateCampaignHUD();
+    // Check victoire
     if (ca.scheduler.state === 'done' && game.brainrots.length === 0) {
       ca.result = 'win';
-      if (typeof onCampaignVictory === 'function') onCampaignVictory();
+      showCampaignResult(true);
     }
-    // Check défaite : un Blop a atteint la base = baseHp -= 1
-    // (l'instance update() gère déjà les Blops qui dépassent la base et les vire)
-    // TODO Point 6 : décrémenter baseHp quand Blop dépasse
+    // Check défaite (baseHp <= 0)
     if (ca.baseHp <= 0) {
       ca.result = 'lose';
-      if (typeof onCampaignDefeat === 'function') onCampaignDefeat();
+      showCampaignResult(false);
     }
+  }
+
+  // Point 5 : résultat (placeholder, Point 6 fera le vrai écran)
+  function showCampaignResult(win) {
+    const ca = game.campaignActive;
+    if (!ca) return;
+    const msg = win ? '🏆 VICTOIRE ! ' + ca.level.name : '💀 Défaite... Ta base est tombée.';
+    showToast(msg, 4000);
+    setTimeout(() => {
+      endCampaignLevel(win ? 'win' : 'lose');
+      setActiveTab('campaign');
+    }, 2500);
   }
 
   // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
@@ -2757,7 +2858,11 @@
   const GARDEN_SPACING = 10;       // écart horizontal entre les 2 jardins
   // Règle : G1 frozen au nb de lanes qu'il avait à P(DUAL_GARDEN_PRESTIGE - 1),
   // puis G2 est créé à P(DUAL) avec BASE_LANE_COUNT lanes, et +1 lane à G2 par prestige.
-  function hasDualGarden() { return game.prestige >= DUAL_GARDEN_PRESTIGE; }
+  function hasDualGarden() {
+    // Pas de dual garden en mode campagne (chaque niveau a son propre nb de lanes)
+    if (game && game.mode === 'campaign') return false;
+    return game.prestige >= DUAL_GARDEN_PRESTIGE;
+  }
   // Lanes par garden : tableau [lanesG1, lanesG2]
   function lanesPerGardenArr() {
     if (!hasDualGarden()) return [BASE_LANE_COUNT + game.prestige];
@@ -2961,7 +3066,14 @@
       document.getElementById('camp-start-btn').onclick = () => {
         sfx && sfx('click');
         closeCampaignLevelModal();
-        // Point 5 : ici on lancera le niveau.
+        // Point 5 : lance le niveau et bascule sur l'onglet jardin
+        const ok = startCampaignLevel(lv.id);
+        if (ok) {
+          setActiveTab('game');
+          showHint('📖 ' + lv.name + ' — bonne chance !', 3000);
+        } else {
+          showHint('⚠️ Niveau indisponible', 2500);
+        }
       };
     }
     // Le modal est déjà visible (pas de classe 'hidden') parce qu'on vient de le créer.
@@ -3612,6 +3724,10 @@
     return 6 + (game.prestige - DUAL_GARDEN_PRESTIGE);
   }
   function currentLaneCount() {
+    // En mode campagne, on utilise les lanes définies par le niveau
+    if (game && game.mode === 'campaign' && game.campaignActive) {
+      return game.campaignActive.data.lanes;
+    }
     const arr = lanesPerGardenArr();
     return arr.reduce((s, n) => s + n, 0);
   }
@@ -7252,6 +7368,12 @@
         removeHpBar(e);
         scene.remove(e);
         game.brainrots.splice(i, 1);
+        // En campagne : le Blop atteint la base = perd 1 HP
+        if (game.mode === 'campaign' && game.campaignActive) {
+          game.campaignActive.baseHp = Math.max(0, game.campaignActive.baseHp - 1);
+          game.campaignActive.stats.baseReached++;
+          updateCampaignHUD();
+        }
       }
     }
 

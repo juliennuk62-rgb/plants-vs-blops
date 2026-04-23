@@ -2411,10 +2411,9 @@
     document.body.classList.toggle('tab-game', tab === 'game');
     document.body.classList.toggle('tab-house', tab === 'house');
     document.body.classList.toggle('tab-campaign', tab === 'campaign');
-    // Safeguard : si on quitte Aventure, ferme le modal briefing de niveau (au cas où il serait resté ouvert)
-    if (tab !== 'campaign') {
-      const campModal = document.getElementById('camp-level-modal');
-      if (campModal) { campModal.classList.remove('closing'); campModal.classList.add('hidden'); }
+    // Safeguard : si on quitte Aventure, détruit le modal briefing de niveau
+    if (tab !== 'campaign' && typeof closeCampaignLevelModal === 'function') {
+      closeCampaignLevelModal();
     }
     if (typeof updateTabSwitcherUI === 'function') updateTabSwitcherUI();
   }
@@ -2720,19 +2719,23 @@
   }
 
   // Point 3 : modal de briefing d'un niveau avant combat
+  // Pattern "créé à la volée + détruit à la fermeture" pour éliminer tout bug de persistence.
+  function closeCampaignLevelModal() {
+    const existing = document.getElementById('camp-level-modal');
+    if (existing) existing.remove();
+  }
   function showCampaignLevelDetail(lv) {
     const data = getLevelData(lv.id);
-    let modal = document.getElementById('camp-level-modal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'camp-level-modal';
-      modal.className = 'modal hidden';
-      modal.innerHTML = '<div class="modal-content modal-content--md" id="camp-level-body" style="position:relative;"></div>';
-      document.body.appendChild(modal);
-      modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
-    }
+    // Retire tout ancien modal (évite la persistance accidentelle)
+    closeCampaignLevelModal();
+    const modal = document.createElement('div');
+    modal.id = 'camp-level-modal';
+    modal.className = 'modal';
+    modal.innerHTML = '<div class="modal-content modal-content--md" id="camp-level-body" style="position:relative;"></div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeCampaignLevelModal(); });
     const body = document.getElementById('camp-level-body');
-    let html = '<button class="modal-x" aria-label="Fermer" onclick="closeModal(document.getElementById(\'camp-level-modal\'))">×</button>';
+    let html = '<button class="modal-x" aria-label="Fermer" onclick="closeCampaignLevelModal()">×</button>';
     html += '<div class="modal-title" style="color:#ffdd00;">' + (lv.boss ? '👑 ' : '') + 'Niveau ' + lv.world + '-' + lv.idx + '</div>';
     html += '<div style="text-align:center;font-family:var(--font-display,sans-serif);font-size:20px;font-weight:700;color:#fff;margin-bottom:8px;">' + lv.name + '</div>';
     html += '<div style="text-align:center;color:#aaa;font-style:italic;margin-bottom:14px;padding:0 10px;">' + lv.desc + '</div>';
@@ -2766,26 +2769,24 @@
         html += '<div style="font-style:italic;color:#ccc;text-align:center;padding:10px;border-left:3px solid #66ccff;background:rgba(102,204,255,0.05);margin-bottom:12px;">"' + data.intro + '"</div>';
       }
       html += '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">';
-      html += '<div class="btn" onclick="closeModal(document.getElementById(\'camp-level-modal\'))" style="padding:10px 20px;">Annuler</div>';
+      html += '<div class="btn" onclick="closeCampaignLevelModal()" style="padding:10px 20px;">Annuler</div>';
       html += '<div class="btn gold" id="camp-start-btn" style="padding:10px 24px;font-size:15px;">▶ Commencer</div>';
       html += '</div>';
     } else {
       html += '<div style="background:#2a1e1e;padding:16px;border-radius:8px;text-align:center;color:#ff9999;font-size:13px;">';
       html += '⚠️ Niveau en cours de création. Revenez plus tard !';
       html += '</div>';
-      html += '<div class="modal-close"><div class="btn" onclick="closeModal(document.getElementById(\'camp-level-modal\'))">Fermer</div></div>';
+      html += '<div class="modal-close"><div class="btn" onclick="closeCampaignLevelModal()">Fermer</div></div>';
     }
     body.innerHTML = html;
     if (data) {
       document.getElementById('camp-start-btn').onclick = () => {
         sfx && sfx('click');
-        // Hard close (pas d'animation, pas de hint qui persiste)
-        modal.classList.remove('closing');
-        modal.classList.add('hidden');
-        // Point 5 : ici on lancera le niveau. Pour l'instant rien.
+        closeCampaignLevelModal();
+        // Point 5 : ici on lancera le niveau.
       };
     }
-    openModal('camp-level-modal');
+    // Le modal est déjà visible (pas de classe 'hidden') parce qu'on vient de le créer.
   }
   // Raccourci : Alt+Shift+A active le mode admin et reload
   window.addEventListener('keydown', (e) => {

@@ -2180,38 +2180,47 @@
   function generateHouseThumbnails() {
     try {
       const tCanvas = document.createElement('canvas');
-      tCanvas.width = 96; tCanvas.height = 96;
+      tCanvas.width = 128; tCanvas.height = 128;
       const tRenderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
       tRenderer.setClearColor(0x000000, 0);
-      tRenderer.setSize(96, 96, false);
+      tRenderer.setSize(128, 128, false);
       const tScene = new THREE.Scene();
       tScene.add(new THREE.AmbientLight(0xffffff, 0.9));
-      const tDir = new THREE.DirectionalLight(0xffffff, 0.7);
+      const tDir = new THREE.DirectionalLight(0xffffff, 0.85);
       tDir.position.set(3, 5, 3); tScene.add(tDir);
-      const tCam = new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 30);
-      tCam.position.set(4, 4.5, 4); tCam.lookAt(0, 1, 0);
+      const tFill = new THREE.DirectionalLight(0xaaccff, 0.3);
+      tFill.position.set(-3, 2, -3); tScene.add(tFill);
+      const tCam = new THREE.OrthographicCamera(-3.5, 3.5, 3.5, -3.5, 0.1, 30);
+      tCam.position.set(6, 5, 6); tCam.lookAt(0, 1, 0);
+      let ok = 0, fail = 0;
       for (const item of BUILD_CATALOG) {
         try {
           const m = houseGetPlacedMesh(item);
-          // Normaliser taille : bounding box → fit dans -2.5 à +2.5
-          const box = new THREE.Box3().setFromObject(m);
+          // Reset scale + position + rotation pour mesurer la taille NATURELLE
+          m.scale.setScalar(1);
+          m.position.set(0, 0, 0);
+          m.rotation.set(0, 0, 0);
+          let box = new THREE.Box3().setFromObject(m);
           const size = new THREE.Vector3(); box.getSize(size);
           const maxSize = Math.max(size.x, size.y, size.z);
-          if (maxSize > 0) {
-            const fitScale = 3.5 / maxSize;
-            m.scale.multiplyScalar(fitScale);
+          if (maxSize > 0 && isFinite(maxSize)) {
+            const fitScale = 4.5 / maxSize;
+            m.scale.setScalar(fitScale);
+            // RECOMPUTE bbox APRÈS scale (crucial pour centrage correct)
+            box = new THREE.Box3().setFromObject(m);
+            const center = new THREE.Vector3(); box.getCenter(center);
+            // Centre en X/Z, pose au sol en Y
+            m.position.set(-center.x, -box.min.y, -center.z);
           }
-          // Centrer
-          const center = new THREE.Vector3(); box.getCenter(center);
-          m.position.sub(center.multiplyScalar(m.scale.x));
           tScene.add(m);
           tRenderer.render(tScene, tCam);
           HOUSE_THUMBS[item.id] = tCanvas.toDataURL('image/png');
           tScene.remove(m);
-        } catch (e) { console.warn('thumb fail', item.id, e); }
+          ok++;
+        } catch (e) { fail++; console.warn('thumb fail', item.id, e.message || e); }
       }
+      console.log('[HOUSE] thumbnails:', ok, 'ok /', fail, 'fail');
       tRenderer.dispose();
-      // Re-render shop si ouvert
       if (typeof renderBuildShop === 'function' && document.getElementById('build-shop-modal') && !document.getElementById('build-shop-modal').classList.contains('hidden')) {
         renderBuildShop();
       }

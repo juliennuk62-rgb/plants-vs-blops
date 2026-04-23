@@ -1239,7 +1239,7 @@
   const ABILITY_LABELS = {
     'basic': 'Simple', 'rapid': 'Rapide', 'splash': 'Splash', 'slow': 'Ralentit',
     'burst': 'Burst ×3', 'pierce': 'Perce', 'cross-lane': 'Toutes lanes', 'splash-pierce': 'Splash + Perce',
-    'coin-aura': 'Cash passif', 'dot-poison': 'Poison (DoT)', 'buff-aura': 'Boost voisins',
+    'coin-aura': 'Cash passif', 'dot-poison': 'Poison (DoT)', 'buff-aura': 'Aura dégâts voisins',
   };
 
   const PLANT_ICONS = {
@@ -5943,6 +5943,41 @@
       group.add(ring);
       group.userData.mutationRing = ring;
     }
+    // Aura visuelle pour les plantes buff-aura (Lotus, Figue) : disque au sol + anneau pulsant
+    if (p.ability === 'buff-aura') {
+      const auraR = p.auraRadius || 2.5;
+      const auraColor = (seed.plantId === 'lotus') ? 0xff55aa : 0xffaa66;
+      const auraGroup = new THREE.Group();
+      // Disque plein translucide
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(auraR, 48),
+        new THREE.MeshBasicMaterial({ color: auraColor, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide })
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.02;
+      auraGroup.add(disc);
+      // Anneau extérieur net
+      const outline = new THREE.Mesh(
+        new THREE.RingGeometry(auraR - 0.08, auraR, 64),
+        new THREE.MeshBasicMaterial({ color: auraColor, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide })
+      );
+      outline.rotation.x = -Math.PI / 2;
+      outline.position.y = 0.04;
+      auraGroup.add(outline);
+      // Anneau intérieur pulsant (animé dans update)
+      const pulse = new THREE.Mesh(
+        new THREE.RingGeometry(auraR - 0.2, auraR - 0.05, 64),
+        new THREE.MeshBasicMaterial({ color: auraColor, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide })
+      );
+      pulse.rotation.x = -Math.PI / 2;
+      pulse.position.y = 0.06;
+      auraGroup.add(pulse);
+      group.add(auraGroup);
+      group.userData.auraGroup = auraGroup;
+      group.userData.auraPulse = pulse;
+      group.userData.auraRadius = auraR;
+      group.userData.auraColor = auraColor;
+    }
     group.position.set(slot.x, 0.2, slot.z);
     group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);
@@ -5962,6 +5997,26 @@
     const idx = game.plants.indexOf(plantGroup);
     if (idx === -1) return;
     game.plants.splice(idx, 1);
+    // Dispose aura GPU resources si présente
+    if (plantGroup.userData.auraGroup) {
+      plantGroup.userData.auraGroup.traverse(o => {
+        if (o.geometry) try { o.geometry.dispose(); } catch(e) {}
+        if (o.material) try { o.material.dispose(); } catch(e) {}
+      });
+    }
+    // Si c'est une buff-aura, nettoie les anneaux "boosté" des voisins
+    // (la prochaine frame les re-créera si d'autres auras sont encore là)
+    if (PLANTS[plantGroup.userData.plantId].ability === 'buff-aura') {
+      for (const other of game.plants) {
+        if (other.userData.boostedRing) {
+          other.remove(other.userData.boostedRing);
+          try { other.userData.boostedRing.geometry.dispose(); } catch(e) {}
+          try { other.userData.boostedRing.material.dispose(); } catch(e) {}
+          other.userData.boostedRing = null;
+          other.userData._buffedThisFrame = 0;
+        }
+      }
+    }
     scene.remove(plantGroup);
     if (plantGroup.userData.slot) plantGroup.userData.slot.plant = null;
     game.inventory.push({
@@ -7059,7 +7114,7 @@
         <div class="shop-name">${p.name}${countBadge}</div>
         ${mut.label ? `<div class="shop-mutation" style="color:${mut.color};">${MUTATION_ICONS[variant.mutation] || '✨'} ${mut.label} ×${mut.damageMult}</div>` : ''}
         <div class="shop-stats">DMG ${(p.damage * mut.damageMult).toFixed(0)} • ${p.cooldown}s</div>
-        <div class="shop-ability">${ABILITY_LABELS[p.ability] || p.ability}</div>
+        <div class="shop-ability">${p.ability === 'buff-aura' ? `Aura +${Math.round(((p.buffMult||1.25)-1)*100)}% voisins (${p.auraRadius||2.5}m)` : (ABILITY_LABELS[p.ability] || p.ability)}</div>
         <div class="price">${fmtNumber(p.price)}$</div>
         ${available
           ? `<button class="buy-btn" ${canBuy ? '' : 'disabled'}>Acheter</button>`
@@ -7432,6 +7487,11 @@
     rows.push(['Damage total', dmg.toFixed(1)]);
     rows.push(['Cooldown', plant.cooldown + 's']);
     rows.push(['DPS', dps.toFixed(2)]);
+    if (plant.ability === 'buff-aura') {
+      const pctGain = Math.round(((plant.buffMult || 1.25) - 1) * 100);
+      rows.push(['Aura radius', (plant.auraRadius || 2.5) + 'm']);
+      rows.push(['Bonus voisins', `+${pctGain}% dégâts (cercle rose au sol)`]);
+    }
     if (plant.splashRadius) rows.push(['Splash radius', plant.splashRadius + 'm']);
     if (plant.slowFactor) rows.push(['Slow', `×${plant.slowFactor} / ${plant.slowDuration}s`]);
     if (plant.burstCount) rows.push(['Burst count', plant.burstCount.toString()]);
@@ -8112,6 +8172,25 @@
       const bob = Math.sin((now + p.userData.bobPhase) * 2.5) * 0.05;
       p.position.y = 0.2 + bob;
       if (p.userData.mutationRing) p.userData.mutationRing.rotation.z = now * 2;
+      // Aura buff-aura : pulse anneau + indicateur sur voisins buffés
+      if (p.userData.auraGroup) {
+        const auraR = p.userData.auraRadius || 2.5;
+        const t = now * 1.4;
+        const phase = (Math.sin(t) + 1) * 0.5; // 0..1
+        if (p.userData.auraPulse) {
+          const scl = 0.6 + phase * 0.8; // pulse 0.6 → 1.4 du rayon interne
+          p.userData.auraPulse.scale.set(scl, scl, 1);
+          p.userData.auraPulse.material.opacity = 0.55 - phase * 0.4;
+        }
+        // Marque les voisins comme buffed pour cette frame
+        for (const other of game.plants) {
+          if (other === p) continue;
+          const od = other.userData;
+          if (PLANTS[od.plantId].ability === 'buff-aura') continue;
+          const dist = p.position.distanceTo(other.position);
+          if (dist <= auraR) od._buffedThisFrame = (od._buffedThisFrame || 0) | 1;
+        }
+      }
       if (p.userData.headRef) {
         const flashT = p.userData.flashUntil - now;
         if (flashT > 0) {
@@ -8131,6 +8210,32 @@
       if (now - p.userData.lastShot < plant.cooldown) continue;
       const target = pickTarget(p);
       if (target) fireFrom(p, target, now);
+    }
+    // Toggle l'indicateur "boosté" sur chaque plante selon l'état de cette frame
+    for (const p of game.plants) {
+      const buffed = !!p.userData._buffedThisFrame;
+      if (buffed && !p.userData.boostedRing) {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.55, 0.7, 32),
+          new THREE.MeshBasicMaterial({ color: 0xff66bb, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.08;
+        p.add(ring);
+        p.userData.boostedRing = ring;
+      } else if (!buffed && p.userData.boostedRing) {
+        p.remove(p.userData.boostedRing);
+        p.userData.boostedRing.geometry.dispose();
+        p.userData.boostedRing.material.dispose();
+        p.userData.boostedRing = null;
+      }
+      if (p.userData.boostedRing) {
+        // Petite rotation pour le rendre vivant
+        p.userData.boostedRing.rotation.z = now * 2.5;
+        const pulse = 1 + Math.sin(now * 5 + p.userData.bobPhase) * 0.08;
+        p.userData.boostedRing.scale.set(pulse, pulse, 1);
+      }
+      p.userData._buffedThisFrame = 0; // reset pour la prochaine frame
     }
     for (let i = game.bullets.length - 1; i >= 0; i--) updateBullet(game.bullets[i], dt, now, i);
     updateParticles(dt);

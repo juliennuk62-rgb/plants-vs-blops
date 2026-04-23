@@ -606,6 +606,15 @@
           <div class="btn" id="account-signout-btn" style="display:inline-block;">Se déconnecter</div>
         </div>
         <div id="account-status-msg" style="margin-top:10px; font-size:12px;"></div>
+        <h3 style="margin-top:18px;color:#ffcc33;">🎁 Parrainage</h3>
+        <div style="font-size:12px;color:#aaa;margin-bottom:8px;line-height:1.5;">
+          Partage ton lien — chaque filleul reçoit <strong style="color:#66ff88;">25 000$</strong> à son arrivée, et tu gagnes <strong style="color:#ffcc33;">100 000$</strong> dès qu'il atteint son premier prestige.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="referral-link" readonly style="flex:1;padding:6px;background:#111;color:#fff;border:1px solid #444;border-radius:6px;font-family:monospace;font-size:11px;" />
+          <div class="btn" id="referral-copy">📋 Copier</div>
+        </div>
+        <div id="referral-status" style="font-size:12px;color:#888;margin-top:6px;"></div>
       </div>
       <div class="modal-close"><div class="btn" id="account-close">Fermer</div></div>
     </div>
@@ -2464,6 +2473,8 @@
     updateHud();
     renderInventory();
     saveGame();
+    // Sprint 3C : notifier le parrain si c'est mon 1er prestige
+    if (game.prestige === 1) notifyReferrerOnPrestige();
   }
 
   // --- ACHIEVEMENTS ---
@@ -2638,6 +2649,12 @@
     if (user && !initialCloudCheckDone) {
       initialCloudCheckDone = true;
       checkCloudSaveOnFirstLogin();
+    }
+    if (user) {
+      // Sprint 3C : check pour bonus parrainage (en tant que parrain)
+      checkReferralRewardsForMe();
+      // Sprint 3C : si j'ai été parrainé et que je suis déjà prestige, notifier
+      notifyReferrerOnPrestige();
     }
     if ($('account-modal') && !$('account-modal').classList.contains('hidden')) {
       renderAccountModal();
@@ -2820,6 +2837,86 @@
     renderLeaderboard(currentLbCat || 'kills');
   }
 
+  // --- PARRAINAGE (Sprint 3C) ---
+  // Flux : nouveau joueur clique un lien ?ref=UID → on mémorise en localStorage
+  // Quand il atteint le 1er prestige, Firebase déclenche le bonus pour lui ET son parrain.
+  const REFERRAL_BONUS_REFEREE = 25000;    // $ pour le filleul qui arrive
+  const REFERRAL_BONUS_REFERRER = 100000;  // $ pour le parrain quand filleul prestige
+  const REF_KEY = 'pvb_ref_by';
+  const REF_CLAIMED_KEY = 'pvb_ref_claimed';
+
+  function captureReferralFromUrl() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref');
+      if (ref && /^[a-zA-Z0-9_-]{6,40}$/.test(ref)) {
+        if (!localStorage.getItem(REF_KEY)) {
+          localStorage.setItem(REF_KEY, ref);
+          // Bonus immédiat pour le filleul
+          setTimeout(() => {
+            if (game && typeof addCash === 'function') {
+              addCash(REFERRAL_BONUS_REFEREE);
+              showHint('🎁 +' + fmtNumber(REFERRAL_BONUS_REFEREE) + '$ — Bonus parrainage !', 3500);
+              sfx('reward');
+              saveGame();
+            }
+          }, 1500);
+        }
+      }
+    } catch (err) { console.warn('ref capture failed:', err); }
+  }
+
+  async function notifyReferrerOnPrestige() {
+    try {
+      if (localStorage.getItem(REF_CLAIMED_KEY)) return;
+      const referrer = localStorage.getItem(REF_KEY);
+      if (!referrer || !cloudReady || !firebaseDb || !cloudUser) return;
+      if (referrer === cloudUser.uid) return;
+      if ((game.prestige || 0) < 1) return;
+      await firebaseDb.collection('referrals').doc(cloudUser.uid + '_' + referrer).set({
+        referee: cloudUser.uid,
+        referrer: referrer,
+        claimedAt: Date.now(),
+        amount: REFERRAL_BONUS_REFERRER,
+      });
+      localStorage.setItem(REF_CLAIMED_KEY, '1');
+    } catch (err) { console.warn('ref notify failed:', err); }
+  }
+
+  async function checkReferralRewardsForMe() {
+    // Cherche les filleuls qui ont déclaré ma UID comme referrer → cumule le bonus
+    try {
+      if (!cloudReady || !firebaseDb || !cloudUser) return;
+      const paidKey = 'pvb_ref_paid_' + cloudUser.uid;
+      const alreadyPaidIds = new Set(JSON.parse(localStorage.getItem(paidKey) || '[]'));
+      const snap = await firebaseDb.collection('referrals').where('referrer', '==', cloudUser.uid).get();
+      let totalBonus = 0;
+      const newlyPaid = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (!alreadyPaidIds.has(doc.id)) {
+          totalBonus += (d.amount || 0);
+          newlyPaid.push(doc.id);
+        }
+      });
+      if (totalBonus > 0) {
+        addCash(totalBonus);
+        showHint('🎁 +' + fmtNumber(totalBonus) + '$ — Filleul(s) ayant atteint prestige !', 4000);
+        sfx('reward');
+        newlyPaid.forEach(id => alreadyPaidIds.add(id));
+        localStorage.setItem(paidKey, JSON.stringify([...alreadyPaidIds]));
+        saveGame();
+      }
+    } catch (err) { console.warn('ref reward check failed:', err); }
+  }
+
+  function getMyReferralLink() {
+    const uid = cloudUser ? cloudUser.uid : '';
+    if (!uid) return null;
+    const url = location.origin + location.pathname + '?ref=' + uid;
+    return url;
+  }
+
   async function linkOrSignInGoogle() {
     if (!firebaseAuth) return;
     const statusEl = $('account-status-msg');
@@ -2939,6 +3036,22 @@
       syncEl.textContent = `Dernière sync : il y a ${fmtDuration(ago)}`;
     } else {
       syncEl.textContent = 'Synchronisation en attente...';
+    }
+    // Parrainage
+    const refLink = getMyReferralLink();
+    if ($('referral-link')) {
+      $('referral-link').value = refLink || '(connecte-toi pour obtenir ton lien)';
+    }
+    if ($('referral-status')) {
+      const myRef = localStorage.getItem(REF_KEY);
+      if (myRef) {
+        const claimed = localStorage.getItem(REF_CLAIMED_KEY);
+        $('referral-status').textContent = claimed
+          ? '✓ Tu as été parrainé — bonus de prestige déjà versé à ton parrain.'
+          : 'Tu as été parrainé (bonus +25 000$ déjà reçu). Atteins le prestige pour récompenser ton parrain.';
+      } else {
+        $('referral-status').textContent = '';
+      }
     }
   }
 
@@ -3515,6 +3628,15 @@
   btnClick('leaderboard-btn', openLeaderboard);
   btnClick('leaderboard-close', () => $('leaderboard-modal').classList.add('hidden'));
   btnClick('leaderboard-submit', submitLeaderboardScore);
+  btnClick('referral-copy', () => {
+    const link = getMyReferralLink();
+    if (!link) { showHint('Connecte-toi pour obtenir ton lien', 2000); return; }
+    try {
+      navigator.clipboard.writeText(link).then(() => showHint('✓ Lien copié', 1800));
+    } catch {
+      const el = $('referral-link'); el.select(); document.execCommand('copy'); showHint('✓ Lien copié', 1800);
+    }
+  });
   document.querySelectorAll('.lb-tab').forEach(el => {
     el.addEventListener('click', () => renderLeaderboard(el.dataset.cat));
   });
@@ -4281,6 +4403,7 @@
     updateMissionsBadge();
     updateHud();
     updateAccountBadge();
+    captureReferralFromUrl();
     initFirebase();
     initEditorUI();
     // Charge la librairie de l'éditeur + placements perso

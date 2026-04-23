@@ -2411,6 +2411,11 @@
     document.body.classList.toggle('tab-game', tab === 'game');
     document.body.classList.toggle('tab-house', tab === 'house');
     document.body.classList.toggle('tab-campaign', tab === 'campaign');
+    // Safeguard : si on quitte Aventure, ferme le modal briefing de niveau (au cas où il serait resté ouvert)
+    if (tab !== 'campaign') {
+      const campModal = document.getElementById('camp-level-modal');
+      if (campModal) { campModal.classList.remove('closing'); campModal.classList.add('hidden'); }
+    }
     if (typeof updateTabSwitcherUI === 'function') updateTabSwitcherUI();
   }
 
@@ -2774,9 +2779,10 @@
     if (data) {
       document.getElementById('camp-start-btn').onclick = () => {
         sfx && sfx('click');
-        closeModal(modal);
-        // Point 5 : ici on lancera le niveau. Pour l'instant on informe.
-        showHint('⚔️ Combat du niveau ' + lv.world + '-' + lv.idx + ' : à venir au Point 5 !', 3500);
+        // Hard close (pas d'animation, pas de hint qui persiste)
+        modal.classList.remove('closing');
+        modal.classList.add('hidden');
+        // Point 5 : ici on lancera le niveau. Pour l'instant rien.
       };
     }
     openModal('camp-level-modal');

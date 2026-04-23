@@ -1868,10 +1868,283 @@
       rewards: { cash: 500, firstClearBonus: 800, unlocks: ['ice'] },
       intro: 'Les Blops arrivent plus nombreux. Ouvre l\'œil sur les Rares !',
     },
-    // Niveaux 3-14 : stubs à remplir
-    'w1-3': null, 'w1-4': null, 'w1-5': null, 'w1-6': null, 'w1-7': null,
-    'w2-1': null, 'w2-2': null, 'w2-3': null, 'w2-4': null,
-    'w2-5': null, 'w2-6': null, 'w2-7': null, 'w2-8': null,
+    // w1-3 "Blops Rares" - Introduction des rares
+    'w1-3': {
+      id: 'w1-3', background: 'farm', music: 'lofi',
+      lanes: 3, startCash: 400, teamSize: 3,
+      plantPool: ['sunflower', 'pea', 'cactus', 'clover', 'mint'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(8, [ s(0,0,'common'),s(1,1,'common'),s(2,2,'common'),s(3,0,'common'),s(4,1,'common'),s(5,2,'common') ]),
+        w('onPrevCleared', [ s(0,0,'common'),s(1,2,'common'),s(2,1,'rare'),s(3.5,0,'rare'),s(5,2,'common'),s(6,1,'common') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,0,'common'),s(0.6,1,'common'),s(1.2,2,'common'),s(2.5,0,'rare'),s(3.5,1,'rare'),s(4.5,2,'rare'),s(6,1,'veryrare') ], { delayAfter: 8 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 120s' },
+      ],
+      rewards: { cash: 700, firstClearBonus: 1000, unlocks: ['bamboo'] },
+      intro: 'Les Blops plus coriaces débarquent. Méfie-toi des Rares.',
+    },
+    // w1-4 "Vague de l'aube" - 4 lanes, plus dense
+    'w1-4': {
+      id: 'w1-4', background: 'farm', music: 'lofi',
+      lanes: 4, startCash: 500, teamSize: 3,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(10, [ s(0,0,'common'),s(0.8,1,'common'),s(1.6,2,'common'),s(2.4,3,'common'),s(3.5,1,'common'),s(4.5,2,'common'),s(6,0,'rare') ]),
+        w('onPrevCleared', [ s(0,0,'common'),s(0.7,3,'common'),s(1.4,1,'rare'),s(2.1,2,'common'),s(2.8,0,'common'),s(3.5,3,'rare'),s(4.5,1,'common'),s(5.5,2,'common') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'common'),s(0.5,1,'common'),s(1,2,'common'),s(1.5,3,'common'),s(3,0,'rare'),s(3.8,2,'rare'),s(4.6,1,'veryrare'),s(6,3,'rare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'cheap', desc: 'Dépenser moins de 900$', limit: 900 },
+      ],
+      rewards: { cash: 900, firstClearBonus: 1400, unlocks: ['pumpkin'] },
+      intro: 'L\'aube se lève, et avec elle une 4ème lane. Sois partout à la fois !',
+    },
+    // w1-5 "Mutations" - More variety
+    'w1-5': {
+      id: 'w1-5', background: 'farm', music: 'phonk',
+      lanes: 4, startCash: 600, teamSize: 3,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo','pumpkin'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(8, [ s(0,0,'common'),s(0.6,1,'common'),s(1.2,2,'common'),s(1.8,3,'common'),s(3,1,'rare'),s(4,3,'rare') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(1,2,'rare'),s(2,1,'common'),s(3,3,'common'),s(4,0,'veryrare'),s(5.5,2,'rare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,1,'common'),s(0.6,3,'common'),s(1.2,0,'rare'),s(2,2,'rare'),s(3,1,'veryrare'),s(4,3,'rare'),s(5,0,'veryrare') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.8,2,'rare'),s(1.6,1,'veryrare'),s(2.4,3,'rare'),s(3.5,0,'veryrare'),s(5,2,'veryrare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 180s' },
+      ],
+      rewards: { cash: 1200, firstClearBonus: 1800, unlocks: ['lime'] },
+      intro: 'Les Très Rares arrivent. Compose une équipe versatile.',
+    },
+    // w1-6 "Siège" - 5 waves, marathon
+    'w1-6': {
+      id: 'w1-6', background: 'farm', music: 'sigma',
+      lanes: 4, startCash: 700, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo','pumpkin','lime'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(10, [ s(0,0,'common'),s(0.5,1,'common'),s(1,2,'common'),s(1.5,3,'common'),s(2.5,0,'common'),s(3.5,2,'common') ]),
+        w('onPrevCleared', [ s(0,1,'common'),s(0.6,3,'common'),s(1.2,0,'rare'),s(2,2,'common'),s(2.8,1,'rare'),s(4,3,'common') ], { delayAfter: 5 }),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.7,1,'rare'),s(1.4,2,'common'),s(2.2,3,'rare'),s(3,0,'common'),s(4,2,'veryrare') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,3,'rare'),s(0.6,0,'rare'),s(1.2,2,'veryrare'),s(2,1,'rare'),s(3,3,'veryrare'),s(4.5,0,'rare') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,2,'veryrare'),s(1.6,1,'rare'),s(2.4,3,'veryrare'),s(3.2,0,'rare'),s(4,2,'ultrarare'),s(5.5,1,'veryrare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 210s' },
+      ],
+      rewards: { cash: 1500, firstClearBonus: 2200, unlocks: ['onion'] },
+      intro: 'Cinq vagues successives. Tiens jusqu\'au bout !',
+    },
+    // w1-7 BOSS "Le Grand Patapim" - First boss fight
+    'w1-7': {
+      id: 'w1-7', background: 'farm', music: 'horror',
+      lanes: 4, startCash: 900, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo','pumpkin','lime','onion'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(12, [ s(0,0,'common'),s(0.7,1,'common'),s(1.4,2,'common'),s(2.1,3,'common'),s(3,0,'rare'),s(4,2,'rare'),s(5,1,'common'),s(6,3,'common') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.8,3,'rare'),s(1.6,1,'veryrare'),s(2.4,2,'rare'),s(3.5,0,'veryrare'),s(4.5,3,'rare'),s(5.5,1,'ultrarare') ], { delayAfter: 6 }),
+        // Boss wave
+        w('onPrevCleared', [
+          s(0, 1, 'goat', { hpMult: 4 }),  // Le Grand Patapim (GOAT × 4 HP)
+          // Adds en renfort
+          s(2, 0, 'common'), s(3, 2, 'common'), s(4, 3, 'rare'),
+          s(5, 0, 'common'), s(6, 2, 'rare'),
+        ], { delayAfter: 15, boss: true, bossName: 'Le Grand Patapim' }),
+      ],
+      boss: true, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Battre le Grand Patapim' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 240s' },
+      ],
+      rewards: { cash: 3000, firstClearBonus: 5000, unlocks: ['blueberry'] },
+      intro: 'Le chef des Blops en personne ! Immense, puissant, terrifiant.',
+    },
+    // w2-1 "Clairière" - New world
+    'w2-1': {
+      id: 'w2-1', background: 'forest', music: 'zen',
+      lanes: 4, startCash: 800, teamSize: 3,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(10, [ s(0,0,'common'),s(0.6,1,'rare'),s(1.2,2,'common'),s(1.8,3,'rare'),s(3,0,'common'),s(4,2,'rare'),s(5,1,'veryrare') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.8,2,'rare'),s(1.6,1,'veryrare'),s(2.4,3,'rare'),s(3.5,0,'veryrare'),s(4.5,2,'rare'),s(5.5,1,'veryrare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,1,'rare'),s(1.6,2,'veryrare'),s(2.4,3,'rare'),s(3.5,0,'ultrarare'),s(5,2,'veryrare'),s(6,1,'ultrarare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'cheap', desc: 'Dépenser moins de 1500$', limit: 1500 },
+      ],
+      rewards: { cash: 1800, firstClearBonus: 2600, unlocks: ['fig'] },
+      intro: 'La forêt est mystérieuse. Les Blops semblent plus sauvages ici.',
+    },
+    // w2-2 "Blops Sauvages"
+    'w2-2': {
+      id: 'w2-2', background: 'forest', music: 'zen',
+      lanes: 4, startCash: 900, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(10, [ s(0,0,'rare'),s(0.6,1,'common'),s(1.2,2,'rare'),s(1.8,3,'common'),s(3,1,'veryrare'),s(4,3,'rare'),s(5,0,'veryrare') ]),
+        w('onPrevCleared', [ s(0,2,'veryrare'),s(0.8,0,'rare'),s(1.6,3,'veryrare'),s(2.4,1,'rare'),s(3.5,2,'ultrarare'),s(5,0,'veryrare'),s(6,3,'rare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,2,'veryrare'),s(1.6,1,'ultrarare'),s(2.4,3,'rare'),s(3.5,0,'ultrarare'),s(4.5,2,'veryrare'),s(6,1,'ultrarare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 180s' },
+      ],
+      rewards: { cash: 2200, firstClearBonus: 3200, unlocks: ['lychee'] },
+      intro: 'Les Blops sauvages sont imprévisibles. Sois réactif.',
+    },
+    // w2-3 "Brouillard"
+    'w2-3': {
+      id: 'w2-3', background: 'forest', music: 'horror',
+      lanes: 4, startCash: 1000, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(10, [ s(0,0,'rare'),s(0.6,2,'rare'),s(1.2,1,'veryrare'),s(1.8,3,'rare'),s(3,0,'veryrare'),s(4,2,'veryrare'),s(5,1,'rare') ]),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,1,'rare'),s(1.6,2,'ultrarare'),s(2.4,3,'veryrare'),s(3.5,0,'rare'),s(4.5,2,'ultrarare'),s(5.5,1,'veryrare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.8,2,'veryrare'),s(1.6,1,'ultrarare'),s(2.4,3,'veryrare'),s(4,0,'ultrarare'),s(5.5,2,'ultrarare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 200s' },
+      ],
+      rewards: { cash: 2800, firstClearBonus: 4000, unlocks: ['avocado'] },
+      intro: 'Le brouillard brouille la vue. Anticipe les trajectoires.',
+    },
+    // w2-4 "La Meute" - 6 waves
+    'w2-4': {
+      id: 'w2-4', background: 'forest', music: 'phonk',
+      lanes: 5, startCash: 1200, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'common'),s(0.5,1,'rare'),s(1,2,'common'),s(1.5,3,'rare'),s(2,4,'common'),s(3,1,'veryrare'),s(4,3,'veryrare') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.6,2,'veryrare'),s(1.2,4,'rare'),s(1.8,1,'rare'),s(2.4,3,'veryrare'),s(3.5,0,'veryrare'),s(4.5,2,'ultrarare') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,1,'veryrare'),s(0.6,3,'veryrare'),s(1.2,0,'rare'),s(1.8,2,'veryrare'),s(2.4,4,'rare'),s(3.5,1,'ultrarare'),s(5,3,'ultrarare') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.6,2,'ultrarare'),s(1.2,4,'veryrare'),s(1.8,1,'veryrare'),s(2.4,3,'ultrarare'),s(4,0,'ultrarare'),s(5.5,2,'veryrare') ], { delayAfter: 8 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 240s' },
+      ],
+      rewards: { cash: 3500, firstClearBonus: 5000, unlocks: ['starfruit'] },
+      intro: '5 lanes à défendre. La meute arrive en masse.',
+    },
+    // w2-5 "Variants"
+    'w2-5': {
+      id: 'w2-5', background: 'forest', music: 'rave',
+      lanes: 5, startCash: 1400, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'rare'),s(0.6,2,'rare'),s(1.2,4,'rare'),s(1.8,1,'veryrare'),s(2.4,3,'veryrare'),s(3.5,0,'ultrarare') ]),
+        w('onPrevCleared', [ s(0,2,'veryrare'),s(0.6,4,'veryrare'),s(1.2,1,'ultrarare'),s(1.8,3,'veryrare'),s(3,0,'ultrarare'),s(4.5,2,'ultrarare'),s(5.5,4,'ultrarare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,2,'ultrarare'),s(1.2,4,'ultrarare'),s(2,1,'ultrarare'),s(3,3,'ultrarare'),s(5,0,'mythic') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 200s' },
+      ],
+      rewards: { cash: 4500, firstClearBonus: 7000, unlocks: ['coconut'] },
+      intro: 'Les variantes Ethereal rôdent. Ils sont plus résistants.',
+    },
+    // w2-6 "Nuit sans lune"
+    'w2-6': {
+      id: 'w2-6', background: 'forest', music: 'horror',
+      lanes: 5, startCash: 1600, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit','coconut'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'veryrare'),s(0.6,2,'veryrare'),s(1.2,4,'rare'),s(1.8,1,'veryrare'),s(2.4,3,'ultrarare'),s(4,0,'ultrarare') ]),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,2,'veryrare'),s(1.2,4,'ultrarare'),s(1.8,1,'ultrarare'),s(2.4,3,'veryrare'),s(3.5,0,'mythic'),s(5,2,'ultrarare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,1,'ultrarare'),s(0.6,3,'ultrarare'),s(1.2,0,'mythic'),s(2.4,2,'ultrarare'),s(3.5,4,'mythic') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 220s' },
+      ],
+      rewards: { cash: 6000, firstClearBonus: 9000, unlocks: ['durian'] },
+      intro: 'Nuit totale. Les Blops sont dans leur élément.',
+    },
+    // w2-7 "Avant-garde"
+    'w2-7': {
+      id: 'w2-7', background: 'forest', music: 'sigma',
+      lanes: 5, startCash: 2000, teamSize: 5,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit','coconut','durian'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'ultrarare'),s(0.6,2,'ultrarare'),s(1.2,4,'ultrarare'),s(2,1,'veryrare'),s(3,3,'mythic') ]),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,1,'mythic'),s(1.2,2,'ultrarare'),s(1.8,3,'mythic'),s(2.4,4,'ultrarare'),s(4,0,'mythic'),s(5.5,2,'mythic') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,1,'mythic'),s(0.8,3,'mythic'),s(1.6,0,'ultrarare'),s(2.4,2,'mythic'),s(3.5,4,'mythic'),s(5,0,'mythic') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 240s' },
+      ],
+      rewards: { cash: 8000, firstClearBonus: 12000, unlocks: ['lotus'] },
+      intro: 'L\'avant-garde du Roi. Ça sent le boss final...',
+    },
+    // w2-8 BOSS FINAL "Bombombini Furieux"
+    'w2-8': {
+      id: 'w2-8', background: 'forest', music: 'horror',
+      lanes: 5, startCash: 3000, teamSize: 5,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit','coconut','durian','lotus'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(15, [ s(0,0,'veryrare'),s(0.6,2,'ultrarare'),s(1.2,4,'veryrare'),s(2,1,'mythic'),s(3,3,'ultrarare'),s(4,0,'mythic') ]),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,2,'mythic'),s(1.2,4,'ultrarare'),s(1.8,1,'mythic'),s(2.4,3,'mythic'),s(4,2,'mythic'),s(5,0,'mythic') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,1,'mythic'),s(0.8,3,'mythic'),s(1.6,0,'mythic'),s(2.4,2,'mythic'),s(3,4,'mythic') ], { delayAfter: 6 }),
+        // BOSS WAVE : Bombombini avec HP × 8 + escorte mythique
+        w('onPrevCleared', [
+          s(0, 2, 'goat', { hpMult: 8 }),  // Bombombini Furieux (GOAT × 8 HP = 24000 HP)
+          s(3, 0, 'mythic'), s(4, 4, 'mythic'),
+          s(6, 1, 'mythic'), s(8, 3, 'mythic'),
+          s(10, 2, 'ultrarare'), s(12, 0, 'mythic'),
+        ], { delayAfter: 20, boss: true, bossName: 'Bombombini Furieux' }),
+      ],
+      boss: true, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Vaincre Bombombini Furieux' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 300s' },
+      ],
+      rewards: { cash: 20000, firstClearBonus: 30000, unlocks: ['phoenix'] },
+      intro: 'LE BOSS FINAL. Bombombini Furieux, roi des Blops. Prêt à en finir ?',
+    },
   };
 
   function getLevelData(id) {
@@ -2163,9 +2436,15 @@
 
     // Scheduler
     game.campaignActive.scheduler = new WaveScheduler(data, {
-      onWaveStart: (i, w) => {
-        showWaveBanner('🌀 VAGUE ' + (i + 1) + '/' + data.waves.length, 'Les Blops arrivent !');
-        sfx && sfx('spawn');
+      onWaveStart: (i, wv) => {
+        if (wv.boss) {
+          showWaveBanner('👑 ' + (wv.bossName || 'BOSS FIGHT'), 'Le combat final !', 0xffdd00);
+          sfx && sfx('rarity');
+          setTimeout(() => sfx && sfx('crit'), 400);
+        } else {
+          showWaveBanner('🌀 VAGUE ' + (i + 1) + '/' + data.waves.length, 'Les Blops arrivent !');
+          sfx && sfx('spawn');
+        }
       },
       onWaveCleared: (i) => {
         if (i < data.waves.length - 1) {

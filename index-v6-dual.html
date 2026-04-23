@@ -1701,6 +1701,49 @@
   }
   setupCameraHouse();
 
+  // === V6 : scène CAMPAGNE (aventure) ===
+  const sceneCampaign = new THREE.Scene();
+  // Fond bleu ciel cartoon PvZ-style (se démarque du jardin et de la maison)
+  sceneCampaign.background = new THREE.Color(0x87c4ff);
+  sceneCampaign.fog = new THREE.Fog(0xb6e0ff, 60, 180);
+  const ambientCampaign = new THREE.AmbientLight(0xffffff, 0.75);
+  sceneCampaign.add(ambientCampaign);
+  const sunCampaign = new THREE.DirectionalLight(0xffffff, 0.9);
+  sunCampaign.position.set(15, 35, 10);
+  sunCampaign.castShadow = Q === 'high';
+  if (Q === 'high') sunCampaign.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+  sceneCampaign.add(sunCampaign);
+  // Caméra campagne (même angle iso que le jeu)
+  const cameraCampaign = new THREE.OrthographicCamera(-22, 22, 22, -22, 0.1, 300);
+  cameraCampaign.position.set(35, 40, 35);
+  cameraCampaign.lookAt(0, 0, 5);
+  function setupCameraCampaign() {
+    const aspect = innerWidth / innerHeight;
+    const frustumH = 22;
+    cameraCampaign.left = -frustumH * aspect;
+    cameraCampaign.right = frustumH * aspect;
+    cameraCampaign.top = frustumH;
+    cameraCampaign.bottom = -frustumH;
+    cameraCampaign.updateProjectionMatrix();
+  }
+  setupCameraCampaign();
+
+  // Placeholder visuel V1 : une plateforme jaune pour montrer qu'on est dans la campagne
+  const campaignPlaceholder = new THREE.Mesh(
+    new THREE.BoxGeometry(40, 0.4, 40),
+    new THREE.MeshStandardMaterial({ color: 0x88dd66 })
+  );
+  campaignPlaceholder.position.y = -0.2;
+  campaignPlaceholder.receiveShadow = Q === 'high';
+  sceneCampaign.add(campaignPlaceholder);
+  // Cartouche texte central (billboard vers cam)
+  const titleCampaign = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 3, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0xffcc33, emissive: 0xffaa22, emissiveIntensity: 0.3 })
+  );
+  titleCampaign.position.set(0, 2, 0);
+  sceneCampaign.add(titleCampaign);
+
   // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
   // Prix progressifs : on commence par du nature peu cher, buildings plus chers.
   // file = chemin GLB relatif au repo (models/house/...). En attendant de les
@@ -2811,6 +2854,7 @@
     bar.style.cssText = 'position:fixed;top:46px;left:50%;transform:translateX(-50%);display:flex;gap:4px;background:rgba(0,0,0,0.55);padding:4px;border-radius:24px;z-index:9997;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);';
     bar.innerHTML = `
       <button id="tab-game" class="tab-btn tab-active">🌱 Jardin</button>
+      <button id="tab-campaign" class="tab-btn">📖 Aventure</button>
       <button id="tab-house" class="tab-btn">🏠 Maison</button>
     `;
     document.body.appendChild(bar);
@@ -2819,16 +2863,20 @@
       .tab-btn { padding:8px 18px;border:none;background:transparent;color:#ccc;font-family:var(--font-display,sans-serif);font-weight:700;font-size:13px;cursor:pointer;border-radius:20px;transition:background 0.2s;letter-spacing:0.5px; }
       .tab-btn:hover { background:rgba(255,255,255,0.08); color:#fff; }
       .tab-btn.tab-active { background:linear-gradient(90deg,#44cc88,#66aadd); color:#fff; box-shadow:0 2px 8px rgba(68,204,136,0.4); }
-      body.tab-house #inventory, body.tab-house #top-right, body.tab-house #hud { opacity:0.5; pointer-events:none; }
-      /* Masquer les overlays game (HP bars, tooltips) quand on est en Maison */
-      body.tab-house #hp-overlay, body.tab-house #plant-tooltip { display:none !important; }
+      body.tab-house #inventory, body.tab-house #top-right, body.tab-house #hud,
+      body.tab-campaign #inventory, body.tab-campaign #top-right, body.tab-campaign #hud { opacity:0.5; pointer-events:none; }
+      /* Masquer les overlays game (HP bars, tooltips) en Maison ou Aventure */
+      body.tab-house #hp-overlay, body.tab-house #plant-tooltip,
+      body.tab-campaign #hp-overlay, body.tab-campaign #plant-tooltip { display:none !important; }
       body.tab-house #build-shop-btn { display:block !important; }
     `;
     document.head.appendChild(st);
     $('tab-game').onclick = () => { setActiveTab('game'); sfx && sfx('click'); };
+    $('tab-campaign').onclick = () => { setActiveTab('campaign'); sfx && sfx('click'); };
     $('tab-house').onclick = () => { setActiveTab('house'); sfx && sfx('click'); };
     window.updateTabSwitcherUI = () => {
       $('tab-game').classList.toggle('tab-active', activeTab === 'game');
+      $('tab-campaign').classList.toggle('tab-active', activeTab === 'campaign');
       $('tab-house').classList.toggle('tab-active', activeTab === 'house');
     };
   }
@@ -6788,6 +6836,8 @@
     // Rendu selon l'onglet actif
     if (activeTab === 'house') {
       renderer.render(sceneHouse, cameraHouse);
+    } else if (activeTab === 'campaign') {
+      renderer.render(sceneCampaign, cameraCampaign);
     } else {
       renderer.render(scene, camera);
     }
@@ -7227,6 +7277,7 @@
     renderer.setSize(innerWidth, innerHeight);
     setupCamera();
     setupCameraHouse();
+    setupCameraCampaign();
   });
   </script>
 </body>

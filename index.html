@@ -2540,7 +2540,9 @@
   function scalePlaced(placed, factor) {
     if (!placed) return;
     placed.scale = Math.max(0.3, Math.min(3, (placed.scale || 1) * factor));
-    placed.mesh.scale.setScalar(placed.scale * 3); // 3 = base scale GLB
+    // Le wrapper Group a scale 1 par défaut (le clone GLB interne est déjà scale 3)
+    // Donc pour scaler visuellement on applique directement placed.scale au wrapper
+    placed.mesh.scale.setScalar(placed.scale);
     saveGame();
   }
 
@@ -2818,6 +2820,8 @@
       .tab-btn:hover { background:rgba(255,255,255,0.08); color:#fff; }
       .tab-btn.tab-active { background:linear-gradient(90deg,#44cc88,#66aadd); color:#fff; box-shadow:0 2px 8px rgba(68,204,136,0.4); }
       body.tab-house #inventory, body.tab-house #top-right, body.tab-house #hud { opacity:0.5; pointer-events:none; }
+      /* Masquer les overlays game (HP bars, tooltips) quand on est en Maison */
+      body.tab-house #hp-overlay, body.tab-house #plant-tooltip { display:none !important; }
       body.tab-house #build-shop-btn { display:block !important; }
     `;
     document.head.appendChild(st);
@@ -3566,6 +3570,7 @@
   function spawnDamageNumber(enemy, damage, opts) {
     opts = opts || {};
     if (!enemy || !enemy.position) return;
+    if (activeTab === 'house') return; // Pas d'overlay game en mode maison
     if (dmgActiveCount >= DMG_MAX_ACTIVE) return; // rate limit
     const pos = enemy.position.clone();
     pos.y += enemy.userData.size * 1.6;
@@ -6660,6 +6665,7 @@
   function showMemeFace(key) {
     const m = MEME_FACES[key];
     if (!m) return;
+    if (activeTab === 'house') return; // Pas de meme reveal en mode maison
     const nowMs = performance.now();
     if (nowMs - lastMemeAt < 800) return;
     lastMemeAt = nowMs;

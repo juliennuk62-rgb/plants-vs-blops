@@ -519,16 +519,16 @@
     </div>
     <!-- Groupe 2 : Progression -->
     <div class="hud-group">
-      <div class="btn" id="profile-btn" title="Profil" role="button" tabindex="0" aria-label="Ouvrir le profil">👤</div>
-      <div class="btn" id="missions-btn" title="Missions" role="button" tabindex="0" aria-label="Ouvrir les missions">🎯<span id="missions-badge" style="display:none;background:var(--alert);color:#fff;border-radius:var(--rad-pill);padding:1px 5px;margin-left:4px;font-size:10px;">!</span></div>
-      <div class="btn" id="leaderboard-btn" title="Classement" role="button" tabindex="0" aria-label="Ouvrir le classement">🏆</div>
-      <div class="btn gold" id="prestige-btn" style="display:none;" title="Prestige">✨ Prestige</div>
+      <div class="btn" id="profile-btn" role="button" tabindex="0" aria-label="Ouvrir le profil">👤 Profil</div>
+      <div class="btn" id="missions-btn" role="button" tabindex="0" aria-label="Ouvrir les missions">🎯 Missions<span id="missions-badge" style="display:none;background:var(--alert);color:#fff;border-radius:var(--rad-pill);padding:1px 5px;margin-left:4px;font-size:10px;">!</span></div>
+      <div class="btn" id="leaderboard-btn" role="button" tabindex="0" aria-label="Ouvrir le classement">🏆 Classement</div>
+      <div class="btn gold" id="prestige-btn" style="display:none;">✨ Prestige</div>
     </div>
     <!-- Groupe 3 : Social -->
     <div class="hud-group">
-      <div class="btn" id="memorial-btn" title="Mémorial des Braves" role="button" tabindex="0" aria-label="Mémorial des plantes retraitées">🕊</div>
-      <div class="btn" id="account-btn" title="Compte & sauvegarde cloud" role="button" tabindex="0" aria-label="Compte et sauvegarde cloud">☁ <span id="account-status" style="margin-left:2px;">📱</span></div>
-      <div class="btn alert" id="rec-btn" title="Partager les 20 dernières secondes" role="button" tabindex="0" aria-label="Partager clip 20 secondes">🎬</div>
+      <div class="btn" id="memorial-btn" role="button" tabindex="0" aria-label="Mémorial des plantes retraitées">🕊 Mémorial</div>
+      <div class="btn" id="account-btn" role="button" tabindex="0" aria-label="Compte et sauvegarde cloud">☁ Compte <span id="account-status" style="margin-left:2px;">📱</span></div>
+      <div class="btn alert" id="rec-btn" role="button" tabindex="0" aria-label="Partager clip 20 secondes">🎬 Clip</div>
     </div>
     <!-- Groupe 4 : Dev / Système / Danger -->
     <div class="hud-group">
@@ -1469,8 +1469,8 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    sunflower: 6.4, cactus: 4.0, strawberry: 5.0,
-    pepper: 6.0, watermelon: 5.6, pineapple: 5.6,
+    sunflower: 10.5, cactus: 6.5, strawberry: 8.0,
+    pepper: 9.5, watermelon: 8.5, pineapple: 9.0,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,
@@ -1495,7 +1495,8 @@
   // `perLane: true` → une copie par lane (x calculé auto selon laneCount)
   // `perLane: false` (ou absent) → position x/y/z fixe
   const BAKED_DECORATIONS = [
-    { file: 'overheadRoundColored.glb', perLane: true, y: 0.2, z: -10.95, rotY: 0, scale: 1.95 },
+    // Vieilles arches rondes retirées (on a maintenant l'arche rouge de spawn Tier 3 qui les remplace)
+    // { file: 'overheadRoundColored.glb', perLane: true, y: 0.2, z: -10.95, rotY: 0, scale: 1.95 },
   ];
   const bakedDecorCache = {};
 
@@ -3031,18 +3032,20 @@
     if (loadedModels.plants[seed.plantId]) {
       // GLB : modèle complet sans stem
       const model = loadedModels.plants[seed.plantId].clone(true);
-      model.scale.setScalar(PLANT_GLB_SCALE[seed.plantId] || 1.5);
+      model.scale.setScalar(PLANT_GLB_SCALE[seed.plantId] || 2.5);
       group.add(model);
       headRef = model;
     } else {
-      // Fallback primitive : stem + head
+      // Fallback primitive : stem + head (scale doublé pour visibilité)
+      const plantScale = 1.9;
       const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.12, 0.15, 0.7, 8),
+        new THREE.CylinderGeometry(0.18 * plantScale, 0.22 * plantScale, 1.1 * plantScale, 8),
         new THREE.MeshStandardMaterial({ color: 0x3c8c3c })
       );
-      stem.position.y = 0.35; stem.castShadow = true; group.add(stem);
+      stem.position.y = 0.55 * plantScale; stem.castShadow = true; group.add(stem);
       const head = makePlantHead(seed.plantId, col);
-      head.position.y = 1.15; group.add(head);
+      head.scale.setScalar(plantScale);
+      head.position.y = 1.8 * plantScale; group.add(head);
       headRef = head;
     }
     group.userData = {
@@ -4136,6 +4139,9 @@
   }
 
   function renderInventory() {
+    try { _renderInventory(); } catch (e) { console.error('renderInventory failed:', e); }
+  }
+  function _renderInventory() {
     [...inventoryEl.querySelectorAll('.seed-card')].forEach(c => c.remove());
     inventoryEmpty.style.display = game.inventory.length === 0 ? 'block' : 'none';
     const groupMap = new Map();
@@ -4172,7 +4178,7 @@
         <div class="seed-icon">${PLANT_ICONS[g.plantId] || '🌱'}</div>
         <div class="seed-name">${p.name}</div>
         <div class="seed-rarity" style="color:${r.color};">${r.label}</div>
-        ${mut.label ? `<div class="seed-mutation" style="color:${mut.color};">${MUTATION_ICONS[seed.mutation] || '✨'} ${mut.label}</div>` : ''}
+        ${mut.label ? `<div class="seed-mutation" style="color:${mut.color};">${MUTATION_ICONS[g.mutation] || '✨'} ${mut.label}</div>` : ''}
       `;
       div.onclick = () => { sfx('click'); selectSeed(g.indices[0]); };
       inventoryEl.appendChild(div);

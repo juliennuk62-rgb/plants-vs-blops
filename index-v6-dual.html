@@ -1780,27 +1780,26 @@
   const slots = [];
 
   // === V6 DUAL GARDEN ===
-  const DUAL_GARDEN_PRESTIGE = 10; // à partir de prestige 10, 2 jardins (en prod)
+  const DUAL_GARDEN_PRESTIGE = 10; // règle officielle : dual mode débloque à prestige 10
   const GARDEN_SPACING = 10;       // écart horizontal entre les 2 jardins (en unités monde)
-  // Fichier de TEST LOCAL : dual mode ACTIVÉ par défaut pour prototyper.
-  // (À désactiver si on veut le comportement prestige-gated : mettre pvb_force_dual = '0')
-  const FORCE_DUAL = (function() {
-    try {
-      const params = new URLSearchParams(location.search);
-      if (params.get('dual') === '0') return false;
-      if (localStorage.getItem('pvb_force_dual') === '0') return false;
-      return true; // default ON dans le fichier v6 local
-    } catch (e) { return true; }
-  })();
-  function hasDualGarden() { return FORCE_DUAL || game.prestige >= DUAL_GARDEN_PRESTIGE; }
-  console.log('[V6] FORCE_DUAL:', FORCE_DUAL, '| DUAL_GARDEN_PRESTIGE:', DUAL_GARDEN_PRESTIGE);
-  // Badge top-center signalant le mode dual
+  // Plus de FORCE_DUAL : les règles prestige sont respectées strictement.
+  // Pour tester le dual mode, utilise le bouton "P10" du panel admin ⚡
+  function hasDualGarden() { return game.prestige >= DUAL_GARDEN_PRESTIGE; }
+  console.log('[V6] DUAL_GARDEN_PRESTIGE:', DUAL_GARDEN_PRESTIGE);
+  // Badge top-center dynamique : affiche le mode actuel
   window.addEventListener('DOMContentLoaded', () => {
     const badge = document.createElement('div');
     badge.id = 'v6-badge';
-    badge.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,#ff3388,#33ccff);color:#fff;padding:6px 14px;border-radius:20px;font-family:var(--font-display,sans-serif);font-weight:700;font-size:13px;z-index:9998;box-shadow:0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;pointer-events:none;';
-    badge.textContent = 'V6 · DUAL GARDEN · prototype local';
+    badge.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);color:#fff;padding:6px 14px;border-radius:20px;font-family:var(--font-display,sans-serif);font-weight:700;font-size:13px;z-index:9998;box-shadow:0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;pointer-events:none;transition:background 0.3s;';
     document.body.appendChild(badge);
+    window._updateV6Badge = () => {
+      const dual = hasDualGarden();
+      badge.style.background = dual ? 'linear-gradient(90deg,#ff3388,#33ccff)' : 'linear-gradient(90deg,#444,#666)';
+      badge.textContent = dual
+        ? `V6 · DUAL · P${game.prestige} · ${lanesPerGarden()}×2 lanes`
+        : `V6 · SOLO · P${game.prestige} · ${lanesPerGarden()} lanes`;
+    };
+    _updateV6Badge();
     buildAdminPanel();
   });
 
@@ -1872,7 +1871,7 @@
 
       <div style="font-weight:700;color:#ff66ff;margin:8px 0 4px;">🧪 Modes</div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-bottom:8px;">
-        <button id="admin-toggle-dual">Toggle DUAL</button>
+        <button id="admin-toggle-dual">Toggle SOLO/DUAL (P0↔P10)</button>
         <button id="admin-toggle-weather">Toggle Pluie</button>
         <button id="admin-toggle-hot">Toggle Canicule</button>
         <button id="admin-toggle-vampire">Unlock Vampire</button>
@@ -1932,6 +1931,7 @@
           }
         });
         updateHud(); updatePrestigeButtonVisibility(); saveGame();
+        if (window._updateV6Badge) window._updateV6Badge();
         status(`Prestige → ${p} (${restored}/${savedPlants.length} plantes restaurées)`);
       };
     });
@@ -2009,9 +2009,9 @@
 
     // Modes toggles
     panel.querySelector('#admin-toggle-dual').onclick = () => {
-      const cur = localStorage.getItem('pvb_force_dual');
-      localStorage.setItem('pvb_force_dual', cur === '0' ? '1' : '0');
-      status('DUAL toggled → ' + localStorage.getItem('pvb_force_dual') + ' (reload requis)');
+      // Shortcut : saute à P10 (ou P9) selon l'état actuel pour basculer SOLO/DUAL
+      const target = hasDualGarden() ? 0 : 10;
+      panel.querySelector(`[data-prestige="${target}"]`).click();
     };
     panel.querySelector('#admin-toggle-weather').onclick = () => {
       if (typeof weatherState !== 'undefined') {
@@ -2083,11 +2083,12 @@
   // À partir du prestige 10 : chaque garden garde un nombre fixe de lanes de base
   // pour que la doublure ne soit pas absurdement large.
   function lanesPerGarden() {
+    // Solo mode (prestige 0..9) : règle officielle 3 + prestige
+    // → P0 = 3 lanes, P1 = 4 lanes, ..., P9 = 12 lanes
     if (!hasDualGarden()) return BASE_LANE_COUNT + game.prestige;
-    // En dual naturel (p>=10) : 6 lanes par garden + 1 par prestige supplémentaire
-    if (game.prestige >= DUAL_GARDEN_PRESTIGE) return 6 + (game.prestige - DUAL_GARDEN_PRESTIGE);
-    // En dual FORCÉ (prototype, prestige bas) : 5 lanes fixes par garden
-    return 5;
+    // Dual mode (prestige 10+) : 6 lanes par garden + 1 par prestige supplémentaire
+    // → P10 = 6+6 (12 total, continuité avec P9 solo), P11 = 7+7, etc.
+    return 6 + (game.prestige - DUAL_GARDEN_PRESTIGE);
   }
   function currentLaneCount() { return lanesPerGarden() * gardenCount(); }
   function playfieldWidth() {

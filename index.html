@@ -1701,6 +1701,1062 @@
   }
   setupCameraHouse();
 
+  // === V6 : scène CAMPAGNE (aventure) ===
+  const sceneCampaign = new THREE.Scene();
+  // Fond bleu ciel cartoon PvZ-style (se démarque du jardin et de la maison)
+  sceneCampaign.background = new THREE.Color(0x87c4ff);
+  sceneCampaign.fog = new THREE.Fog(0xb6e0ff, 60, 180);
+  const ambientCampaign = new THREE.AmbientLight(0xffffff, 0.75);
+  sceneCampaign.add(ambientCampaign);
+  const sunCampaign = new THREE.DirectionalLight(0xffffff, 0.9);
+  sunCampaign.position.set(15, 35, 10);
+  sunCampaign.castShadow = Q === 'high';
+  if (Q === 'high') sunCampaign.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+  sceneCampaign.add(sunCampaign);
+  // Caméra campagne (même angle iso que le jeu)
+  const cameraCampaign = new THREE.OrthographicCamera(-22, 22, 22, -22, 0.1, 300);
+  cameraCampaign.position.set(35, 40, 35);
+  cameraCampaign.lookAt(0, 0, 5);
+  function setupCameraCampaign() {
+    const aspect = innerWidth / innerHeight;
+    const frustumH = 22;
+    cameraCampaign.left = -frustumH * aspect;
+    cameraCampaign.right = frustumH * aspect;
+    cameraCampaign.top = frustumH;
+    cameraCampaign.bottom = -frustumH;
+    cameraCampaign.updateProjectionMatrix();
+  }
+  setupCameraCampaign();
+
+  // === CAMPAGNE : 15 niveaux sur 2 mondes (Point 2) ===
+  const CAMPAIGN_LEVELS = [
+    // MONDE 1 : LA FERME (7 niveaux, niveau 7 = mini-boss)
+    { id: 'w1-1', world: 1, idx: 1, name: 'Premier jour',         desc: 'Les premiers Blops arrivent. Apprends à planter.' },
+    { id: 'w1-2', world: 1, idx: 2, name: 'Renforts',             desc: 'Plus de Blops, deux lanes à défendre.' },
+    { id: 'w1-3', world: 1, idx: 3, name: 'Blops Rares',          desc: 'De nouveaux ennemis plus résistants.' },
+    { id: 'w1-4', world: 1, idx: 4, name: 'Vague de l\'aube',     desc: 'Les Blops attaquent en groupe.' },
+    { id: 'w1-5', world: 1, idx: 5, name: 'Mutations',            desc: 'Tes graines peuvent muter !' },
+    { id: 'w1-6', world: 1, idx: 6, name: 'Siège',                desc: 'Tiens jusqu\'à l\'aube.' },
+    { id: 'w1-7', world: 1, idx: 7, name: 'Le Grand Patapim',     desc: 'Boss : un Blop gigantesque te défie.', boss: true },
+    // MONDE 2 : LA FORÊT (8 niveaux, niveau 15 = boss final)
+    { id: 'w2-1', world: 2, idx: 1, name: 'Clairière',            desc: 'Nouveau terrain, nouveaux dangers.' },
+    { id: 'w2-2', world: 2, idx: 2, name: 'Blops Sauvages',       desc: 'Des ennemis plus rapides.' },
+    { id: 'w2-3', world: 2, idx: 3, name: 'Brouillard',           desc: 'Vision réduite — anticipe.' },
+    { id: 'w2-4', world: 2, idx: 4, name: 'La Meute',             desc: 'Ils arrivent par hordes.' },
+    { id: 'w2-5', world: 2, idx: 5, name: 'Variants',             desc: 'Les Blops mutent en Ethereal.' },
+    { id: 'w2-6', world: 2, idx: 6, name: 'Nuit sans lune',       desc: 'La nuit est leur alliée.' },
+    { id: 'w2-7', world: 2, idx: 7, name: 'Avant-garde',          desc: 'L\'ennemi prépare son champion.' },
+    { id: 'w2-8', world: 2, idx: 8, name: 'Bombombini Furieux',   desc: 'Boss final : le roi des Blops.', boss: true },
+  ];
+
+  // État progression campagne
+  if (!window.gameCampaign) {
+    window.gameCampaign = {
+      highestUnlocked: 'w1-1',
+      stars: {},         // { 'w1-1': 2, 'w1-2': 1, ... }
+      completed: {},     // { 'w1-1': true, ... }
+      currentLevel: null, // id du niveau en cours de jeu
+    };
+  }
+
+  function campaignLevelUnlocked(levelId) {
+    if (levelId === 'w1-1') return true;
+    const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === levelId);
+    if (idx <= 0) return false;
+    const prevId = CAMPAIGN_LEVELS[idx - 1].id;
+    return !!gameCampaign.completed[prevId];
+  }
+
+  // === Point 3 : Data model complète d'un niveau ===
+  // Helpers de construction pour des niveaux compacts
+  const s = (at, lane, rarity, extras) => Object.assign({ at, lane, rarity }, extras || {});
+  const w = (triggerAt, spawns, extras) => Object.assign({ triggerAt, spawns }, extras || {});
+
+  const LEVEL_DATA = {
+    // MONDE 1 — LA FERME
+    'w1-1': {
+      id: 'w1-1', background: 'farm', music: 'lofi',
+      lanes: 3, startCash: 300, teamSize: 3,
+      plantPool: ['sunflower', 'pea', 'cactus'],
+      waves: [
+        // Wave 1 : intro tranquille, 5 Blops sur 6 secondes
+        w(10, [
+          s(0,   1, 'common'),
+          s(1.5, 0, 'common'),
+          s(2.5, 2, 'common'),
+          s(4,   1, 'common'),
+          s(5.5, 0, 'common'),
+        ]),
+        // Wave 2 : plus dense, 7 Blops en 8 secondes
+        w('onPrevCleared', [
+          s(0,   0, 'common'),
+          s(0.8, 2, 'common'),
+          s(1.6, 1, 'common'),
+          s(2.4, 0, 'common'),
+          s(3.2, 2, 'common'),
+          s(4.5, 1, 'common'),
+          s(6,   1, 'common'),
+        ], { delayAfter: 8 }),
+        // Wave 3 : finale, 8 Blops avec 2 rares en fin
+        w('onPrevCleared', [
+          s(0,   0, 'common'),
+          s(0.6, 1, 'common'),
+          s(1.2, 2, 'common'),
+          s(1.8, 0, 'common'),
+          s(2.4, 1, 'common'),
+          s(3.0, 2, 'common'),
+          s(5.0, 0, 'rare'),
+          s(5.5, 2, 'rare'),
+        ], { delayAfter: 10 }),
+      ],
+      boss: null,
+      winCondition: 'allWavesCleared',
+      loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear',    desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Aucun Blop n\'atteint la base' },
+        { id: 'quick',    desc: 'Finir en moins de 90 secondes' },
+      ],
+      rewards: { cash: 300, firstClearBonus: 500, unlocks: [] },
+      intro: 'Les premiers Blops approchent de la ferme. Plante des graines et défends ta base !',
+      tutorial: true, // déclenche hints pour novices
+    },
+    'w1-2': {
+      id: 'w1-2', background: 'farm', music: 'lofi',
+      lanes: 3, startCash: 350, teamSize: 3,
+      plantPool: ['sunflower', 'pea', 'cactus', 'clover', 'mint'], // 5 plantes, choisis-en 3
+      plantUnlocks: ['ice', 'bamboo'], // dispo dès que débloqué (Point 7 : étend automatiquement le pool)
+      waves: [
+        w(8, [
+          s(0,   0, 'common'),
+          s(0.8, 1, 'common'),
+          s(1.6, 2, 'common'),
+          s(2.5, 0, 'common'),
+          s(3.5, 1, 'common'),
+          s(5,   2, 'rare'),
+        ]),
+        w('onPrevCleared', [
+          s(0,   2, 'common'),
+          s(0.8, 0, 'common'),
+          s(1.6, 1, 'common'),
+          s(2.4, 2, 'common'),
+          s(3.5, 0, 'rare'),
+          s(4.5, 1, 'common'),
+          s(5.5, 2, 'common'),
+          s(6.5, 0, 'common'),
+        ], { delayAfter: 8 }),
+        w('onPrevCleared', [
+          s(0,   0, 'common'),
+          s(0.6, 1, 'common'),
+          s(1.2, 2, 'common'),
+          s(2,   0, 'rare'),
+          s(2.8, 1, 'common'),
+          s(3.6, 2, 'rare'),
+          s(5,   1, 'rare'),
+          s(6,   0, 'common'),
+          s(6.6, 2, 'common'),
+        ], { delayAfter: 10 }),
+      ],
+      boss: null,
+      winCondition: 'allWavesCleared',
+      loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear',    desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Aucun Blop n\'atteint la base' },
+        { id: 'cheap',    desc: 'Dépenser moins de 700$' },
+      ],
+      rewards: { cash: 500, firstClearBonus: 800, unlocks: ['ice'] },
+      intro: 'Les Blops arrivent plus nombreux. Ouvre l\'œil sur les Rares !',
+    },
+    // w1-3 "Blops Rares" - Introduction des rares
+    'w1-3': {
+      id: 'w1-3', background: 'farm', music: 'lofi',
+      lanes: 3, startCash: 400, teamSize: 3,
+      plantPool: ['sunflower', 'pea', 'cactus', 'clover', 'mint'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(8, [ s(0,0,'common'),s(1,1,'common'),s(2,2,'common'),s(3,0,'common'),s(4,1,'common'),s(5,2,'common') ]),
+        w('onPrevCleared', [ s(0,0,'common'),s(1,2,'common'),s(2,1,'rare'),s(3.5,0,'rare'),s(5,2,'common'),s(6,1,'common') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,0,'common'),s(0.6,1,'common'),s(1.2,2,'common'),s(2.5,0,'rare'),s(3.5,1,'rare'),s(4.5,2,'rare'),s(6,1,'veryrare') ], { delayAfter: 8 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 120s' },
+      ],
+      rewards: { cash: 700, firstClearBonus: 1000, unlocks: ['bamboo'] },
+      intro: 'Les Blops plus coriaces débarquent. Méfie-toi des Rares.',
+    },
+    // w1-4 "Vague de l'aube" - 4 lanes, plus dense
+    'w1-4': {
+      id: 'w1-4', background: 'farm', music: 'lofi',
+      lanes: 4, startCash: 500, teamSize: 3,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(10, [ s(0,0,'common'),s(0.8,1,'common'),s(1.6,2,'common'),s(2.4,3,'common'),s(3.5,1,'common'),s(4.5,2,'common'),s(6,0,'rare') ]),
+        w('onPrevCleared', [ s(0,0,'common'),s(0.7,3,'common'),s(1.4,1,'rare'),s(2.1,2,'common'),s(2.8,0,'common'),s(3.5,3,'rare'),s(4.5,1,'common'),s(5.5,2,'common') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'common'),s(0.5,1,'common'),s(1,2,'common'),s(1.5,3,'common'),s(3,0,'rare'),s(3.8,2,'rare'),s(4.6,1,'veryrare'),s(6,3,'rare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'cheap', desc: 'Dépenser moins de 900$', limit: 900 },
+      ],
+      rewards: { cash: 900, firstClearBonus: 1400, unlocks: ['pumpkin'] },
+      intro: 'L\'aube se lève, et avec elle une 4ème lane. Sois partout à la fois !',
+    },
+    // w1-5 "Mutations" - More variety
+    'w1-5': {
+      id: 'w1-5', background: 'farm', music: 'phonk',
+      lanes: 4, startCash: 600, teamSize: 3,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo','pumpkin'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(8, [ s(0,0,'common'),s(0.6,1,'common'),s(1.2,2,'common'),s(1.8,3,'common'),s(3,1,'rare'),s(4,3,'rare') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(1,2,'rare'),s(2,1,'common'),s(3,3,'common'),s(4,0,'veryrare'),s(5.5,2,'rare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,1,'common'),s(0.6,3,'common'),s(1.2,0,'rare'),s(2,2,'rare'),s(3,1,'veryrare'),s(4,3,'rare'),s(5,0,'veryrare') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.8,2,'rare'),s(1.6,1,'veryrare'),s(2.4,3,'rare'),s(3.5,0,'veryrare'),s(5,2,'veryrare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 180s' },
+      ],
+      rewards: { cash: 1200, firstClearBonus: 1800, unlocks: ['lime'] },
+      intro: 'Les Très Rares arrivent. Compose une équipe versatile.',
+    },
+    // w1-6 "Siège" - 5 waves, marathon
+    'w1-6': {
+      id: 'w1-6', background: 'farm', music: 'sigma',
+      lanes: 4, startCash: 700, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo','pumpkin','lime'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(10, [ s(0,0,'common'),s(0.5,1,'common'),s(1,2,'common'),s(1.5,3,'common'),s(2.5,0,'common'),s(3.5,2,'common') ]),
+        w('onPrevCleared', [ s(0,1,'common'),s(0.6,3,'common'),s(1.2,0,'rare'),s(2,2,'common'),s(2.8,1,'rare'),s(4,3,'common') ], { delayAfter: 5 }),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.7,1,'rare'),s(1.4,2,'common'),s(2.2,3,'rare'),s(3,0,'common'),s(4,2,'veryrare') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,3,'rare'),s(0.6,0,'rare'),s(1.2,2,'veryrare'),s(2,1,'rare'),s(3,3,'veryrare'),s(4.5,0,'rare') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,2,'veryrare'),s(1.6,1,'rare'),s(2.4,3,'veryrare'),s(3.2,0,'rare'),s(4,2,'ultrarare'),s(5.5,1,'veryrare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 210s' },
+      ],
+      rewards: { cash: 1500, firstClearBonus: 2200, unlocks: ['onion'] },
+      intro: 'Cinq vagues successives. Tiens jusqu\'au bout !',
+    },
+    // w1-7 BOSS "Le Grand Patapim" - First boss fight
+    'w1-7': {
+      id: 'w1-7', background: 'farm', music: 'horror',
+      lanes: 4, startCash: 900, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','clover','mint','bamboo','pumpkin','lime','onion'],
+      plantUnlocks: ['ice'],
+      waves: [
+        w(12, [ s(0,0,'common'),s(0.7,1,'common'),s(1.4,2,'common'),s(2.1,3,'common'),s(3,0,'rare'),s(4,2,'rare'),s(5,1,'common'),s(6,3,'common') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.8,3,'rare'),s(1.6,1,'veryrare'),s(2.4,2,'rare'),s(3.5,0,'veryrare'),s(4.5,3,'rare'),s(5.5,1,'ultrarare') ], { delayAfter: 6 }),
+        // Boss wave
+        w('onPrevCleared', [
+          s(0, 1, 'goat', { hpMult: 4 }),  // Le Grand Patapim (GOAT × 4 HP)
+          // Adds en renfort
+          s(2, 0, 'common'), s(3, 2, 'common'), s(4, 3, 'rare'),
+          s(5, 0, 'common'), s(6, 2, 'rare'),
+        ], { delayAfter: 15, boss: true, bossName: 'Le Grand Patapim' }),
+      ],
+      boss: true, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Battre le Grand Patapim' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 240s' },
+      ],
+      rewards: { cash: 3000, firstClearBonus: 5000, unlocks: ['blueberry'] },
+      intro: 'Le chef des Blops en personne ! Immense, puissant, terrifiant.',
+    },
+    // w2-1 "Clairière" - New world
+    'w2-1': {
+      id: 'w2-1', background: 'forest', music: 'zen',
+      lanes: 4, startCash: 800, teamSize: 3,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(10, [ s(0,0,'common'),s(0.6,1,'rare'),s(1.2,2,'common'),s(1.8,3,'rare'),s(3,0,'common'),s(4,2,'rare'),s(5,1,'veryrare') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.8,2,'rare'),s(1.6,1,'veryrare'),s(2.4,3,'rare'),s(3.5,0,'veryrare'),s(4.5,2,'rare'),s(5.5,1,'veryrare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,1,'rare'),s(1.6,2,'veryrare'),s(2.4,3,'rare'),s(3.5,0,'ultrarare'),s(5,2,'veryrare'),s(6,1,'ultrarare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'cheap', desc: 'Dépenser moins de 1500$', limit: 1500 },
+      ],
+      rewards: { cash: 1800, firstClearBonus: 2600, unlocks: ['fig'] },
+      intro: 'La forêt est mystérieuse. Les Blops semblent plus sauvages ici.',
+    },
+    // w2-2 "Blops Sauvages"
+    'w2-2': {
+      id: 'w2-2', background: 'forest', music: 'zen',
+      lanes: 4, startCash: 900, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(10, [ s(0,0,'rare'),s(0.6,1,'common'),s(1.2,2,'rare'),s(1.8,3,'common'),s(3,1,'veryrare'),s(4,3,'rare'),s(5,0,'veryrare') ]),
+        w('onPrevCleared', [ s(0,2,'veryrare'),s(0.8,0,'rare'),s(1.6,3,'veryrare'),s(2.4,1,'rare'),s(3.5,2,'ultrarare'),s(5,0,'veryrare'),s(6,3,'rare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,2,'veryrare'),s(1.6,1,'ultrarare'),s(2.4,3,'rare'),s(3.5,0,'ultrarare'),s(4.5,2,'veryrare'),s(6,1,'ultrarare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 180s' },
+      ],
+      rewards: { cash: 2200, firstClearBonus: 3200, unlocks: ['lychee'] },
+      intro: 'Les Blops sauvages sont imprévisibles. Sois réactif.',
+    },
+    // w2-3 "Brouillard"
+    'w2-3': {
+      id: 'w2-3', background: 'forest', music: 'horror',
+      lanes: 4, startCash: 1000, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(10, [ s(0,0,'rare'),s(0.6,2,'rare'),s(1.2,1,'veryrare'),s(1.8,3,'rare'),s(3,0,'veryrare'),s(4,2,'veryrare'),s(5,1,'rare') ]),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.8,1,'rare'),s(1.6,2,'ultrarare'),s(2.4,3,'veryrare'),s(3.5,0,'rare'),s(4.5,2,'ultrarare'),s(5.5,1,'veryrare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.8,2,'veryrare'),s(1.6,1,'ultrarare'),s(2.4,3,'veryrare'),s(4,0,'ultrarare'),s(5.5,2,'ultrarare') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 200s' },
+      ],
+      rewards: { cash: 2800, firstClearBonus: 4000, unlocks: ['avocado'] },
+      intro: 'Le brouillard brouille la vue. Anticipe les trajectoires.',
+    },
+    // w2-4 "La Meute" - 6 waves
+    'w2-4': {
+      id: 'w2-4', background: 'forest', music: 'phonk',
+      lanes: 5, startCash: 1200, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'common'),s(0.5,1,'rare'),s(1,2,'common'),s(1.5,3,'rare'),s(2,4,'common'),s(3,1,'veryrare'),s(4,3,'veryrare') ]),
+        w('onPrevCleared', [ s(0,0,'rare'),s(0.6,2,'veryrare'),s(1.2,4,'rare'),s(1.8,1,'rare'),s(2.4,3,'veryrare'),s(3.5,0,'veryrare'),s(4.5,2,'ultrarare') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,1,'veryrare'),s(0.6,3,'veryrare'),s(1.2,0,'rare'),s(1.8,2,'veryrare'),s(2.4,4,'rare'),s(3.5,1,'ultrarare'),s(5,3,'ultrarare') ], { delayAfter: 6 }),
+        w('onPrevCleared', [ s(0,0,'veryrare'),s(0.6,2,'ultrarare'),s(1.2,4,'veryrare'),s(1.8,1,'veryrare'),s(2.4,3,'ultrarare'),s(4,0,'ultrarare'),s(5.5,2,'veryrare') ], { delayAfter: 8 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 240s' },
+      ],
+      rewards: { cash: 3500, firstClearBonus: 5000, unlocks: ['starfruit'] },
+      intro: '5 lanes à défendre. La meute arrive en masse.',
+    },
+    // w2-5 "Variants"
+    'w2-5': {
+      id: 'w2-5', background: 'forest', music: 'rave',
+      lanes: 5, startCash: 1400, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'rare'),s(0.6,2,'rare'),s(1.2,4,'rare'),s(1.8,1,'veryrare'),s(2.4,3,'veryrare'),s(3.5,0,'ultrarare') ]),
+        w('onPrevCleared', [ s(0,2,'veryrare'),s(0.6,4,'veryrare'),s(1.2,1,'ultrarare'),s(1.8,3,'veryrare'),s(3,0,'ultrarare'),s(4.5,2,'ultrarare'),s(5.5,4,'ultrarare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,2,'ultrarare'),s(1.2,4,'ultrarare'),s(2,1,'ultrarare'),s(3,3,'ultrarare'),s(5,0,'mythic') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 200s' },
+      ],
+      rewards: { cash: 4500, firstClearBonus: 7000, unlocks: ['coconut'] },
+      intro: 'Les variantes Ethereal rôdent. Ils sont plus résistants.',
+    },
+    // w2-6 "Nuit sans lune"
+    'w2-6': {
+      id: 'w2-6', background: 'forest', music: 'horror',
+      lanes: 5, startCash: 1600, teamSize: 4,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit','coconut'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'veryrare'),s(0.6,2,'veryrare'),s(1.2,4,'rare'),s(1.8,1,'veryrare'),s(2.4,3,'ultrarare'),s(4,0,'ultrarare') ]),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,2,'veryrare'),s(1.2,4,'ultrarare'),s(1.8,1,'ultrarare'),s(2.4,3,'veryrare'),s(3.5,0,'mythic'),s(5,2,'ultrarare') ], { delayAfter: 7 }),
+        w('onPrevCleared', [ s(0,1,'ultrarare'),s(0.6,3,'ultrarare'),s(1.2,0,'mythic'),s(2.4,2,'ultrarare'),s(3.5,4,'mythic') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 220s' },
+      ],
+      rewards: { cash: 6000, firstClearBonus: 9000, unlocks: ['durian'] },
+      intro: 'Nuit totale. Les Blops sont dans leur élément.',
+    },
+    // w2-7 "Avant-garde"
+    'w2-7': {
+      id: 'w2-7', background: 'forest', music: 'sigma',
+      lanes: 5, startCash: 2000, teamSize: 5,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit','coconut','durian'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(12, [ s(0,0,'ultrarare'),s(0.6,2,'ultrarare'),s(1.2,4,'ultrarare'),s(2,1,'veryrare'),s(3,3,'mythic') ]),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,1,'mythic'),s(1.2,2,'ultrarare'),s(1.8,3,'mythic'),s(2.4,4,'ultrarare'),s(4,0,'mythic'),s(5.5,2,'mythic') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,1,'mythic'),s(0.8,3,'mythic'),s(1.6,0,'ultrarare'),s(2.4,2,'mythic'),s(3.5,4,'mythic'),s(5,0,'mythic') ], { delayAfter: 10 }),
+      ],
+      boss: null, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Terminer le niveau' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 240s' },
+      ],
+      rewards: { cash: 8000, firstClearBonus: 12000, unlocks: ['lotus'] },
+      intro: 'L\'avant-garde du Roi. Ça sent le boss final...',
+    },
+    // w2-8 BOSS FINAL "Bombombini Furieux"
+    'w2-8': {
+      id: 'w2-8', background: 'forest', music: 'horror',
+      lanes: 5, startCash: 3000, teamSize: 5,
+      plantPool: ['sunflower','pea','cactus','bamboo','pumpkin','lime','onion','blueberry','fig','lychee','avocado','starfruit','coconut','durian','lotus'],
+      plantUnlocks: ['ice','mint'],
+      waves: [
+        w(15, [ s(0,0,'veryrare'),s(0.6,2,'ultrarare'),s(1.2,4,'veryrare'),s(2,1,'mythic'),s(3,3,'ultrarare'),s(4,0,'mythic') ]),
+        w('onPrevCleared', [ s(0,0,'ultrarare'),s(0.6,2,'mythic'),s(1.2,4,'ultrarare'),s(1.8,1,'mythic'),s(2.4,3,'mythic'),s(4,2,'mythic'),s(5,0,'mythic') ], { delayAfter: 8 }),
+        w('onPrevCleared', [ s(0,1,'mythic'),s(0.8,3,'mythic'),s(1.6,0,'mythic'),s(2.4,2,'mythic'),s(3,4,'mythic') ], { delayAfter: 6 }),
+        // BOSS WAVE : Bombombini avec HP × 8 + escorte mythique
+        w('onPrevCleared', [
+          s(0, 2, 'goat', { hpMult: 8 }),  // Bombombini Furieux (GOAT × 8 HP = 24000 HP)
+          s(3, 0, 'mythic'), s(4, 4, 'mythic'),
+          s(6, 1, 'mythic'), s(8, 3, 'mythic'),
+          s(10, 2, 'ultrarare'), s(12, 0, 'mythic'),
+        ], { delayAfter: 20, boss: true, bossName: 'Bombombini Furieux' }),
+      ],
+      boss: true, winCondition: 'allWavesCleared', loseCondition: 'anyBlopReachedBase',
+      starGoals: [
+        { id: 'clear', desc: 'Vaincre Bombombini Furieux' },
+        { id: 'noDamage', desc: 'Base intacte' },
+        { id: 'quick', desc: 'Finir en moins de 300s' },
+      ],
+      rewards: { cash: 20000, firstClearBonus: 30000, unlocks: ['phoenix'] },
+      intro: 'LE BOSS FINAL. Bombombini Furieux, roi des Blops. Prêt à en finir ?',
+    },
+  };
+
+  function getLevelData(id) {
+    return LEVEL_DATA[id];
+  }
+  function levelBlopCount(levelData) {
+    if (!levelData || !levelData.waves) return 0;
+    return levelData.waves.reduce((n, wave) => n + (wave.spawns || []).length, 0);
+  }
+
+  // === Point 4 : WaveScheduler (moteur de spawn scripté pour campagne) ===
+  // État global du combat campagne
+  // game.mode : 'endless' (défaut) | 'campaign'
+  // game.campaignActive : { levelId, scheduler, baseHp, startedAt, stats }
+  // NB : game.mode sera initialisé lazy (au premier tick du loop) car `game` n'existe pas encore ici
+
+  class WaveScheduler {
+    constructor(level, callbacks) {
+      this.level = level;
+      this.waves = level.waves || [];
+      this.cb = callbacks || {};
+      this.t = 0;                    // temps écoulé depuis start
+      this.currentIdx = -1;           // index wave en cours, -1 = pas commencé
+      this.waveStartT = 0;            // temps où la wave courante a commencé
+      this.spawnCursor = 0;           // combien de spawns consommés dans la wave courante
+      this.spawned = [];              // refs aux Blops spawnés (current wave)
+      this.state = 'pending';         // 'pending' | 'spawning' | 'clearing' | 'done'
+      this.nextWaveAfterCleared = 0;  // temps mini à attendre après clear
+      this.totalSpawned = 0;
+    }
+
+    tick(dt) {
+      this.t += dt;
+      if (this.state === 'done') return;
+
+      // Décider si on lance la prochaine wave
+      if (this.state === 'pending' || this.state === 'clearing') {
+        const next = this.waves[this.currentIdx + 1];
+        if (!next) {
+          // Plus de waves à lancer → on attend que la courante soit clear
+          if (this.state === 'clearing' && this._allSpawnedDead()) {
+            this.state = 'done';
+            if (this.cb.onAllCleared) this.cb.onAllCleared();
+          }
+          return;
+        }
+        let shouldStart = false;
+        if (next.triggerAt === 'onPrevCleared') {
+          if (this.state === 'pending') {
+            shouldStart = true; // 1ère wave : onPrevCleared = immédiat
+          } else if (this.state === 'clearing' && this._allSpawnedDead()) {
+            // attendre le delayAfter de la wave précédente
+            const prev = this.waves[this.currentIdx];
+            const delay = (prev && prev.delayAfter) || 0;
+            if (this.t - this.lastClearedAt >= delay) shouldStart = true;
+          }
+        } else if (typeof next.triggerAt === 'number') {
+          if (this.t >= next.triggerAt) shouldStart = true;
+        }
+        if (shouldStart) this._startWave();
+      }
+
+      // Process des spawns de la wave courante
+      if (this.state === 'spawning') {
+        const wave = this.waves[this.currentIdx];
+        const relT = this.t - this.waveStartT;
+        while (this.spawnCursor < wave.spawns.length && wave.spawns[this.spawnCursor].at <= relT) {
+          const sp = wave.spawns[this.spawnCursor];
+          this._fireSpawn(sp);
+          this.spawnCursor++;
+        }
+        if (this.spawnCursor >= wave.spawns.length) {
+          this.state = 'clearing';
+          if (this.cb.onWaveSpawnsDone) this.cb.onWaveSpawnsDone(this.currentIdx);
+        }
+      }
+
+      // Détection fin de wave clear (pour déclencher cb)
+      if (this.state === 'clearing' && !this._cleanupFlag && this._allSpawnedDead()) {
+        this._cleanupFlag = true;
+        this.lastClearedAt = this.t;
+        if (this.cb.onWaveCleared) this.cb.onWaveCleared(this.currentIdx);
+      }
+    }
+
+    _startWave() {
+      this.currentIdx++;
+      this.waveStartT = this.t;
+      this.spawnCursor = 0;
+      this.spawned = [];
+      this._cleanupFlag = false;
+      this.state = 'spawning';
+      if (this.cb.onWaveStart) this.cb.onWaveStart(this.currentIdx, this.waves[this.currentIdx]);
+    }
+
+    _fireSpawn(spawn) {
+      // Délègue au spawner global (utilise spawnBrainrot existant)
+      const enemy = spawnBrainrot(spawn.lane, spawn.rarity, {
+        noVariant: spawn.noVariant !== undefined ? spawn.noVariant : true,
+        hpMult: spawn.hpMult,
+        startZ: spawn.startZ,
+      });
+      if (enemy) {
+        this.spawned.push(enemy);
+        this.totalSpawned++;
+        if (this.cb.onSpawn) this.cb.onSpawn(enemy, spawn);
+      }
+    }
+
+    _allSpawnedDead() {
+      return this.spawned.every(e => !e || !e.parent);
+    }
+
+    currentWaveInfo() {
+      if (this.currentIdx < 0) return { num: 0, total: this.waves.length, state: this.state };
+      return { num: this.currentIdx + 1, total: this.waves.length, state: this.state };
+    }
+  }
+
+  // === Point 7 : Loadout screen (choix pré-match des plantes) ===
+  function availablePlantsForLevel(data) {
+    // Plantes dispo = plantPool + déblocages campagne persistés
+    const base = data.plantPool.slice();
+    if (gameCampaign.unlocks) {
+      gameCampaign.unlocks.forEach(id => {
+        if (!base.includes(id) && data.plantUnlocks && data.plantUnlocks.includes(id)) base.push(id);
+      });
+    }
+    return base;
+  }
+  function showLoadoutScreen(lv) {
+    const data = getLevelData(lv.id);
+    if (!data) return;
+    const pool = availablePlantsForLevel(data);
+    const teamSize = data.teamSize || 3;
+    // Si pool === teamSize, on skip (loadout forcé)
+    if (pool.length <= teamSize) {
+      startLevelWithLoadout(lv.id, pool);
+      return;
+    }
+    // Construction UI
+    const existing = document.getElementById('loadout-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'loadout-modal';
+    modal.className = 'modal';
+    modal.style.zIndex = '9999';
+    let poolHtml = '';
+    for (const pid of pool) {
+      const p = PLANTS[pid];
+      if (!p) continue;
+      const r = RARITIES[p.rarity];
+      const icon = PLANT_ICONS[pid] || '🌱';
+      poolHtml += `
+        <div class="loadout-card" data-pid="${pid}" style="background:#1a1a22;border:2px solid #333;border-radius:10px;padding:10px;cursor:pointer;text-align:center;min-height:110px;display:flex;flex-direction:column;justify-content:center;transition:all 0.15s;">
+          <div style="font-size:36px;">${icon}</div>
+          <div style="font-weight:700;color:#fff;font-size:12px;margin-top:4px;">${p.name}</div>
+          <div style="font-size:10px;color:${r.color};text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">${r.label}</div>
+          <div style="color:#ffcc33;font-weight:700;font-size:13px;margin-top:4px;">${p.price}$</div>
+        </div>`;
+    }
+    modal.innerHTML = `
+      <div class="modal-content modal-content--md" style="position:relative;">
+        <button class="modal-x" aria-label="Fermer" id="loadout-close-btn">×</button>
+        <div class="modal-title" style="color:#66ccff;">🌱 Loadout — ${lv.name}</div>
+        <div style="text-align:center;color:#aaa;font-size:13px;margin-bottom:14px;">
+          Choisis <strong style="color:#ffcc33;">${teamSize} plantes</strong> sur ${pool.length}. Ce seront tes seules armes pour ce niveau.
+        </div>
+        <div id="loadout-pool" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:16px;">
+          ${poolHtml}
+        </div>
+        <div style="background:#0d0d15;padding:10px;border-radius:8px;margin-bottom:14px;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:6px;">Ton équipe (<span id="loadout-count">0</span>/${teamSize}) :</div>
+          <div id="loadout-team" style="display:flex;gap:6px;min-height:36px;flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <div class="btn" id="loadout-cancel" style="padding:10px 18px;">Annuler</div>
+          <div class="btn gold" id="loadout-confirm" style="padding:10px 24px;opacity:0.4;pointer-events:none;">▶ Commencer (${teamSize} requis)</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const selected = [];
+    const refresh = () => {
+      const team = document.getElementById('loadout-team');
+      team.innerHTML = selected.map(pid => {
+        const p = PLANTS[pid];
+        return `<div style="background:#2a2a3a;padding:4px 10px;border-radius:14px;font-size:12px;display:flex;gap:4px;align-items:center;">${PLANT_ICONS[pid]||'🌱'} <strong>${p.name}</strong></div>`;
+      }).join('') || '<span style="color:#666;font-style:italic;font-size:12px;">Aucune plante sélectionnée</span>';
+      document.getElementById('loadout-count').textContent = selected.length;
+      // Cards visuelles
+      modal.querySelectorAll('.loadout-card').forEach(c => {
+        const isSelected = selected.includes(c.dataset.pid);
+        c.style.borderColor = isSelected ? '#ffdd00' : '#333';
+        c.style.boxShadow = isSelected ? '0 0 14px rgba(255,221,0,0.5)' : 'none';
+        c.style.transform = isSelected ? 'scale(1.05)' : 'scale(1)';
+      });
+      // Bouton
+      const ok = selected.length === teamSize;
+      const btn = document.getElementById('loadout-confirm');
+      btn.style.opacity = ok ? '1' : '0.4';
+      btn.style.pointerEvents = ok ? 'auto' : 'none';
+      btn.textContent = ok ? '▶ Commencer' : '▶ Commencer (' + (teamSize - selected.length) + ' à choisir)';
+    };
+    modal.querySelectorAll('.loadout-card').forEach(c => {
+      c.onclick = () => {
+        const pid = c.dataset.pid;
+        const i = selected.indexOf(pid);
+        if (i >= 0) selected.splice(i, 1);
+        else if (selected.length < teamSize) selected.push(pid);
+        sfx && sfx('click');
+        refresh();
+      };
+    });
+    document.getElementById('loadout-cancel').onclick = () => { modal.remove(); };
+    document.getElementById('loadout-close-btn').onclick = () => { modal.remove(); };
+    document.getElementById('loadout-confirm').onclick = () => {
+      sfx && sfx('click');
+      modal.remove();
+      startLevelWithLoadout(lv.id, selected);
+    };
+    refresh();
+  }
+
+  function startLevelWithLoadout(levelId, loadout) {
+    const ok = startCampaignLevel(levelId, loadout);
+    if (ok) {
+      setActiveTab('game');
+      const lv = CAMPAIGN_LEVELS.find(l => l.id === levelId);
+      showHint('📖 ' + lv.name + ' — bonne chance !', 3000);
+    } else {
+      showHint('⚠️ Niveau indisponible', 2500);
+    }
+  }
+
+  // === Fonctions helpers campagne ===
+  function startCampaignLevel(levelId, loadout) {
+    const lv = CAMPAIGN_LEVELS.find(l => l.id === levelId);
+    const data = getLevelData(levelId);
+    if (!lv || !data) return false;
+
+    // Snapshot endless state (pour restaurer après)
+    game._endlessSnapshot = {
+      cash: game.cash,
+      inventory: game.inventory.slice(),
+      plants: game.plants.map(p => ({
+        plantId: p.userData.plantId,
+        mutation: p.userData.mutation,
+        laneIdx: p.userData.slot.laneIdx,
+        slotIdx: p.userData.slot.slotIdx,
+        killCount: p.userData.killCount || 0,
+      })),
+    };
+
+    // Setup campaign
+    game.mode = 'campaign';
+    game.campaignActive = {
+      levelId, level: lv, data,
+      baseHp: 3, baseHpMax: 3,
+      startedAt: performance.now(),
+      stats: { blopsKilled: 0, cashSpent: 0, plantsPlaced: 0, baseReached: 0 },
+      result: null,
+    };
+
+    // Wipe scène
+    game.plants.forEach(p => scene.remove(p));
+    game.plants = [];
+    game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
+    game.brainrots = [];
+    game.bullets.forEach(b => scene.remove(b));
+    game.bullets = [];
+    game.selectedSeedIdx = null;
+
+    // Override cash + inventaire (basé sur le loadout choisi)
+    game.cash = data.startCash;
+    game.inventory = [];
+    const activePool = loadout && loadout.length ? loadout : data.plantPool;
+    for (const pid of activePool) {
+      for (let i = 0; i < 50; i++) {
+        game.inventory.push({ plantId: pid, mutation: 'none' });
+      }
+    }
+    // Mémorise le loadout pour retry
+    game.campaignActive.loadout = activePool.slice();
+
+    // Rebuild terrain avec les lanes du niveau
+    rebuildTerrain();
+
+    // Scheduler
+    game.campaignActive.scheduler = new WaveScheduler(data, {
+      onWaveStart: (i, wv) => {
+        if (wv.boss) {
+          showWaveBanner('👑 ' + (wv.bossName || 'BOSS FIGHT'), 'Le combat final !', 0xffdd00);
+          sfx && sfx('rarity');
+          setTimeout(() => sfx && sfx('crit'), 400);
+        } else {
+          showWaveBanner('🌀 VAGUE ' + (i + 1) + '/' + data.waves.length, 'Les Blops arrivent !');
+          sfx && sfx('spawn');
+        }
+      },
+      onWaveCleared: (i) => {
+        if (i < data.waves.length - 1) {
+          showWaveBanner('✅ VAGUE ' + (i + 1) + ' NETTOYÉE', 'Prépare-toi...', 0x44ff88);
+          sfx && sfx('reward');
+        }
+      },
+      onAllCleared: () => {/* géré dans campaignTick */},
+    });
+
+    // Tutorial hints pour 1er niveau
+    if (data.tutorial) {
+      setTimeout(() => showHint('👆 Clique une graine à gauche, puis un slot sur une lane pour planter', 6000), 1500);
+      setTimeout(() => showHint('🌻 Les Tournesols génèrent du cash passif. Plantes-en d\'abord !', 5500), 7000);
+      setTimeout(() => showHint('🌀 1ère vague dans 10s — positionne bien tes plantes', 3500), 12500);
+    }
+
+    // UI
+    buildCampaignHUD();
+    renderInventory();
+    updateHud();
+    return true;
+  }
+
+  function endCampaignLevel(result) {
+    if (!game.campaignActive) return;
+    game.campaignActive.result = result || 'cancel';
+    game.mode = 'endless';
+
+    // Nettoie scène campagne
+    game.plants.forEach(p => scene.remove(p));
+    game.plants = [];
+    game.brainrots.forEach(b => { removeHpBar(b); scene.remove(b); });
+    game.brainrots = [];
+    game.bullets.forEach(b => scene.remove(b));
+    game.bullets = [];
+    game.selectedSeedIdx = null;
+
+    // Restaure endless state
+    if (game._endlessSnapshot) {
+      game.cash = game._endlessSnapshot.cash;
+      game.inventory = game._endlessSnapshot.inventory;
+      rebuildTerrain();
+      game._endlessSnapshot.plants.forEach(p => {
+        const slot = slots.find(s => s.laneIdx === p.laneIdx && s.slotIdx === p.slotIdx);
+        if (slot && !slot.plant && PLANTS[p.plantId]) {
+          placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
+          if (slot.plant) slot.plant.userData.killCount = p.killCount || 0;
+        }
+      });
+      game._endlessSnapshot = null;
+    }
+
+    game.campaignActive = null;
+    removeCampaignHUD();
+    renderInventory();
+    updateHud();
+  }
+
+  // === Point 5 : HUD overlay pendant un niveau campagne ===
+  function buildCampaignHUD() {
+    removeCampaignHUD();
+    const hud = document.createElement('div');
+    hud.id = 'campaign-hud';
+    hud.style.cssText = 'position:fixed;top:96px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);padding:10px 16px;border-radius:14px;z-index:400;color:#fff;font-family:var(--font-display,sans-serif);display:flex;gap:12px;align-items:center;border:2px solid #ffcc33;box-shadow:0 4px 20px rgba(0,0,0,0.6);backdrop-filter:blur(8px);';
+    hud.innerHTML = `
+      <div style="font-size:13px;"><span id="camp-hud-title" style="color:#ffcc33;font-weight:700;"></span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:13px;">🌀 <span id="camp-hud-wave" style="font-weight:700;color:#88ccff;">-</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:13px;">👾 <span id="camp-hud-killed" style="font-weight:700;color:#ff9966;">0</span>/<span id="camp-hud-total">?</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:13px;">❤️ <span id="camp-hud-hp" style="font-weight:700;">3/3</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:12px;color:#aaa;" id="camp-hud-timer">⏱ <span id="camp-hud-time">0:00</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <button id="camp-abandon-btn" style="background:#cc3333;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px;">❌ Abandonner</button>
+    `;
+    document.body.appendChild(hud);
+    document.getElementById('camp-abandon-btn').onclick = () => {
+      if (!confirm('Abandonner le niveau et retourner à la carte ?')) return;
+      sfx && sfx('click');
+      endCampaignLevel('cancel');
+      setActiveTab('campaign');
+    };
+    updateCampaignHUD();
+  }
+  function removeCampaignHUD() {
+    const h = document.getElementById('campaign-hud');
+    if (h) h.remove();
+  }
+  function updateCampaignHUD() {
+    if (!game.campaignActive) return;
+    const ca = game.campaignActive;
+    const title = document.getElementById('camp-hud-title');
+    if (!title) return;
+    title.textContent = '📖 ' + ca.level.world + '-' + ca.level.idx + ' ' + ca.level.name;
+    const w = ca.scheduler.currentWaveInfo();
+    document.getElementById('camp-hud-wave').textContent = w.num + '/' + w.total;
+    document.getElementById('camp-hud-killed').textContent = ca.stats.blopsKilled;
+    document.getElementById('camp-hud-total').textContent = levelBlopCount(ca.data);
+    const hpEl = document.getElementById('camp-hud-hp');
+    hpEl.textContent = ca.baseHp + '/' + ca.baseHpMax;
+    hpEl.style.color = ca.baseHp >= 2 ? '#66ff99' : ca.baseHp === 1 ? '#ffaa33' : '#ff3333';
+    const elapsed = (performance.now() - ca.startedAt) / 1000;
+    const m = Math.floor(elapsed / 60);
+    const s = Math.floor(elapsed % 60);
+    document.getElementById('camp-hud-time').textContent = m + ':' + String(s).padStart(2, '0');
+  }
+
+  // Point 5+ : bannière cinématique "VAGUE X"
+  function showWaveBanner(title, subtitle, colorHex) {
+    const col = colorHex || 0xff3366;
+    const hex = '#' + col.toString(16).padStart(6, '0');
+    const ex = document.getElementById('wave-banner');
+    if (ex) ex.remove();
+    const banner = document.createElement('div');
+    banner.id = 'wave-banner';
+    banner.style.cssText = 'position:fixed;top:35%;left:50%;transform:translate(-50%,-50%) scale(0.6);opacity:0;pointer-events:none;z-index:3000;text-align:center;transition:all 0.28s cubic-bezier(.2,1.5,.4,1);';
+    banner.innerHTML = `
+      <div style="font-family:var(--font-display,sans-serif);font-size:52px;font-weight:900;color:${hex};text-shadow:3px 3px 0 #000,0 0 20px ${hex},0 0 40px ${hex};letter-spacing:3px;">${title}</div>
+      <div style="font-family:var(--font-display,sans-serif);font-size:18px;color:#fff;margin-top:6px;text-shadow:2px 2px 0 rgba(0,0,0,0.5);">${subtitle || ''}</div>
+    `;
+    document.body.appendChild(banner);
+    requestAnimationFrame(() => {
+      banner.style.opacity = '1';
+      banner.style.transform = 'translate(-50%,-50%) scale(1)';
+    });
+    setTimeout(() => {
+      banner.style.opacity = '0';
+      banner.style.transform = 'translate(-50%,-50%) scale(1.15)';
+    }, 1600);
+    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 2000);
+  }
+
+  function campaignTick(dt) {
+    if (game.mode !== 'campaign' || !game.campaignActive) return;
+    const ca = game.campaignActive;
+    if (ca.result) return; // déjà terminé
+    ca.scheduler.tick(dt);
+    updateCampaignHUD();
+    // Check victoire
+    if (ca.scheduler.state === 'done' && game.brainrots.length === 0) {
+      ca.result = 'win';
+      showCampaignResult(true);
+    }
+    // Check défaite (baseHp <= 0)
+    if (ca.baseHp <= 0) {
+      ca.result = 'lose';
+      showCampaignResult(false);
+    }
+  }
+
+  // === Point 6 : Évaluation objectifs étoiles ===
+  function evaluateStarGoals(ca, win) {
+    if (!win) return 0;
+    const elapsed = (performance.now() - ca.startedAt) / 1000;
+    let stars = 0;
+    for (const g of ca.data.starGoals) {
+      let achieved = false;
+      if (g.id === 'clear') achieved = true;
+      else if (g.id === 'noDamage') achieved = ca.baseHp === ca.baseHpMax;
+      else if (g.id === 'quick') achieved = elapsed < 90;
+      else if (g.id === 'cheap') achieved = ca.stats.cashSpent < (ca.data.starGoals.find(sg => sg.id === 'cheap')?.limit || 700);
+      if (achieved) stars++;
+    }
+    return stars;
+  }
+
+  // === Point 6 : Modal résultat victoire/défaite ===
+  function showCampaignResult(win) {
+    const ca = game.campaignActive;
+    if (!ca) return;
+    const lv = ca.level;
+    const data = ca.data;
+    const elapsed = (performance.now() - ca.startedAt) / 1000;
+    const stars = evaluateStarGoals(ca, win);
+    const prevStars = gameCampaign.stars[lv.id] || 0;
+    const newBest = stars > prevStars;
+
+    // Applique progression
+    if (win) {
+      gameCampaign.completed[lv.id] = true;
+      if (stars > prevStars) gameCampaign.stars[lv.id] = stars;
+      // Unlock niveau suivant
+      const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === lv.id);
+      if (idx >= 0 && idx < CAMPAIGN_LEVELS.length - 1) {
+        const nextId = CAMPAIGN_LEVELS[idx + 1].id;
+        if (!gameCampaign.completed[nextId]) gameCampaign.highestUnlocked = nextId;
+      }
+      // Rewards (cash ajouté à endless après retour)
+      ca._rewardCash = (data.rewards.cash || 0);
+      if (!prevStars && data.rewards.firstClearBonus) ca._rewardCash += data.rewards.firstClearBonus;
+      // Unlock plantes (persisté dans game.campaign.unlocks)
+      if (data.rewards.unlocks) {
+        gameCampaign.unlocks = gameCampaign.unlocks || [];
+        data.rewards.unlocks.forEach(id => {
+          if (!gameCampaign.unlocks.includes(id)) gameCampaign.unlocks.push(id);
+        });
+      }
+    }
+
+    // Build modal
+    const existing = document.getElementById('camp-result-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'camp-result-modal';
+    modal.className = 'modal';
+    modal.style.zIndex = '9999';
+    const color = win ? '#ffcc33' : '#ff3366';
+    const bgGrad = win ? 'linear-gradient(135deg,#1a2a1a,#0f0d1a)' : 'linear-gradient(135deg,#2a1a1a,#0f0d1a)';
+    const title = win ? '🏆 VICTOIRE' : '💀 DÉFAITE';
+    const subtitle = win ? lv.name + ' — terminé !' : 'Ta base est tombée...';
+    let starsHtml = '';
+    for (let i = 0; i < 3; i++) {
+      const earned = i < stars;
+      starsHtml += `<span style="font-size:56px;margin:0 4px;color:${earned ? '#ffdd00' : '#555'};text-shadow:${earned ? '0 0 20px #ffcc00' : 'none'};display:inline-block;transition:transform 0.4s cubic-bezier(.2,1.6,.4,1);transform:scale(${earned ? 1 : 0.7});">★</span>`;
+    }
+    const timeStr = Math.floor(elapsed / 60) + ':' + String(Math.floor(elapsed % 60)).padStart(2, '0');
+    const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === lv.id);
+    const hasNext = idx >= 0 && idx < CAMPAIGN_LEVELS.length - 1;
+    const nextData = hasNext ? getLevelData(CAMPAIGN_LEVELS[idx + 1].id) : null;
+    const canPlayNext = win && hasNext;
+
+    modal.innerHTML = `
+      <div class="modal-content modal-content--md" style="background:${bgGrad};border:2px solid ${color};box-shadow:0 0 40px ${color}88;text-align:center;padding:28px 24px;">
+        <div style="font-family:var(--font-display,sans-serif);font-size:42px;font-weight:900;color:${color};text-shadow:0 0 15px ${color};letter-spacing:3px;">${title}</div>
+        <div style="color:#ccc;margin-top:4px;font-size:16px;">${subtitle}</div>
+        <div style="margin:24px 0;">${starsHtml}</div>
+        ${win && newBest ? `<div style="color:#66ff99;font-weight:700;font-size:14px;margin-bottom:14px;">✨ Nouveau meilleur score !</div>` : ''}
+        <div style="background:rgba(0,0,0,0.4);padding:12px;border-radius:8px;margin-bottom:14px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;text-align:left;">
+            <div>⏱ Temps : <strong>${timeStr}</strong></div>
+            <div>👾 Blops tués : <strong>${ca.stats.blopsKilled}</strong></div>
+            <div>❤️ Base : <strong style="color:${ca.baseHp === ca.baseHpMax ? '#66ff99' : '#ffaa33'};">${ca.baseHp}/${ca.baseHpMax}</strong></div>
+            <div>💸 Dépensé : <strong>${ca.stats.cashSpent}$</strong></div>
+          </div>
+        </div>
+        ${win && ca._rewardCash ? `<div style="background:rgba(255,204,51,0.15);border:1px solid ${color};padding:10px;border-radius:8px;margin-bottom:14px;font-size:14px;">
+          🎁 Récompense : <strong style="color:#ffcc33;font-size:16px;">+${ca._rewardCash}$</strong>
+          ${data.rewards.unlocks && data.rewards.unlocks.length ? `<br>🔓 Débloqué : ${data.rewards.unlocks.map(id => PLANTS[id]?.name || id).join(', ')}` : ''}
+        </div>` : ''}
+        ${win && !hasNext ? `<div style="color:#ffcc33;font-weight:700;margin-bottom:14px;">🏆 Tu as terminé l'aventure ! Félicitations !</div>` : ''}
+
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <div class="btn" id="camp-res-retry" style="padding:10px 18px;">🔄 Rejouer</div>
+          <div class="btn" id="camp-res-map" style="padding:10px 18px;">🗺 Carte</div>
+          ${canPlayNext ? `<div class="btn gold" id="camp-res-next" style="padding:10px 22px;font-size:15px;">▶ Niveau suivant</div>` : ''}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeAndGoMap = () => {
+      modal.remove();
+      endCampaignLevel(win ? 'win' : 'lose');
+      // Donne le cash reward
+      if (win && ca._rewardCash) game.cash += ca._rewardCash;
+      setActiveTab('campaign');
+      renderCampaignMap();
+      updateHud();
+      saveGame();
+    };
+
+    document.getElementById('camp-res-retry').onclick = () => {
+      sfx && sfx('click');
+      const levelId = lv.id;
+      const prevLoadout = ca.loadout ? ca.loadout.slice() : null;
+      modal.remove();
+      endCampaignLevel(win ? 'win' : 'retry');
+      if (win && ca._rewardCash) game.cash += ca._rewardCash;
+      updateHud(); saveGame();
+      // Rejoue avec le même loadout (pas besoin de re-picker)
+      startCampaignLevel(levelId, prevLoadout);
+    };
+    document.getElementById('camp-res-map').onclick = () => { sfx && sfx('click'); closeAndGoMap(); };
+    if (canPlayNext) {
+      document.getElementById('camp-res-next').onclick = () => {
+        sfx && sfx('click');
+        const nextId = CAMPAIGN_LEVELS[idx + 1].id;
+        const nextLvData = getLevelData(nextId);
+        modal.remove();
+        endCampaignLevel('win');
+        if (ca._rewardCash) game.cash += ca._rewardCash;
+        updateHud(); saveGame();
+        if (nextLvData) {
+          startCampaignLevel(nextId);
+        } else {
+          showHint('⚠️ Niveau ' + nextId + ' pas encore implémenté', 2500);
+          setActiveTab('campaign');
+          renderCampaignMap();
+        }
+      };
+    }
+
+    // Animation d'entrée des étoiles
+    if (win && stars > 0) {
+      setTimeout(() => {
+        const starEls = modal.querySelectorAll('.modal-content span');
+        starEls.forEach((el, i) => {
+          setTimeout(() => {
+            el.style.transform = 'scale(1.2)';
+            sfx && sfx('coin');
+            setTimeout(() => { el.style.transform = 'scale(1)'; }, 200);
+          }, i * 300);
+        });
+      }, 200);
+    }
+
+    sfx && sfx(win ? 'reward' : 'error');
+  }
+
   // === V6 : Catalog BUILD (GLB achetables pour construire sa maison) ===
   // Prix progressifs : on commence par du nature peu cher, buildings plus chers.
   // file = chemin GLB relatif au repo (models/house/...). En attendant de les
@@ -2284,6 +3340,11 @@
     activeTab = tab;
     document.body.classList.toggle('tab-game', tab === 'game');
     document.body.classList.toggle('tab-house', tab === 'house');
+    document.body.classList.toggle('tab-campaign', tab === 'campaign');
+    // Safeguard : si on quitte Aventure, détruit le modal briefing de niveau
+    if (tab !== 'campaign' && typeof closeCampaignLevelModal === 'function') {
+      closeCampaignLevelModal();
+    }
     if (typeof updateTabSwitcherUI === 'function') updateTabSwitcherUI();
   }
 
@@ -2448,7 +3509,11 @@
   const GARDEN_SPACING = 10;       // écart horizontal entre les 2 jardins
   // Règle : G1 frozen au nb de lanes qu'il avait à P(DUAL_GARDEN_PRESTIGE - 1),
   // puis G2 est créé à P(DUAL) avec BASE_LANE_COUNT lanes, et +1 lane à G2 par prestige.
-  function hasDualGarden() { return game.prestige >= DUAL_GARDEN_PRESTIGE; }
+  function hasDualGarden() {
+    // Pas de dual garden en mode campagne (chaque niveau a son propre nb de lanes)
+    if (game && game.mode === 'campaign') return false;
+    return game.prestige >= DUAL_GARDEN_PRESTIGE;
+  }
   // Lanes par garden : tableau [lanesG1, lanesG2]
   function lanesPerGardenArr() {
     if (!hasDualGarden()) return [BASE_LANE_COUNT + game.prestige];
@@ -2477,9 +3542,189 @@
   window.addEventListener('DOMContentLoaded', () => {
     buildTabSwitcher();
     buildHouseShopUI();
+    buildCampaignMapUI();
     if (IS_ADMIN) buildAdminPanel();
     setupHousePlacementClicks();
   });
+
+  // === CAMPAGNE : UI Map Selector (Point 2) ===
+  function buildCampaignMapUI() {
+    const overlay = document.createElement('div');
+    overlay.id = 'campaign-map';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:linear-gradient(180deg,#8fd8ff 0%,#b6f0a6 65%,#87c4ff 100%);overflow-y:auto;padding:80px 20px 40px;';
+    document.body.appendChild(overlay);
+    const st = document.createElement('style');
+    st.textContent = `
+      #campaign-map { display:none; }
+      body.tab-campaign #campaign-map { display:block; }
+      .camp-world { max-width: 960px; margin: 0 auto 40px; }
+      .camp-world-header {
+        display:flex; align-items:center; gap:12px; margin-bottom:16px;
+        font-family: var(--font-display, sans-serif); font-size: 24px; font-weight:700; color:#fff;
+        text-shadow: 2px 2px 0 rgba(0,0,0,0.4), 0 0 12px rgba(0,0,0,0.3);
+      }
+      .camp-world-header .icon { font-size: 32px; }
+      .camp-levels-row {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 14px;
+      }
+      .camp-level {
+        background: rgba(0,0,0,0.35); border: 2px solid rgba(255,255,255,0.2);
+        border-radius: 16px; padding: 14px 10px; text-align: center; color: #fff;
+        cursor: pointer; position: relative;
+        transition: transform 0.15s var(--e-pop, ease), box-shadow 0.15s ease;
+        backdrop-filter: blur(4px);
+      }
+      .camp-level:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+      .camp-level.locked { opacity: 0.55; cursor: not-allowed; }
+      .camp-level.locked:hover { transform: none; box-shadow: none; }
+      .camp-level.completed { border-color: #ffcc33; background: rgba(255,204,51,0.2); }
+      .camp-level.boss { border-color: #ff3366; background: linear-gradient(135deg, rgba(255,51,102,0.3), rgba(100,20,40,0.4)); }
+      .camp-level .l-num { font-family: var(--font-display, sans-serif); font-size: 26px; font-weight: 900; }
+      .camp-level .l-name { font-size: 11px; color: #e0e0e0; margin-top: 4px; line-height: 1.2; min-height: 26px; }
+      .camp-level .l-stars { margin-top: 6px; font-size: 14px; letter-spacing: 2px; color: #ffdd00; }
+      .camp-level .l-stars.empty { color: rgba(255,255,255,0.25); }
+      .camp-level .l-lock { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 36px; opacity: 0.8; }
+      .camp-level.boss .l-num::before { content: '👑 '; }
+      .camp-map-title {
+        text-align: center; font-family: var(--font-display, sans-serif);
+        font-size: 40px; font-weight: 900; color: #fff; margin-bottom: 24px;
+        text-shadow: 3px 3px 0 rgba(0,0,0,0.4), 0 0 20px rgba(0,0,0,0.3);
+      }
+      .camp-map-subtitle {
+        text-align: center; font-size: 14px; color: #234;
+        margin-bottom: 30px; max-width: 640px; margin-left: auto; margin-right: auto;
+      }
+    `;
+    document.head.appendChild(st);
+    renderCampaignMap();
+  }
+
+  function renderCampaignMap() {
+    const overlay = document.getElementById('campaign-map');
+    if (!overlay) return;
+    const worldsData = [
+      { num: 1, name: 'La Ferme', icon: '🌾' },
+      { num: 2, name: 'La Forêt', icon: '🌲' },
+    ];
+    let html = '<div class="camp-map-title">📖 L\'Aventure de Patapim</div>';
+    html += '<div class="camp-map-subtitle">Enchaîne les niveaux pour débloquer de nouvelles plantes et battre les boss. Termine un niveau parfaitement pour décrocher 3 étoiles.</div>';
+    for (const world of worldsData) {
+      const levels = CAMPAIGN_LEVELS.filter(l => l.world === world.num);
+      html += '<div class="camp-world">';
+      html += '<div class="camp-world-header"><span class="icon">' + world.icon + '</span>Monde ' + world.num + ' — ' + world.name + '</div>';
+      html += '<div class="camp-levels-row">';
+      for (const lv of levels) {
+        const unlocked = campaignLevelUnlocked(lv.id);
+        const completed = !!gameCampaign.completed[lv.id];
+        const stars = gameCampaign.stars[lv.id] || 0;
+        const starsStr = '★★★'.slice(0, stars) + '☆☆☆'.slice(0, 3 - stars);
+        const cls = ['camp-level', unlocked ? '' : 'locked', completed ? 'completed' : '', lv.boss ? 'boss' : ''].filter(Boolean).join(' ');
+        html += '<div class="' + cls + '" data-level="' + lv.id + '">';
+        if (!unlocked) {
+          html += '<div class="l-lock">🔒</div>';
+          html += '<div class="l-num" style="opacity:0.3">' + lv.world + '-' + lv.idx + '</div>';
+          html += '<div class="l-name">???</div>';
+          html += '<div class="l-stars empty">☆☆☆</div>';
+        } else {
+          html += '<div class="l-num">' + lv.world + '-' + lv.idx + '</div>';
+          html += '<div class="l-name">' + lv.name + '</div>';
+          html += '<div class="l-stars' + (stars === 0 ? ' empty' : '') + '">' + starsStr + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+    overlay.innerHTML = html;
+    overlay.querySelectorAll('.camp-level').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.dataset.level;
+        const lv = CAMPAIGN_LEVELS.find(l => l.id === id);
+        if (!lv) return;
+        if (!campaignLevelUnlocked(id)) {
+          sfx && sfx('error');
+          showHint('Niveau verrouillé — termine le précédent.', 2000);
+          return;
+        }
+        sfx && sfx('click');
+        showCampaignLevelDetail(lv);
+      });
+    });
+  }
+
+  // Point 3 : modal de briefing d'un niveau avant combat
+  // Pattern "créé à la volée + détruit à la fermeture" pour éliminer tout bug de persistence.
+  function closeCampaignLevelModal() {
+    const existing = document.getElementById('camp-level-modal');
+    if (existing) existing.remove();
+  }
+  function showCampaignLevelDetail(lv) {
+    const data = getLevelData(lv.id);
+    // Retire tout ancien modal (évite la persistance accidentelle)
+    closeCampaignLevelModal();
+    const modal = document.createElement('div');
+    modal.id = 'camp-level-modal';
+    modal.className = 'modal';
+    // z-index 9999 pour passer au-dessus du campaign-map overlay (z:200)
+    modal.style.zIndex = '9999';
+    modal.innerHTML = '<div class="modal-content modal-content--md" id="camp-level-body" style="position:relative;"></div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeCampaignLevelModal(); });
+    const body = document.getElementById('camp-level-body');
+    let html = '<button class="modal-x" aria-label="Fermer" onclick="closeCampaignLevelModal()">×</button>';
+    html += '<div class="modal-title" style="color:#ffdd00;">' + (lv.boss ? '👑 ' : '') + 'Niveau ' + lv.world + '-' + lv.idx + '</div>';
+    html += '<div style="text-align:center;font-family:var(--font-display,sans-serif);font-size:20px;font-weight:700;color:#fff;margin-bottom:8px;">' + lv.name + '</div>';
+    html += '<div style="text-align:center;color:#aaa;font-style:italic;margin-bottom:14px;padding:0 10px;">' + lv.desc + '</div>';
+    if (data) {
+      html += '<div style="background:#1a1a22;padding:12px;border-radius:8px;margin-bottom:12px;">';
+      html += '<div style="color:#88ccff;font-weight:700;margin-bottom:6px;">📊 Briefing</div>';
+      html += '<div style="font-size:13px;line-height:1.7;">';
+      html += '<div>🌱 Plantes disponibles : <strong>' + data.plantPool.map(id => PLANTS[id] ? PLANTS[id].name : id).join(', ') + '</strong></div>';
+      html += '<div>🛤 Lanes : <strong>' + data.lanes + '</strong></div>';
+      html += '<div>💰 Cash de départ : <strong>' + data.startCash + '$</strong></div>';
+      html += '<div>🌀 Vagues : <strong>' + data.waves.length + '</strong></div>';
+      html += '<div>👾 Blops à éliminer : <strong>' + levelBlopCount(data) + '</strong></div>';
+      if (data.boss) html += '<div>👑 Boss : <strong style="color:#ff6666;">oui</strong></div>';
+      html += '</div></div>';
+      html += '<div style="background:#1a1a22;padding:12px;border-radius:8px;margin-bottom:12px;">';
+      html += '<div style="color:#ffcc33;font-weight:700;margin-bottom:6px;">⭐ Objectifs</div>';
+      data.starGoals.forEach((g, i) => {
+        const gained = (gameCampaign.stars[lv.id] || 0) > i;
+        html += '<div style="font-size:12px;padding:3px 0;">' + (gained ? '★' : '☆') + ' ' + g.desc + '</div>';
+      });
+      html += '</div>';
+      if (data.rewards && (data.rewards.cash || data.rewards.unlocks?.length)) {
+        html += '<div style="background:#1a221a;padding:10px;border-radius:8px;margin-bottom:12px;font-size:12px;">';
+        html += '<div style="color:#66ff99;font-weight:700;margin-bottom:4px;">🎁 Récompenses</div>';
+        if (data.rewards.cash) html += '<div>💰 +' + data.rewards.cash + '$</div>';
+        if (data.rewards.firstClearBonus && !gameCampaign.completed[lv.id]) html += '<div style="color:#ffcc33;">🌟 Première fois : +' + data.rewards.firstClearBonus + '$</div>';
+        if (data.rewards.unlocks && data.rewards.unlocks.length) html += '<div>🔓 Débloque : ' + data.rewards.unlocks.map(id => PLANTS[id] ? PLANTS[id].name : id).join(', ') + '</div>';
+        html += '</div>';
+      }
+      if (data.intro) {
+        html += '<div style="font-style:italic;color:#ccc;text-align:center;padding:10px;border-left:3px solid #66ccff;background:rgba(102,204,255,0.05);margin-bottom:12px;">"' + data.intro + '"</div>';
+      }
+      html += '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">';
+      html += '<div class="btn" onclick="closeCampaignLevelModal()" style="padding:10px 20px;">Annuler</div>';
+      html += '<div class="btn gold" id="camp-start-btn" style="padding:10px 24px;font-size:15px;">▶ Commencer</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="background:#2a1e1e;padding:16px;border-radius:8px;text-align:center;color:#ff9999;font-size:13px;">';
+      html += '⚠️ Niveau en cours de création. Revenez plus tard !';
+      html += '</div>';
+      html += '<div class="modal-close"><div class="btn" onclick="closeCampaignLevelModal()">Fermer</div></div>';
+    }
+    body.innerHTML = html;
+    if (data) {
+      document.getElementById('camp-start-btn').onclick = () => {
+        sfx && sfx('click');
+        closeCampaignLevelModal();
+        // Point 7 : passe par l'écran loadout (choix des 3 plantes)
+        showLoadoutScreen(lv);
+      };
+    }
+    // Le modal est déjà visible (pas de classe 'hidden') parce qu'on vient de le créer.
+  }
   // Raccourci : Alt+Shift+A active le mode admin et reload
   window.addEventListener('keydown', (e) => {
     if (e.altKey && e.shiftKey && e.key === 'A') {
@@ -2811,6 +4056,7 @@
     bar.style.cssText = 'position:fixed;top:46px;left:50%;transform:translateX(-50%);display:flex;gap:4px;background:rgba(0,0,0,0.55);padding:4px;border-radius:24px;z-index:9997;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);';
     bar.innerHTML = `
       <button id="tab-game" class="tab-btn tab-active">🌱 Jardin</button>
+      <button id="tab-campaign" class="tab-btn">📖 Aventure</button>
       <button id="tab-house" class="tab-btn">🏠 Maison</button>
     `;
     document.body.appendChild(bar);
@@ -2819,16 +4065,20 @@
       .tab-btn { padding:8px 18px;border:none;background:transparent;color:#ccc;font-family:var(--font-display,sans-serif);font-weight:700;font-size:13px;cursor:pointer;border-radius:20px;transition:background 0.2s;letter-spacing:0.5px; }
       .tab-btn:hover { background:rgba(255,255,255,0.08); color:#fff; }
       .tab-btn.tab-active { background:linear-gradient(90deg,#44cc88,#66aadd); color:#fff; box-shadow:0 2px 8px rgba(68,204,136,0.4); }
-      body.tab-house #inventory, body.tab-house #top-right, body.tab-house #hud { opacity:0.5; pointer-events:none; }
-      /* Masquer les overlays game (HP bars, tooltips) quand on est en Maison */
-      body.tab-house #hp-overlay, body.tab-house #plant-tooltip { display:none !important; }
+      body.tab-house #inventory, body.tab-house #top-right, body.tab-house #hud,
+      body.tab-campaign #inventory, body.tab-campaign #top-right, body.tab-campaign #hud { opacity:0.5; pointer-events:none; }
+      /* Masquer les overlays game (HP bars, tooltips) en Maison ou Aventure */
+      body.tab-house #hp-overlay, body.tab-house #plant-tooltip,
+      body.tab-campaign #hp-overlay, body.tab-campaign #plant-tooltip { display:none !important; }
       body.tab-house #build-shop-btn { display:block !important; }
     `;
     document.head.appendChild(st);
     $('tab-game').onclick = () => { setActiveTab('game'); sfx && sfx('click'); };
+    $('tab-campaign').onclick = () => { setActiveTab('campaign'); sfx && sfx('click'); };
     $('tab-house').onclick = () => { setActiveTab('house'); sfx && sfx('click'); };
     window.updateTabSwitcherUI = () => {
       $('tab-game').classList.toggle('tab-active', activeTab === 'game');
+      $('tab-campaign').classList.toggle('tab-active', activeTab === 'campaign');
       $('tab-house').classList.toggle('tab-active', activeTab === 'house');
     };
   }
@@ -3121,6 +4371,10 @@
     return 6 + (game.prestige - DUAL_GARDEN_PRESTIGE);
   }
   function currentLaneCount() {
+    // En mode campagne, on utilise les lanes définies par le niveau
+    if (game && game.mode === 'campaign' && game.campaignActive) {
+      return game.campaignActive.data.lanes;
+    }
     const arr = lanesPerGardenArr();
     return arr.reduce((s, n) => s + n, 0);
   }
@@ -4217,6 +5471,7 @@
     }
     addCash(ud.value);
     game.kills++;
+    if (game.mode === 'campaign' && game.campaignActive) game.campaignActive.stats.blopsKilled++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
     addBlopToHolding(ud.rarity, ud.variant || 'none', ud.blopId);
     addXp(ud.value / XP_PER_KILL_DIVISOR);
@@ -5055,6 +6310,11 @@
           purchased: { ...window.gameHouse.purchased },
           placed: window.gameHouse.placed.map(p => ({ id: p.id, itemId: p.itemId, x: p.x, y: p.y, z: p.z, rotY: p.rotY, scale: p.scale })),
         } : null,
+        campaign: window.gameCampaign ? {
+          highestUnlocked: window.gameCampaign.highestUnlocked,
+          stars: { ...window.gameCampaign.stars },
+          completed: { ...window.gameCampaign.completed },
+        } : null,
         achievements: { ...game.achievements },
         stats: { ...game.stats },
         missions: game.missions ? JSON.parse(JSON.stringify(game.missions)) : null,
@@ -5140,6 +6400,14 @@
         sceneHouse.add(mesh);
         window.gameHouse.placed.push({ ...p, mesh });
       });
+    }
+    // Campagne (Point 2)
+    if (data.campaign) {
+      window.gameCampaign = window.gameCampaign || { highestUnlocked: 'w1-1', stars: {}, completed: {}, currentLevel: null };
+      window.gameCampaign.highestUnlocked = data.campaign.highestUnlocked || 'w1-1';
+      window.gameCampaign.stars = { ...(data.campaign.stars || {}) };
+      window.gameCampaign.completed = { ...(data.campaign.completed || {}) };
+      if (typeof renderCampaignMap === 'function') renderCampaignMap();
     }
     if (data.missions) game.missions = data.missions;
     initMissions();
@@ -6153,8 +7421,22 @@
       const slot = hitSlot(e);
       if (slot && !slot.plant) {
         const seed = game.inventory[game.selectedSeedIdx];
-        game.inventory.splice(game.selectedSeedIdx, 1);
-        placePlant(seed, slot);
+        // En campagne : le cash sert pour placer (PvZ-style), les graines sont infinies
+        if (game.mode === 'campaign' && game.campaignActive) {
+          const plant = PLANTS[seed.plantId];
+          if (game.cash < plant.price) {
+            showHint('Pas assez de cash pour ' + plant.name + ' (' + plant.price + '$)', 2500);
+            sfx && sfx('error');
+            return;
+          }
+          game.cash -= plant.price;
+          game.campaignActive.stats.cashSpent += plant.price;
+          placePlant(seed, slot);
+          // Pas de splice : graines infinies en campagne
+        } else {
+          game.inventory.splice(game.selectedSeedIdx, 1);
+          placePlant(seed, slot);
+        }
         sfx('click'); cancelPlacement(); updateHud(); saveGame();
       }
       return;
@@ -6684,8 +7966,13 @@
     if (now < slowMoUntil) dt = dt * slowMoFactor;
     game.stats.totalPlayTimeMs += dt * 1000;
     brSpawnTimer += dt;
-    if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
-      // V6 : en dual, on spawn plus vite pour alimenter les 2 gardens
+    // V6 : init lazy game.mode
+    if (!game.mode) game.mode = 'endless';
+    // en mode campagne, c'est le WaveScheduler qui pilote les spawns (pas le random timer)
+    if (game.mode === 'campaign') {
+      campaignTick(dt);
+    } else if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
+      // Mode endless : spawn aléatoire classique
       brSpawnTimer = 0;
       const MAX_BLOPS_ON_SCREEN = hasDualGarden() ? 60 : 40;
       if (game.brainrots.length < MAX_BLOPS_ON_SCREEN) {
@@ -6743,6 +8030,12 @@
         removeHpBar(e);
         scene.remove(e);
         game.brainrots.splice(i, 1);
+        // En campagne : le Blop atteint la base = perd 1 HP
+        if (game.mode === 'campaign' && game.campaignActive) {
+          game.campaignActive.baseHp = Math.max(0, game.campaignActive.baseHp - 1);
+          game.campaignActive.stats.baseReached++;
+          updateCampaignHUD();
+        }
       }
     }
 
@@ -6788,6 +8081,8 @@
     // Rendu selon l'onglet actif
     if (activeTab === 'house') {
       renderer.render(sceneHouse, cameraHouse);
+    } else if (activeTab === 'campaign') {
+      renderer.render(sceneCampaign, cameraCampaign);
     } else {
       renderer.render(scene, camera);
     }
@@ -7227,6 +8522,7 @@
     renderer.setSize(innerWidth, innerHeight);
     setupCamera();
     setupCameraHouse();
+    setupCameraCampaign();
   });
   </script>
 </body>

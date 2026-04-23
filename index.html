@@ -1875,6 +1875,62 @@
 
   // --- HP BARS (DOM overlay) ---
   const hpOverlay = document.getElementById('hp-overlay');
+
+  // === TIER 1 UI : Damage numbers flottants + red flash hit ===
+  function spawnDamageNumber(enemy, damage, opts) {
+    opts = opts || {};
+    if (!enemy || !enemy.position) return;
+    const pos = enemy.position.clone();
+    pos.y += enemy.userData.size * 1.6;
+    pos.project(camera);
+    if (pos.z > 1 || pos.z < -1) return;
+    const x = (pos.x + 1) / 2 * innerWidth;
+    const y = (-pos.y + 1) / 2 * innerHeight;
+    const el = document.createElement('div');
+    const val = Math.max(1, Math.round(damage));
+    const color = opts.crit ? '#ffdd33' : (opts.armored ? '#88aaff' : '#ffffff');
+    const size = opts.crit ? '22px' : '16px';
+    const weight = opts.crit ? '900' : '700';
+    const prefix = opts.crit ? '' : '-';
+    el.textContent = prefix + val + (opts.crit ? '!' : '');
+    el.style.cssText = 'position:fixed;left:' + (x + (Math.random() - 0.5) * 20) + 'px;top:' + y + 'px;color:' + color + ';font-size:' + size + ';font-weight:' + weight + ';text-shadow:0 0 4px #000,1px 1px 0 #000;pointer-events:none;z-index:600;transition:transform 0.7s cubic-bezier(.2,.8,.3,1),opacity 0.7s ease-out;transform:translate(-50%,0);will-change:transform,opacity;';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.transform = 'translate(-50%,-60px) scale(' + (opts.crit ? 1.3 : 1) + ')';
+      el.style.opacity = '0';
+    });
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 750);
+  }
+
+  function flashEnemyHit(enemy) {
+    const ud = enemy.userData;
+    if (!ud || !ud.bodyMesh) return;
+    const body = ud.bodyMesh;
+    const now = performance.now();
+    ud.flashUntil = now + 80;
+    // Stocke l'emissive original une seule fois
+    if (!ud._origEmissive) {
+      ud._origEmissive = [];
+      if (body.material) {
+        ud._origEmissive.push({ mat: body.material, hex: body.material.emissive ? body.material.emissive.getHex() : 0x000000, intensity: body.material.emissiveIntensity || 0 });
+        try { body.material.emissive.setHex(0xff3333); body.material.emissiveIntensity = 1.5; } catch (e) {}
+      } else {
+        body.traverse(o => {
+          if (o.isMesh && o.material && o.material.emissive) {
+            ud._origEmissive.push({ mat: o.material, hex: o.material.emissive.getHex(), intensity: o.material.emissiveIntensity || 0 });
+            try { o.material.emissive.setHex(0xff3333); o.material.emissiveIntensity = 1.5; } catch (e) {}
+          }
+        });
+      }
+      setTimeout(() => {
+        if (ud._origEmissive) {
+          ud._origEmissive.forEach(o => { try { o.mat.emissive.setHex(o.hex); o.mat.emissiveIntensity = o.intensity; } catch (e) {} });
+          ud._origEmissive = null;
+        }
+      }, 80);
+    }
+  }
+
   const MECHANIC_ICONS = {
     'phase-through': '👻', 'summon-wave': '🌀', 'speed-boost-dying': '💨',
     'teleport': '✨', 'armored': '🛡', 'heal-nearby': '💚',
@@ -2457,8 +2513,18 @@
     }
     if (ud.shielded) return;
     if (ud.invisible) return;
-    if (ud.mechanic === 'armored') damage *= 0.5;
+    const armored = ud.mechanic === 'armored';
+    if (armored) damage *= 0.5;
     ud.hp -= damage;
+    // Tier 1 UI : damage numbers flottants + red flash emissive
+    if (typeof spawnDamageNumber === 'function') {
+      const baseDmg = sourcePlant && sourcePlant.userData && sourcePlant.userData.plantId
+        ? (PLANTS[sourcePlant.userData.plantId] && PLANTS[sourcePlant.userData.plantId].damage) || damage
+        : damage;
+      const isCrit = damage > baseDmg * 1.8;
+      spawnDamageNumber(enemy, damage, { crit: isCrit, armored });
+    }
+    if (typeof flashEnemyHit === 'function') flashEnemyHit(enemy);
     if (ud.hp <= 0) {
       // Feature #13 : crédite kill à la plante source pour le mémorial
       if (sourcePlant && sourcePlant.userData && sourcePlant.userData.type === 'plant') {

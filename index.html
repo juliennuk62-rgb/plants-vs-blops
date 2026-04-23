@@ -955,7 +955,7 @@
 
   const MUTATIONS = {
     none:    { label: null,       weight: 85,   color: '#ffffff', hex: 0xffffff, damageMult: 1   },
-    gold:    { label: 'Gold',     weight: 10,   color: '#ffd700', hex: 0xffd700, damageMult: 2   },
+    gold:    { label: 'Gold',     weight: 10,   color: '#ffb020', hex: 0xffb020, damageMult: 2   },
     diamond: { label: 'Diamond',  weight: 3.5,  color: '#00eeff', hex: 0x00eeff, damageMult: 3   },
     neon:    { label: 'Neon',     weight: 1.2,  color: '#ff33ee', hex: 0xff33ee, damageMult: 4.5 },
     frozen:  { label: 'Frozen',   weight: 0.3,  color: '#99eeff', hex: 0x99eeff, damageMult: 4,   addSlow: true },
@@ -963,7 +963,7 @@
     toxic:   { label: 'Toxic',    weight: 2.0,  color: '#88ff44', hex: 0x88ff44, damageMult: 2.5, addDot: true, dotDps: 6, dotDur: 3 },
     chain:   { label: 'Chain',    weight: 1.2,  color: '#33ccff', hex: 0x33ccff, damageMult: 3,   chain: true, chainJumps: 2, chainFalloff: 0.6 },
     vampire: { label: 'Vampire',  weight: 0.6,  color: '#cc0044', hex: 0xcc0044, damageMult: 3.5, lifesteal: 0.05 },
-    mega:    { label: 'MEGA',     weight: 0.15, color: '#ff6600', hex: 0xff6600, damageMult: 7,   addSlow: true, chain: true, chainJumps: 3, chainFalloff: 0.5 },
+    mega:    { label: 'MEGA',     weight: 0.15, color: '#ff1493', hex: 0xff1493, damageMult: 7,   addSlow: true, chain: true, chainJumps: 3, chainFalloff: 0.5 },
   };
   const MUTATION_KEYS = Object.keys(MUTATIONS);
 
@@ -972,7 +972,7 @@
     none:     { label: null,       weight: 82,    color: '#ffffff', hex: 0xffffff, mult: 1   },
     bronze:   { label: 'Bronze',   weight: 10,    color: '#cd7f32', hex: 0xcd7f32, mult: 2   },
     silver:   { label: 'Argent',   weight: 3.5,   color: '#c0c0c0', hex: 0xc0c0c0, mult: 3   },
-    gold:     { label: 'Or',       weight: 1.2,   color: '#ffcc00', hex: 0xffcc00, mult: 4   },
+    gold:     { label: 'Or',       weight: 1.2,   color: '#e6a010', hex: 0xe6a010, mult: 4   },
     diamond:  { label: 'Diamant',  weight: 0.3,   color: '#66ddff', hex: 0x66ddff, mult: 5   },
     // Sprint 2D : nouvelles variantes rares
     ethereal: { label: 'Ethereal', weight: 1.5,   color: '#aa88ff', hex: 0xaa88ff, mult: 6   },
@@ -1062,13 +1062,13 @@
 
   const PLANT_ICONS = {
     // Commun
-    sunflower: '🌻', pea: '🟢', clover: '🍀', mint: '🌿',
+    sunflower: '🌻', pea: '🫛', clover: '🍀', mint: '🌿',
     // Rare
-    cactus: '🌵', ice: '❄️', bamboo: '🎋', pumpkin: '🎃', lime: '🟩',
+    cactus: '🌵', ice: '❄️', bamboo: '🎋', pumpkin: '🎃', lime: '🍋',
     // Très rare
-    strawberry: '🍓', pepper: '🌶️', onion: '🧅', blueberry: '🫐', fig: '🟣',
+    strawberry: '🍓', pepper: '🌶️', onion: '🧅', blueberry: '🫐', fig: '🍇',
     // Ultra rare
-    watermelon: '🍉', kiwi: '🥝', lychee: '🔴', avocado: '🥑',
+    watermelon: '🍉', kiwi: '🥝', lychee: '🍒', avocado: '🥑',
     // Mythique
     mango: '🥭', pineapple: '🍍', starfruit: '⭐', coconut: '🥥',
     // GOAT
@@ -1077,6 +1077,18 @@
   const BLOP_ICONS = {
     common: '🐸', rare: '🦎', veryrare: '🦀',
     ultrarare: '🦖', mythic: '👾', goat: '🐙',
+  };
+  // Icônes spécifiques pour les Blops étendus (par id) — fallback sur rareté sinon
+  const BLOP_ICONS_ID = {
+    glorbo: '🟢', zibzab: '🫧', skibidino: '🚽', croccodrillo: '🐊',
+    boneca: '🎎', frigo: '🧊', brrbrr: '❄️', trippi: '🍄',
+    chimpanzini: '🐵', capuccino: '☕', trulimero: '🌀', vacca: '🐄',
+    selenis: '🌙', nocturis: '🦇', mirror: '🪞',
+  };
+  // Icônes pour mutations (shop/inventaire/fiche)
+  const MUTATION_ICONS = {
+    none: '', gold: '💰', diamond: '💎', neon: '🌈', frozen: '❄️',
+    toxic: '☠️', chain: '⚡', vampire: '🩸', mega: '🔥',
   };
 
   const ACHIEVEMENTS = {
@@ -1934,8 +1946,9 @@
     };
   }
 
-  function addBlopToHolding(rarity, variant) {
+  function addBlopToHolding(rarity, variant, blopId) {
     const blop = { rarity, variant: variant || 'none' };
+    if (blopId) blop.blopId = blopId;
     // Persona sur 70% des Blops non-commons
     if (rarity !== 'common' && Math.random() < 0.7) blop.persona = generateBlopPersona(rarity, variant);
     game.blops.push(blop);
@@ -2400,7 +2413,7 @@
     addCash(ud.value);
     game.kills++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
-    addBlopToHolding(ud.rarity, ud.variant || 'none');
+    addBlopToHolding(ud.rarity, ud.variant || 'none', ud.blopId);
     addXp(ud.value / XP_PER_KILL_DIVISOR);
     // Missions tracking
     incMissionStat('kills', 1);
@@ -2948,7 +2961,7 @@
         shop: game.shop.map(s => ({ plantId: s.plantId, mutation: s.mutation, bought: s.bought })),
         shopTimer: game.shopTimer,
         collection: { ...game.collection },
-        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none', p: b.persona || null })),
+        blops: game.blops.map(b => ({ r: b.rarity, v: b.variant || 'none', p: b.persona || null, i: b.blopId || null })),
         memorial: game.memorial || [],
         memorialBonus: game.memorialBonus || 0,
         achievements: { ...game.achievements },
@@ -2968,7 +2981,7 @@
       try {
         const d = JSON.parse(raw);
         if (d.v === 5) {
-          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none', persona: b.p || b.persona || null }));
+          d.blops = (d.blops || []).map(b => ({ rarity: b.r || b.rarity, variant: b.v || b.variant || 'none', persona: b.p || b.persona || null, blopId: b.i || b.blopId || null }));
           return d;
         }
       } catch {}
@@ -3023,7 +3036,7 @@
     updateMissionsBadge();
     // Blops (format v5: [{rarity, variant}])
     game.blops = (data.blops || [])
-      .map(b => typeof b === 'string' ? { rarity: b, variant: 'none' } : { rarity: b.rarity, variant: b.variant || 'none', persona: b.persona || null })
+      .map(b => typeof b === 'string' ? { rarity: b, variant: 'none' } : { rarity: b.rarity, variant: b.variant || 'none', persona: b.persona || null, blopId: b.blopId || null })
       .filter(b => RARITIES[b.rarity]);
     sortBlops();
     // Lanes depend on prestige — rebuild BEFORE restoring plants
@@ -3597,7 +3610,7 @@
         <div class="shop-icon">${PLANT_ICONS[plantId] || '🌱'}</div>
         <div class="shop-rarity" style="color:${r.color};">${r.label}</div>
         <div class="shop-name">${p.name}${countBadge}</div>
-        ${mut.label ? `<div class="shop-mutation" style="color:${mut.color};">✨ ${mut.label} ×${mut.damageMult}</div>` : ''}
+        ${mut.label ? `<div class="shop-mutation" style="color:${mut.color};">${MUTATION_ICONS[slot.mutation] || '✨'} ${mut.label} ×${mut.damageMult}</div>` : ''}
         <div class="shop-stats">DMG ${(p.damage * mut.damageMult).toFixed(0)} • ${p.cooldown}s</div>
         <div class="shop-ability">${ABILITY_LABELS[p.ability] || p.ability}</div>
         <div class="price">${fmtNumber(p.price)}$</div>
@@ -3647,7 +3660,7 @@
         <div class="seed-icon">${PLANT_ICONS[g.plantId] || '🌱'}</div>
         <div class="seed-name">${p.name}</div>
         <div class="seed-rarity" style="color:${r.color};">${r.label}</div>
-        ${mut.label ? `<div class="seed-mutation" style="color:${mut.color};">${mut.label}</div>` : ''}
+        ${mut.label ? `<div class="seed-mutation" style="color:${mut.color};">${MUTATION_ICONS[seed.mutation] || '✨'} ${mut.label}</div>` : ''}
       `;
       div.onclick = () => { sfx('click'); selectSeed(g.indices[0]); };
       inventoryEl.appendChild(div);
@@ -3672,7 +3685,7 @@
           div.style.border = `2px solid ${v.color}`;
           div.style.boxShadow = `0 0 10px ${v.color}`;
         }
-        div.innerHTML = `${BLOP_ICONS[b.rarity] || '👾'}
+        div.innerHTML = `${(b.blopId && BLOP_ICONS_ID[b.blopId]) || BLOP_ICONS[b.rarity] || '👾'}
           ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color};">${v.label}</div>` : ''}
           ${b.persona ? `<div style="position:absolute; bottom:16px; left:0; right:0; font-size:8px; color:#ffddaa; text-align:center; text-shadow:0 0 3px #000;">${b.persona.fullName.split(' ')[0]}</div>` : ''}
           <div class="parc-rate">+${rate.toFixed(2)}</div>`;

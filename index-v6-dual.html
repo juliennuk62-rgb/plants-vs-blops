@@ -2387,10 +2387,17 @@
     const data = getLevelData(levelId);
     if (!lv || !data) return false;
 
-    // Snapshot endless state (pour restaurer après)
+    // Snapshot ISOLATION COMPLÈTE de l'état endless
     game._endlessSnapshot = {
       cash: game.cash,
       inventory: game.inventory.slice(),
+      prestige: game.prestige,
+      level: game.level,
+      xp: game.xp,
+      kills: game.kills,
+      collection: { ...game.collection },
+      blops: game.blops.slice(),
+      stats: { ...game.stats },
       plants: game.plants.map(p => ({
         plantId: p.userData.plantId,
         mutation: p.userData.mutation,
@@ -2399,6 +2406,13 @@
         killCount: p.userData.killCount || 0,
       })),
     };
+    // Hide parc meshes pendant la campagne (reste en data, retiré de la scène)
+    if (game.parcMeshes) {
+      game.parcMeshes.forEach(m => scene.remove(m));
+    }
+    // Override prestige et compteurs campagne pour isolation visuelle
+    game.prestige = 0;
+    // blops laissé intact (juste non-visible), mais passive revenu géré dans le loop
 
     // Setup campaign
     game.mode = 'campaign';
@@ -2483,18 +2497,28 @@
     game.bullets = [];
     game.selectedSeedIdx = null;
 
-    // Restaure endless state
+    // Restaure endless state COMPLET (isolation totale)
     if (game._endlessSnapshot) {
-      game.cash = game._endlessSnapshot.cash;
-      game.inventory = game._endlessSnapshot.inventory;
+      const snap = game._endlessSnapshot;
+      game.cash = snap.cash;
+      game.inventory = snap.inventory;
+      game.prestige = snap.prestige;
+      game.level = snap.level;
+      game.xp = snap.xp;
+      game.kills = snap.kills;
+      game.collection = snap.collection;
+      game.blops = snap.blops;
+      game.stats = snap.stats;
       rebuildTerrain();
-      game._endlessSnapshot.plants.forEach(p => {
+      snap.plants.forEach(p => {
         const slot = slots.find(s => s.laneIdx === p.laneIdx && s.slotIdx === p.slotIdx);
         if (slot && !slot.plant && PLANTS[p.plantId]) {
           placePlant({ plantId: p.plantId, mutation: p.mutation }, slot);
           if (slot.plant) slot.plant.userData.killCount = p.killCount || 0;
         }
       });
+      // Ré-affiche les Blops du parc
+      if (typeof rebuildParcVisual === 'function') rebuildParcVisual();
       game._endlessSnapshot = null;
     }
 
@@ -4073,9 +4097,18 @@
       body.tab-house #build-shop-btn { display:block !important; }
     `;
     document.head.appendChild(st);
-    $('tab-game').onclick = () => { setActiveTab('game'); sfx && sfx('click'); };
+    // Guard : en campagne active, prévenir avant de changer de tab (abandon implicite)
+    function guardedSwitch(targetTab) {
+      if (game.campaignActive && !game.campaignActive.result) {
+        if (!confirm('Abandonner le niveau en cours ?')) return;
+        endCampaignLevel('cancel');
+      }
+      setActiveTab(targetTab);
+      sfx && sfx('click');
+    }
+    $('tab-game').onclick = () => guardedSwitch('game');
     $('tab-campaign').onclick = () => { setActiveTab('campaign'); sfx && sfx('click'); };
-    $('tab-house').onclick = () => { setActiveTab('house'); sfx && sfx('click'); };
+    $('tab-house').onclick = () => guardedSwitch('house');
     window.updateTabSwitcherUI = () => {
       $('tab-game').classList.toggle('tab-active', activeTab === 'game');
       $('tab-campaign').classList.toggle('tab-active', activeTab === 'campaign');
@@ -4738,12 +4771,23 @@
   function addCash(amount) {
     game.cash += amount;
     if (amount > 0) {
-      game.stats.totalEarned += amount;
-      if (game.missions) incMissionStat('earned', amount);
+      // En campagne, le cash est un wallet local — ne pollue pas stats/missions endless
+      if (game.mode !== 'campaign') {
+        game.stats.totalEarned += amount;
+        if (game.missions) incMissionStat('earned', amount);
+      }
       if (amount >= 5) flashCash();
     }
   }
-  function spendCash(amount) { game.cash -= amount; game.stats.totalSpent += amount; if (game.missions) incMissionStat('spent', amount); }
+  function spendCash(amount) {
+    game.cash -= amount;
+    if (game.mode !== 'campaign') {
+      game.stats.totalSpent += amount;
+      if (game.missions) incMissionStat('spent', amount);
+    } else if (game.campaignActive) {
+      game.campaignActive.stats.cashSpent += amount;
+    }
+  }
 
   // --- PARTICLES ---
   // Utility : free GPU memory on mesh removal (geometry + material)
@@ -5462,25 +5506,27 @@
       if (ud.rarity === 'goat') triggerSlowMo(0.25, 1.8);
       else if (ud.rarity === 'mythic') triggerSlowMo(0.4, 1.2);
     }
-    // Season 2 : meme face reveal
+    // Season 2 : meme face reveal (SUS/Skibidi retirés — rester clean)
     if (typeof showMemeFace === 'function') {
       if (ud.rarity === 'goat') showMemeFace('gigachad');
       else if (ud.rarity === 'mythic') showMemeFace('fire');
-      else if (ud.variant && ud.variant !== 'none' && ud.variant !== 'bronze') showMemeFace('sus');
-      else if (ud.mechanic && Math.random() < 0.2) showMemeFace('skibidi');
     }
     addCash(ud.value);
-    game.kills++;
-    if (game.mode === 'campaign' && game.campaignActive) game.campaignActive.stats.blopsKilled++;
-    game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
-    addBlopToHolding(ud.rarity, ud.variant || 'none', ud.blopId);
-    addXp(ud.value / XP_PER_KILL_DIVISOR);
-    // Missions tracking
-    incMissionStat('kills', 1);
-    if (ud.rarity !== 'common') incMissionStat('killsRare', 1);
-    if (ud.rarity === 'mythic') incMissionStat('killsMythic', 1);
-    if (ud.rarity === 'goat') incMissionStat('killsGoat', 1);
-    if (ud.mechanic) incMissionStat('killsVariant', 1);
+    if (game.mode === 'campaign' && game.campaignActive) {
+      // CAMPAGNE : ne touche PAS au state endless (kills/xp/collection/missions/inventaire blops)
+      game.campaignActive.stats.blopsKilled++;
+    } else {
+      game.kills++;
+      game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
+      addBlopToHolding(ud.rarity, ud.variant || 'none', ud.blopId);
+      addXp(ud.value / XP_PER_KILL_DIVISOR);
+      // Missions tracking
+      incMissionStat('kills', 1);
+      if (ud.rarity !== 'common') incMissionStat('killsRare', 1);
+      if (ud.rarity === 'mythic') incMissionStat('killsMythic', 1);
+      if (ud.rarity === 'goat') incMissionStat('killsGoat', 1);
+      if (ud.mechanic) incMissionStat('killsVariant', 1);
+    }
     removeHpBar(enemy);
     scene.remove(enemy);
     const idx = game.brainrots.indexOf(enemy);
@@ -5902,10 +5948,14 @@
     scene.add(group);
     slot.plant = group;
     game.plants.push(group);
-    game.stats.plantsPlaced++;
-    incMissionStat('planted', 1);
+    if (game.mode === 'campaign' && game.campaignActive) {
+      game.campaignActive.stats.plantsPlaced++;
+    } else {
+      game.stats.plantsPlaced++;
+      incMissionStat('planted', 1);
+      checkAchievements();
+    }
     sfx('plant');
-    checkAchievements();
   }
 
   function removePlant(plantGroup) {
@@ -6935,7 +6985,10 @@
   }
   function updatePrestigeButtonVisibility() {
     const unlockLvl = levelRequiredForPrestige(1);
-    $('prestige-btn').style.display = (game.level >= unlockLvl || game.prestige >= 1) ? 'block' : 'none';
+    const btn = $('prestige-btn');
+    if (!btn) return;
+    if (game.mode === 'campaign') { btn.style.display = 'none'; return; }
+    btn.style.display = (game.level >= unlockLvl || game.prestige >= 1) ? 'block' : 'none';
   }
 
   function updateHud() {
@@ -6943,19 +6996,28 @@
     killsEl.textContent = fmtNumber(game.kills);
     plantCountEl.textContent = game.plants.length;
     plantCapEl.textContent = getMaxPlants();
-    const rate = passiveIncomePerSec();
-    cashRateEl.textContent = rate >= 0.01 ? `(+${rate.toFixed(2)}/sec)` : '';
+    const inCampaign = (game.mode === 'campaign');
+    if (inCampaign) {
+      // En campagne, cash = wallet local du niveau — pas de revenu passif à afficher
+      cashRateEl.textContent = '';
+    } else {
+      const rate = passiveIncomePerSec();
+      cashRateEl.textContent = rate >= 0.01 ? `(+${rate.toFixed(2)}/sec)` : '';
+    }
     levelEl.textContent = game.level;
     const prog = xpProgressInLevel(game.xp, game.level);
     const pct = (prog.inLevel / prog.forNext) * 100;
     xpFill.style.width = Math.min(100, pct) + '%';
     xpText.textContent = `${fmtNumber(prog.inLevel)} / ${fmtNumber(prog.forNext)} XP`;
-    if (game.prestige > 0) {
+    if (!inCampaign && game.prestige > 0) {
       prestigeBadge.textContent = 'P' + game.prestige;
       prestigeBadge.style.display = 'inline-block';
     } else {
       prestigeBadge.style.display = 'none';
     }
+    // Prestige button masqué en campagne
+    const pbtn = document.getElementById('prestige-btn');
+    if (pbtn && inCampaign) pbtn.style.display = 'none';
   }
 
   function renderShop() {
@@ -7983,13 +8045,16 @@
         }
       }
     }
-    game.shopTimer -= dt;
-    if (game.shopTimer <= 0) { rollShop(); notifyShopRefresh(); }
-    shopTimerShort.textContent = fmtTime(game.shopTimer);
-    shopTimerFull.textContent = fmtTime(game.shopTimer);
-    addCash(passiveIncomePerSec() * dt);
-    game.saveTimer += dt;
-    if (game.saveTimer >= AUTOSAVE_INTERVAL) { game.saveTimer = 0; saveGame(); }
+    // Isolation campagne : le shop, le revenu passif et l'autosave appartiennent au jardin
+    if (game.mode !== 'campaign') {
+      game.shopTimer -= dt;
+      if (game.shopTimer <= 0) { rollShop(); notifyShopRefresh(); }
+      shopTimerShort.textContent = fmtTime(game.shopTimer);
+      shopTimerFull.textContent = fmtTime(game.shopTimer);
+      addCash(passiveIncomePerSec() * dt);
+      game.saveTimer += dt;
+      if (game.saveTimer >= AUTOSAVE_INTERVAL) { game.saveTimer = 0; saveGame(); }
+    }
 
     for (let i = game.brainrots.length - 1; i >= 0; i--) {
       const e = game.brainrots[i];

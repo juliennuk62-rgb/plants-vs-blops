@@ -220,23 +220,56 @@
     .stats-grid > div { background: #2a2a3a; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
     .stats-grid strong { color: #ffcc00; }
 
-    #shop-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+    #shop-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; align-items: stretch; }
     .shop-slot {
-      padding: 12px 8px; border-radius: 6px;
-      text-align: center; background: #2a2a3a;
+      padding: 12px 8px; border-radius: var(--rad-md);
+      text-align: center; background: var(--bg-raised);
       border-left: 6px solid #555;
+      position: relative;
       display: flex; flex-direction: column; justify-content: space-between;
+      transition: transform var(--t-fast) var(--e-pop);
     }
+    .shop-slot:hover { transform: translateY(-2px); }
     .shop-slot.mutated { box-shadow: 0 0 12px currentColor; }
     .shop-slot.unavailable { opacity: 0.4; filter: grayscale(0.6); }
-    .shop-slot .shop-icon { font-size: 30px; line-height: 1; margin: 2px 0 4px; }
-    .shop-slot .shop-rarity { font-size: 11px; font-weight: bold; }
-    .shop-slot .shop-name { font-size: 14px; margin: 4px 0; font-weight: bold; }
-    .shop-slot .shop-mutation { font-size: 11px; font-weight: bold; margin-bottom: 3px; }
-    .shop-slot .shop-stats { font-size: 11px; color: #aaa; }
-    .shop-slot .shop-ability { font-size: 10px; color: #66ccff; margin-top: 3px; font-style: italic; }
-    .shop-slot .shop-unavailable-msg { font-size: 11px; color: #aaa; font-style: italic; margin: 6px 0; }
-    .shop-slot .price { font-size: 15px; color: #ffcc00; margin: 8px 0; font-weight: bold; }
+    /* Tier 3 : hiérarchie par rareté */
+    .shop-slot[data-rarity="mythic"] { border-width: 3px; }
+    .shop-slot[data-rarity="goat"] {
+      grid-column: span 2;
+      background: radial-gradient(circle at 50% 30%, #3a2f00 0%, var(--bg-raised) 70%);
+      border: 3px solid var(--rarity-goat);
+      box-shadow: 0 0 28px rgba(255,221,0,0.5);
+      animation: goatShimmer 2.4s ease-in-out infinite;
+    }
+    @keyframes goatShimmer {
+      0%, 100% { box-shadow: 0 0 28px rgba(255,221,0,0.5); }
+      50%      { box-shadow: 0 0 40px rgba(255,221,0,0.9), inset 0 0 20px rgba(255,221,0,0.15); }
+    }
+    .shop-slot[data-rarity="goat"] .shop-icon { font-size: 46px; }
+    .shop-slot[data-rarity="goat"] .price { font-size: 28px; }
+    .shop-slot .shop-icon { font-size: 30px; line-height: 1; margin: 2px 0 4px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+    .shop-slot .shop-rarity { font-size: var(--fs-xs); font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; }
+    .shop-slot .shop-name { font-size: var(--fs-sm); margin: 4px 0; font-weight: 600; font-family: var(--font-display); }
+    .shop-slot .shop-mutation {
+      position: absolute; top: -8px; right: -6px;
+      font-size: var(--fs-xs); font-weight: 700;
+      padding: 3px 8px; border-radius: var(--rad-pill);
+      background: var(--bg-0); border: 2px solid currentColor;
+      animation: mutPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes mutPulse {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.1); }
+    }
+    .shop-slot .shop-stats { font-size: var(--fs-xs); color: var(--fg-ter); }
+    .shop-slot .shop-ability { font-size: 10px; color: var(--accent-hover); margin-top: 3px; font-style: italic; }
+    .shop-slot .shop-unavailable-msg { font-size: var(--fs-xs); color: var(--fg-ter); font-style: italic; margin: 6px 0; }
+    .shop-slot .price {
+      font-size: 22px; color: var(--warning); margin: 8px 0;
+      font-weight: 700; font-family: var(--font-display);
+      text-shadow: 0 0 8px rgba(255,204,0,0.4);
+    }
+    .shop-slot.unavailable .price { color: var(--alert); text-shadow: 0 0 8px rgba(255,85,102,0.4); }
     .shop-slot .buy-btn {
       padding: 6px 12px; font-size: 12px;
       background: #4488cc; border: none; color: #fff; cursor: pointer; border-radius: 4px;
@@ -3939,6 +3972,7 @@
       const mut = variant ? (MUTATIONS[variant.mutation] || MUTATIONS.none) : MUTATIONS.none;
       const div = document.createElement('div');
       div.className = 'shop-slot' + (mut.label ? ' mutated' : '') + (available ? '' : ' unavailable');
+      div.setAttribute('data-rarity', p.rarity);
       div.style.borderLeftColor = r.color;
       if (mut.label) div.style.color = mut.color;
       const canBuy = available && game.cash >= p.price;

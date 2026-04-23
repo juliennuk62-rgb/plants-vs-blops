@@ -2282,23 +2282,36 @@
   function addVariantRing(group, variantKey, size) {
     const v = VARIANTS[variantKey];
     if (!v || !v.label) return;
+    // Tier 3 : intensité scale avec le mult (bronze discret → blessed spectaculaire)
+    const intensity = 0.5 + (v.mult / 10) * 1.5;
+    const ringThick = 0.06 + (v.mult / 50);
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.95 * size, 0.08 * size, 8, 28),
-      new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: 1.0 })
+      new THREE.TorusGeometry(0.95 * size, ringThick * size, 8, 28),
+      new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: intensity })
     );
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.08;
     group.add(ring);
     group.userData.variantRing = ring;
-    // Halo au-dessus pour Or et Diamant
-    if (variantKey === 'gold' || variantKey === 'diamond') {
-      const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(0.18 * size, 10, 8),
-        new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: 1.5, transparent: true, opacity: 0.7 })
+    // Halo au-dessus pour TOUTES les variantes (Tier 3 : rings visibles partout)
+    const haloSize = 0.12 + (v.mult / 50);
+    const halo = new THREE.Mesh(
+      new THREE.SphereGeometry(haloSize * size, 10, 8),
+      new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: intensity, transparent: true, opacity: 0.5 + (v.mult / 20) })
+    );
+    halo.position.y = 2.4 * size;
+    group.add(halo);
+    group.userData.variantHalo = halo;
+    // Pour les variantes les plus rares (gold+), second ring contra-rotatif plus large
+    if (v.mult >= 4) {
+      const outerRing = new THREE.Mesh(
+        new THREE.TorusGeometry(1.25 * size, 0.04 * size, 6, 24),
+        new THREE.MeshStandardMaterial({ color: v.hex, emissive: v.hex, emissiveIntensity: intensity * 0.8, transparent: true, opacity: 0.7 })
       );
-      halo.position.y = 2.4 * size;
-      group.add(halo);
-      group.userData.variantHalo = halo;
+      outerRing.rotation.x = Math.PI / 2;
+      outerRing.position.y = 0.15;
+      group.add(outerRing);
+      group.userData.variantOuterRing = outerRing;
     }
   }
 
@@ -3987,7 +4000,7 @@
           div.style.boxShadow = `0 0 10px ${v.color}`;
         }
         div.innerHTML = `${(b.blopId && BLOP_ICONS_ID[b.blopId]) || BLOP_ICONS[b.rarity] || '👾'}
-          ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color};">${v.label}</div>` : ''}
+          ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color}; text-shadow:0 0 3px #000;">${v.label} ${'★'.repeat(Math.min(5, Math.ceil(v.mult/2)))}</div>` : ''}
           ${b.persona ? `<div style="position:absolute; bottom:16px; left:0; right:0; font-size:8px; color:#ffddaa; text-align:center; text-shadow:0 0 3px #000;">${b.persona.fullName.split(' ')[0]}</div>` : ''}
           <div class="parc-rate">+${rate.toFixed(2)}</div>`;
         div.title = `${b.persona ? b.persona.fullName + ' — ' : ''}${br.name} (${r.label}${v.label ? ' ' + v.label + ' ×' + v.mult : ''}) — +${rate.toFixed(2)}$/sec`;
@@ -4440,7 +4453,7 @@
     const val = blopValue(blop);
     let body = '<div><span style="color:#aaa;">Espèce :</span> <strong>' + br.name + '</strong></div>';
     body += '<div><span style="color:#aaa;">Rareté :</span> <strong style="color:' + r.color + ';">' + r.label + '</strong></div>';
-    if (v) body += '<div><span style="color:#aaa;">Variante :</span> <strong style="color:' + v.color + ';">' + v.label + ' (×' + v.mult + ')</strong></div>';
+    if (v) body += '<div><span style="color:#aaa;">Variante :</span> <strong style="color:' + v.color + ';">' + v.label + ' ' + '★'.repeat(Math.min(5, Math.ceil(v.mult/2))) + ' (×' + v.mult + ')</strong></div>';
     body += '<div><span style="color:#aaa;">Revenu passif :</span> <strong>' + (val * PASSIVE_RATE).toFixed(2) + '$/s</strong></div>';
     if (persona) {
       const days = Math.floor((Date.now() - persona.capturedAt) / 86400000);
@@ -4871,6 +4884,7 @@
         }
       }
       if (e.userData.variantRing) e.userData.variantRing.rotation.z = now * 1.5;
+      if (e.userData.variantOuterRing) e.userData.variantOuterRing.rotation.z = -now * 1.1; // contra-rotatif
       if (e.userData.variantHalo) {
         e.userData.variantHalo.position.y = 2.4 * e.userData.size + Math.sin(now * 3) * 0.1;
       }

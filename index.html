@@ -763,6 +763,26 @@
     goat:      { name: 'Bombombini',      hp: 3000, size: 2.2,  value: 50000 },
   };
 
+  // Variantes Blops avec mécaniques spéciales (spawn alternatif avec 40% de chance)
+  const BLOPS_EXTENDED = {
+    glorbo:       { name: 'Glorbo',             rarity: 'common',    hp: 4,    size: 1.0,  value: 15,    mechanic: 'phase-through' },
+    zibzab:       { name: 'Zibzab',             rarity: 'common',    hp: 5,    size: 1.0,  value: 18,    mechanic: 'summon-wave' },
+    skibidino:    { name: 'Skibidino',          rarity: 'rare',      hp: 18,   size: 1.15, value: 80,    mechanic: 'speed-boost-dying' },
+    croccodrillo: { name: 'Croccodrillo',       rarity: 'rare',      hp: 25,   size: 1.15, value: 100,   mechanic: 'teleport' },
+    boneca:       { name: 'Boneca Ambalabu',    rarity: 'veryrare',  hp: 80,   size: 1.3,  value: 450,   mechanic: 'armored' },
+    frigo:        { name: 'Frigo Camelo',       rarity: 'veryrare',  hp: 90,   size: 1.3,  value: 500,   mechanic: 'heal-nearby' },
+    brrbrr:       { name: 'Brr Brr Patapum',    rarity: 'ultrarare', hp: 220,  size: 1.55, value: 1800,  mechanic: 'shield-phase' },
+    trippi:       { name: 'Trippi Troppi',      rarity: 'ultrarare', hp: 240,  size: 1.55, value: 2000,  mechanic: 'splits-on-death' },
+    chimpanzini:  { name: 'Chimpanzini',        rarity: 'mythic',    hp: 900,  size: 1.85, value: 10000, mechanic: 'rage-regen' },
+    capuccino:    { name: 'Capuccino Assassino',rarity: 'mythic',    hp: 1000, size: 1.85, value: 12000, mechanic: 'invisibility-pulse' },
+    trulimero:    { name: 'Trulimero',          rarity: 'goat',      hp: 3400, size: 2.2,  value: 60000, mechanic: 'rage-regen' },
+    vacca:        { name: 'Vacca Saturno',      rarity: 'goat',      hp: 3800, size: 2.2,  value: 70000, mechanic: 'armored' },
+  };
+  const BLOPS_BY_RARITY_EXTENDED = {};
+  RARITY_KEYS.forEach(k => BLOPS_BY_RARITY_EXTENDED[k] = []);
+  Object.keys(BLOPS_EXTENDED).forEach(id => BLOPS_BY_RARITY_EXTENDED[BLOPS_EXTENDED[id].rarity].push(id));
+  const VARIANT_SPAWN_CHANCE = 0.4; // 40% qu'un Blop spawn soit une variante spéciale
+
   const PLANTS = {
     // --- COMMUN (4) ---
     sunflower: { name: 'Tournesol', rarity: 'common',    cooldown: 1.2,  damage: 1,   price: 50,     ability: 'basic' },
@@ -1545,31 +1565,133 @@
     }
   }
 
-  function spawnBrainrot(laneIdx, rarityKey) {
-    const br = BRAINROTS[rarityKey];
+  function spawnBrainrot(laneIdx, rarityKey, overrides) {
+    overrides = overrides || {};
+    let blopData = BRAINROTS[rarityKey];
+    let mechanic = null;
+    let blopName = blopData.name;
+    let blopId = null;
+    if (!overrides.noVariant && Math.random() < VARIANT_SPAWN_CHANCE) {
+      const pool = BLOPS_BY_RARITY_EXTENDED[rarityKey];
+      if (pool && pool.length > 0) {
+        blopId = pool[Math.floor(Math.random() * pool.length)];
+        const ext = BLOPS_EXTENDED[blopId];
+        blopData = { hp: ext.hp, size: ext.size, value: ext.value, name: ext.name };
+        mechanic = ext.mechanic;
+        blopName = ext.name;
+      }
+    }
     const variantKey = pickVariant();
     const variant = VARIANTS[variantKey];
     const laneCount = currentLaneCount();
     const group = createBlopMesh(rarityKey, 1);
-    group.position.set((laneIdx - (laneCount - 1) / 2) * LANE_WIDTH, 0.1, -LANE_LENGTH / 2);
-    const effectiveHp = br.hp * variant.mult;
-    const effectiveValue = br.value * variant.mult;
+    group.position.set((laneIdx - (laneCount - 1) / 2) * LANE_WIDTH, 0.1, overrides.startZ !== undefined ? overrides.startZ : -LANE_LENGTH / 2);
+    const hpMult = overrides.hpMult || 1;
+    const effectiveHp = blopData.hp * variant.mult * hpMult;
+    const effectiveValue = blopData.value * variant.mult * hpMult;
     Object.assign(group.userData, {
       type: 'brainrot',
       hp: effectiveHp, maxHp: effectiveHp, speed: BRAINROT_SPEED,
       lane: laneIdx, rarity: rarityKey, variant: variantKey,
-      value: effectiveValue, size: br.size,
+      value: effectiveValue, size: blopData.size,
       slowUntil: 0, slowFactor: 1,
       wigglePhase: Math.random() * Math.PI * 2,
       hpBarEl: createHpBar(),
+      mechanic: mechanic,
+      blopId: blopId,
+      blopName: blopName,
+      mechanicCd: 0,
+      phaseUsed: false,
+      ragePhase: false,
+      invisible: false,
     });
-    addVariantRing(group, variantKey, br.size);
+    addVariantRing(group, variantKey, blopData.size);
     group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);
     game.brainrots.push(group);
+    return group;
   }
 
-  function killBrainrot(enemy) {
+  // Tick mécaniques spéciales pour chaque Blop variant
+  function applyMechanicTick(e, dt, now) {
+    const m = e.userData.mechanic;
+    if (!m) return;
+    const ud = e.userData;
+    switch (m) {
+      case 'speed-boost-dying':
+        if (ud.hp / ud.maxHp < 0.3 && !ud.speedBoosted) {
+          ud.speed = BRAINROT_SPEED * 2.2;
+          ud.speedBoosted = true;
+          if (ud.bodyMesh) {
+            const flash = () => {
+              if (!e.parent) return;
+              e.scale.multiplyScalar(1.08);
+              setTimeout(() => { if (e.parent) e.scale.multiplyScalar(1 / 1.08); }, 80);
+            };
+            flash();
+          }
+        }
+        break;
+      case 'teleport':
+        ud.mechanicCd -= dt;
+        if (ud.mechanicCd <= 0) {
+          ud.mechanicCd = 4 + Math.random() * 2;
+          const jump = 3 + Math.random() * 2;
+          e.position.z = Math.min(e.position.z + jump, LANE_LENGTH / 2 - 1);
+          spawnDeathBurst(e.position, 0xaa66ff, ud.size * 0.6);
+        }
+        break;
+      case 'heal-nearby':
+        ud.mechanicCd -= dt;
+        if (ud.mechanicCd <= 0) {
+          ud.mechanicCd = 1.0;
+          for (const other of game.brainrots) {
+            if (other === e) continue;
+            if (other.position.distanceTo(e.position) < 3) {
+              other.userData.hp = Math.min(other.userData.maxHp, other.userData.hp + other.userData.maxHp * 0.05);
+            }
+          }
+        }
+        break;
+      case 'shield-phase':
+        ud.mechanicCd -= dt;
+        if (ud.mechanicCd <= 0) {
+          ud.shielded = !ud.shielded;
+          ud.mechanicCd = ud.shielded ? 1.5 : 2.5;
+          if (ud.bodyMesh) {
+            const opacity = ud.shielded ? 0.4 : 1;
+            ud.bodyMesh.traverse(o => {
+              if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = opacity; }
+            });
+          }
+        }
+        break;
+      case 'invisibility-pulse':
+        ud.mechanicCd -= dt;
+        if (ud.mechanicCd <= 0) {
+          ud.invisible = !ud.invisible;
+          ud.mechanicCd = ud.invisible ? 1.2 : 2.0;
+          if (ud.bodyMesh) {
+            const opacity = ud.invisible ? 0.15 : 1;
+            ud.bodyMesh.traverse(o => {
+              if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = opacity; }
+            });
+          }
+        }
+        break;
+      case 'rage-regen':
+        if (ud.hp / ud.maxHp < 0.5) {
+          ud.hp = Math.min(ud.maxHp, ud.hp + ud.maxHp * 0.02 * dt);
+          if (!ud.ragePhase) {
+            ud.ragePhase = true;
+            ud.speed = BRAINROT_SPEED * 1.3;
+          }
+        }
+        break;
+    }
+  }
+
+  function killBrainrot(enemy, skipMechanic) {
     const ud = enemy.userData;
     spawnDeathBurst(enemy.position, RARITIES[ud.rarity].hex, ud.size);
     sfx('kill');
@@ -1582,13 +1704,42 @@
     scene.remove(enemy);
     const idx = game.brainrots.indexOf(enemy);
     if (idx !== -1) game.brainrots.splice(idx, 1);
+    // Mécaniques à la mort
+    if (!skipMechanic && ud.mechanic) {
+      const lane = ud.lane;
+      const z = enemy.position.z;
+      if (ud.mechanic === 'summon-wave') {
+        for (let i = 0; i < 3; i++) {
+          const s = spawnBrainrot(lane, 'common', { noVariant: true, hpMult: 0.5, startZ: z - 0.6 - Math.random() * 1.2 });
+          if (s) s.scale.set(0.4, 0.4, 0.4);
+        }
+      } else if (ud.mechanic === 'splits-on-death') {
+        for (let i = 0; i < 2; i++) {
+          const s = spawnBrainrot(lane, ud.rarity, { noVariant: true, hpMult: 0.4, startZ: z - 0.5 - i * 0.8 });
+          if (s) {
+            s.scale.set(0.5, 0.5, 0.5);
+            s.userData.hp = s.userData.maxHp;
+          }
+        }
+      }
+    }
     updateHud();
     checkAchievements();
   }
   function applyDamage(enemy, damage) {
     if (!enemy || !enemy.parent) return;
-    enemy.userData.hp -= damage;
-    if (enemy.userData.hp <= 0) killBrainrot(enemy);
+    const ud = enemy.userData;
+    // Mécaniques défensives
+    if (ud.mechanic === 'phase-through' && !ud.phaseUsed) {
+      ud.phaseUsed = true;
+      spawnDeathBurst(enemy.position, 0x66ffcc, 0.3);
+      return;
+    }
+    if (ud.shielded) return; // shield-phase
+    if (ud.invisible) return; // invisibility-pulse (balles passent à travers pendant phase invisible)
+    if (ud.mechanic === 'armored') damage *= 0.5;
+    ud.hp -= damage;
+    if (ud.hp <= 0) killBrainrot(enemy);
   }
   function applySlow(enemy, factor, duration, now) {
     if (!enemy || !enemy.parent) return;
@@ -3240,6 +3391,8 @@
         e.userData.hp -= (e.userData.poisonDps || 0) * dt;
         if (e.userData.hp <= 0) { killBrainrot(e); continue; }
       }
+      // Mécaniques Blops variants
+      applyMechanicTick(e, dt, now);
       const slowed = now < e.userData.slowUntil;
       const speed = slowed ? e.userData.speed * e.userData.slowFactor : e.userData.speed;
       e.position.z += speed * dt;

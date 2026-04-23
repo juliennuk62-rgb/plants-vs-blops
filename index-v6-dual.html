@@ -818,6 +818,14 @@
     <div class="modal-content modal-content--md">
       <div class="modal-title">Paramètres</div>
 
+      <h3>🎮 Qualité graphique</h3>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px;">Low = pas d'ombres, pas de chevrons, pixel ratio réduit. High = tout. Auto = détecté selon ton appareil. Change en live (nécessite reload).</div>
+      <select id="gfx-select" style="width:100%;padding:8px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;font-size:13px;margin-bottom:16px;">
+        <option value="auto">🤖 Auto (recommandé)</option>
+        <option value="low">🪫 Low (max FPS)</option>
+        <option value="high">💎 High (max beauté)</option>
+      </select>
+
       <h3>🎵 Musique d'ambiance</h3>
       <div style="font-size:12px;color:#aaa;margin-bottom:8px;">10 pistes procédurales différentes (phonk, lofi, chiptune, zen, rave, anime…). Idéal pour les clips TikTok.</div>
       <select id="bgm-select" style="width:100%;padding:8px;background:#222;color:#fff;border:1px solid #555;border-radius:4px;font-size:13px;margin-bottom:16px;"></select>
@@ -1611,17 +1619,44 @@
   scene.fog = new THREE.Fog(0x87CEEB, 40, 110);
   // Caméra orthographique pour un look isométrique propre (style Clash Royale / Kenney)
   const camera = new THREE.OrthographicCamera(-22, 22, 22, -22, 0.1, 300);
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  // === V6 : détection hardware + qualité graphique ===
+  const IS_MOBILE = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const HW_CONCURRENCY = navigator.hardwareConcurrency || 4;
+  const IS_LOW_END = IS_MOBILE || HW_CONCURRENCY <= 4;
+  // Qualité lu depuis localStorage : 'low' | 'auto' | 'high'
+  let gfxQuality = (function() {
+    try { return localStorage.getItem('pvb_gfx') || 'auto'; } catch { return 'auto'; }
+  })();
+  function effectiveQuality() {
+    if (gfxQuality === 'low') return 'low';
+    if (gfxQuality === 'high') return 'high';
+    return IS_LOW_END ? 'low' : 'high'; // auto
+  }
+  const Q = effectiveQuality();
+  console.log('[V6 perf] quality:', gfxQuality, '| effective:', Q, '| mobile:', IS_MOBILE, '| cores:', HW_CONCURRENCY);
+
+  const renderer = new THREE.WebGLRenderer({
+    antialias: Q === 'high',          // AA désactivé en low
+    powerPreference: 'high-performance',
+    stencil: false,                    // on n'utilise pas de stencil buffer
+    depth: true,
+  });
+  // Pixel ratio : cap à 1.5 en low, 2 en high (évite retina 3× overkill sur iPhone)
+  const targetPixelRatio = Math.min(window.devicePixelRatio || 1, Q === 'high' ? 2 : 1.5);
+  renderer.setPixelRatio(targetPixelRatio);
   renderer.setSize(innerWidth, innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = Q === 'high';           // pas de shadow en low
+  renderer.shadowMap.type = Q === 'high' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   document.body.appendChild(renderer.domElement);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+  const ambientLight = new THREE.AmbientLight(0xffffff, Q === 'low' ? 0.75 : 0.55); // compense l'absence d'ombre
   scene.add(ambientLight);
   const sun = new THREE.DirectionalLight(0xffffff, 0.85);
-  sun.position.set(15, 35, 15); sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.position.set(15, 35, 15);
+  sun.castShadow = Q === 'high';
+  // Shadow map plus petit si low, même si activé
+  const shadowMapSize = Q === 'high' ? 1024 : 512;
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   scene.add(sun);
 
   // Ciel Vivant (Season 2 Feature #1) — RETIRÉ : rendait le jeu trop sombre la nuit.
@@ -2198,48 +2233,65 @@
     spawnBakedDecorations();
   }
 
+  // === V6 : matériaux partagés (tous les terrain meshes réutilisent) ===
+  const SHARED_MATS = {
+    laneA: new THREE.MeshStandardMaterial({ color: 0x6abf4e }),
+    laneB: new THREE.MeshStandardMaterial({ color: 0x5aaf3e }),
+    path: new THREE.MeshStandardMaterial({ color: 0xccb888, roughness: 1 }),
+    chevron: new THREE.MeshStandardMaterial({ color: 0x88ff88, emissive: 0x33aa33, emissiveIntensity: 0.3, transparent: true, opacity: 0.25 }),
+    baseZone: new THREE.MeshStandardMaterial({ color: 0x2d5016 }),
+    spawnZone: new THREE.MeshStandardMaterial({ color: 0x8B0000 }),
+    flagPole: new THREE.MeshStandardMaterial({ color: 0x553322 }),
+    flag: new THREE.MeshStandardMaterial({ color: 0x44cc88, emissive: 0x228844, emissiveIntensity: 0.2 }),
+    arch: new THREE.MeshStandardMaterial({ color: 0x331111, emissive: 0xff2233, emissiveIntensity: 0.6 }),
+    slot: new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0, emissive: 0x00ff00, emissiveIntensity: 0.4 }),
+  };
+  // Geometries partagées aussi
+  const SHARED_GEOMS = {
+    lane: new THREE.BoxGeometry(LANE_WIDTH, 0.2, LANE_LENGTH),
+    path: new THREE.BoxGeometry(LANE_WIDTH * 0.4, 0.01, LANE_LENGTH),
+    chevron: new THREE.ConeGeometry(0.25, 0.4, 3),
+    flagPole: new THREE.CylinderGeometry(0.06, 0.06, 1.8, 6),
+    flag: new THREE.BoxGeometry(0.6, 0.4, 0.05),
+    archPillar: new THREE.BoxGeometry(0.5, 2.2, 0.5),
+    slot: new THREE.BoxGeometry(LANE_WIDTH * 0.85, 0.05, SLOT_DEPTH * 0.85),
+  };
+
   function buildOneGarden(gardenIdx, perGarden, globalStart) {
     if (globalStart === undefined) globalStart = gardenIdx * perGarden;
     const offsetX = gardenCenterX(gardenIdx);
-    const laneColors = [0x6abf4e, 0x5aaf3e];
+    const laneMats = [SHARED_MATS.laneA, SHARED_MATS.laneB];
     for (let i = 0; i < perGarden; i++) {
       const laneLocalX = offsetX + (i - (perGarden - 1) / 2) * LANE_WIDTH;
-      // Herbe
-      const lane = new THREE.Mesh(
-        new THREE.BoxGeometry(LANE_WIDTH, 0.2, LANE_LENGTH),
-        new THREE.MeshStandardMaterial({ color: laneColors[i % 2] })
-      );
+      // Herbe (matériaux + geom partagés)
+      const lane = new THREE.Mesh(SHARED_GEOMS.lane, laneMats[i % 2]);
       lane.position.x = laneLocalX;
-      lane.receiveShadow = true;
+      lane.receiveShadow = Q === 'high';
       scene.add(lane);
       terrainObjects.push(lane);
       // Chemin central
-      const path = new THREE.Mesh(
-        new THREE.BoxGeometry(LANE_WIDTH * 0.4, 0.01, LANE_LENGTH),
-        new THREE.MeshStandardMaterial({ color: 0xccb888, roughness: 1 })
-      );
+      const path = new THREE.Mesh(SHARED_GEOMS.path, SHARED_MATS.path);
       path.position.set(laneLocalX, 0.11, 0);
-      path.receiveShadow = true;
+      path.receiveShadow = Q === 'high';
       scene.add(path);
       terrainObjects.push(path);
-      // Chevrons flow
-      for (let c = 0; c < 6; c++) {
-        const chevron = new THREE.Mesh(
-          new THREE.ConeGeometry(0.25, 0.4, 3),
-          new THREE.MeshStandardMaterial({ color: 0x88ff88, emissive: 0x33aa33, emissiveIntensity: 0.3, transparent: true, opacity: 0.25 })
-        );
-        chevron.rotation.x = Math.PI / 2;
-        chevron.rotation.z = Math.PI;
-        chevron.position.set(laneLocalX, 0.12, -LANE_LENGTH / 2 + (c + 1) * (LANE_LENGTH / 7));
-        scene.add(chevron);
-        terrainObjects.push(chevron);
+      // Chevrons flow (en Q=low on skip les chevrons, c'est décoratif)
+      if (Q === 'high') {
+        for (let c = 0; c < 6; c++) {
+          const chevron = new THREE.Mesh(SHARED_GEOMS.chevron, SHARED_MATS.chevron);
+          chevron.rotation.x = Math.PI / 2;
+          chevron.rotation.z = Math.PI;
+          chevron.position.set(laneLocalX, 0.12, -LANE_LENGTH / 2 + (c + 1) * (LANE_LENGTH / 7));
+          scene.add(chevron);
+          terrainObjects.push(chevron);
+        }
       }
     }
     const totalW = perGarden * LANE_WIDTH;
-    // Base à défendre
+    // Base à défendre (geom unique car largeur variable par garden)
     const baseZone = new THREE.Mesh(
       new THREE.BoxGeometry(totalW, 0.3, 1.5),
-      new THREE.MeshStandardMaterial({ color: 0x2d5016 })
+      SHARED_MATS.baseZone
     );
     baseZone.position.set(offsetX, 0.05, LANE_LENGTH / 2 + 0.75);
     scene.add(baseZone);
@@ -2254,37 +2306,34 @@
     // Spawn zone
     const spawnZone = new THREE.Mesh(
       new THREE.BoxGeometry(totalW, 0.3, 1.5),
-      new THREE.MeshStandardMaterial({ color: 0x8B0000 })
+      SHARED_MATS.spawnZone
     );
     spawnZone.position.set(offsetX, 0.05, -LANE_LENGTH / 2 - 0.75);
     scene.add(spawnZone);
     terrainObjects.push(spawnZone);
-    // Arche rouge
-    const archMat = new THREE.MeshStandardMaterial({ color: 0x331111, emissive: 0xff2233, emissiveIntensity: 0.6 });
+    // Arche rouge (matériau partagé)
     for (const s of [-1, 1]) {
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.2, 0.5), archMat);
+      const pillar = new THREE.Mesh(SHARED_GEOMS.archPillar, SHARED_MATS.arch);
       pillar.position.set(offsetX + s * totalW * 0.42, 1.1, -LANE_LENGTH / 2 - 0.75);
       scene.add(pillar); terrainObjects.push(pillar);
     }
-    const archTop = new THREE.Mesh(new THREE.BoxGeometry(totalW * 0.95, 0.4, 0.5), archMat);
+    const archTop = new THREE.Mesh(new THREE.BoxGeometry(totalW * 0.95, 0.4, 0.5), SHARED_MATS.arch);
     archTop.position.set(offsetX, 2.3, -LANE_LENGTH / 2 - 0.75);
     scene.add(archTop); terrainObjects.push(archTop);
-    const spawnLight = new THREE.PointLight(0xff3322, 0.6, 10);
-    spawnLight.position.set(offsetX, 2, -LANE_LENGTH / 2 - 0.75);
-    scene.add(spawnLight); terrainObjects.push(spawnLight);
-    // Slots : laneIdx GLOBAL = globalStart + localLane (compatible gardens asymétriques)
+    // PointLight seulement en qualité high (coûteux avec shadows)
+    if (Q === 'high') {
+      const spawnLight = new THREE.PointLight(0xff3322, 0.6, 10);
+      spawnLight.position.set(offsetX, 2, -LANE_LENGTH / 2 - 0.75);
+      scene.add(spawnLight); terrainObjects.push(spawnLight);
+    }
+    // Slots (geom + mat partagés)
     for (let localLane = 0; localLane < perGarden; localLane++) {
       const globalLane = globalStart + localLane;
       const laneX = offsetX + (localLane - (perGarden - 1) / 2) * LANE_WIDTH;
       for (let slotIdx = 0; slotIdx < SLOTS_PER_LANE; slotIdx++) {
         const z = -LANE_LENGTH / 2 + (slotIdx + 0.5) * SLOT_DEPTH;
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(LANE_WIDTH * 0.85, 0.05, SLOT_DEPTH * 0.85),
-          new THREE.MeshStandardMaterial({
-            color: 0x00ff00, transparent: true, opacity: 0,
-            emissive: 0x00ff00, emissiveIntensity: 0.4,
-          })
-        );
+        // Slot : geom partagée, material cloné (opacity per-slot)
+        const mesh = new THREE.Mesh(SHARED_GEOMS.slot, SHARED_MATS.slot.clone());
         mesh.position.set(laneX, 0.17, z);
         mesh.userData = { type: 'slot', laneIdx: globalLane, slotIdx, gardenIdx };
         scene.add(mesh);
@@ -5307,6 +5356,19 @@
       sel.addEventListener('change', () => setBgmTrack(sel.value));
     }
     if (sel) sel.value = currentBgmId;
+    // V6 : sélecteur qualité graphique
+    const gfxSel = $('gfx-select');
+    if (gfxSel) {
+      gfxSel.value = gfxQuality;
+      if (!gfxSel._bound) {
+        gfxSel.addEventListener('change', () => {
+          gfxQuality = gfxSel.value;
+          try { localStorage.setItem('pvb_gfx', gfxQuality); } catch {}
+          if (confirm('Qualité changée. Recharger maintenant pour appliquer ?')) location.reload();
+        });
+        gfxSel._bound = true;
+      }
+    }
     openModal('settings-modal');
   });
   btnClick('settings-close', () => closeModal($('settings-modal')));

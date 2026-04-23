@@ -3304,10 +3304,64 @@
     sfx('mix');
     renderInventory(); renderMixer();
     checkAchievements(); saveGame();
+    // Tier 3 : Cauldron reveal animation (3 plantes → 1, suspense + reveal)
+    showCauldronReveal(plantId, newPlantId, newMutation, nextRarity);
+  }
+
+  function showCauldronReveal(srcPlantId, newPlantId, newMutation, newRarity) {
+    const srcEmoji = PLANT_ICONS[srcPlantId] || '🌱';
+    const newEmoji = PLANT_ICONS[newPlantId] || '🌱';
     const np = PLANTS[newPlantId];
-    const mut = MUTATIONS[newMutation];
-    const r = RARITIES[np.rarity];
-    showHint(`✨ Obtenu : ${np.name}${mut.label ? ' ' + mut.label : ''} (${r.label})`, 3500);
+    const mut = MUTATIONS[newMutation] || MUTATIONS.none;
+    const r = RARITIES[newRarity];
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;pointer-events:none;backdrop-filter:blur(4px);';
+    overlay.innerHTML = `
+      <div style="position:relative;width:320px;height:320px;">
+        <div id="cauldronP1" style="position:absolute;top:0;left:50%;font-size:64px;transform:translate(-50%,0);transition:all 1.2s var(--e-swoosh);">${srcEmoji}</div>
+        <div id="cauldronP2" style="position:absolute;top:50%;left:0;font-size:64px;transform:translate(0,-50%);transition:all 1.2s var(--e-swoosh);">${srcEmoji}</div>
+        <div id="cauldronP3" style="position:absolute;top:50%;right:0;font-size:64px;transform:translate(0,-50%);transition:all 1.2s var(--e-swoosh);">${srcEmoji}</div>
+        <div id="cauldronBurst" style="position:absolute;top:50%;left:50%;width:100px;height:100px;transform:translate(-50%,-50%) scale(0);background:radial-gradient(circle, ${r.color} 0%, transparent 70%);border-radius:50%;opacity:0;transition:all 0.4s var(--e-pop);"></div>
+        <div id="cauldronNew" style="position:absolute;top:50%;left:50%;font-size:88px;transform:translate(-50%,-50%) scale(0);opacity:0;transition:all 0.5s var(--e-pop);text-shadow:0 0 20px ${r.color};">${newEmoji}</div>
+        <div id="cauldronLabel" style="position:absolute;top:100%;left:50%;transform:translate(-50%,10px);color:${r.color};font-family:var(--font-display);font-size:20px;font-weight:700;text-align:center;opacity:0;transition:opacity 0.5s ease;text-shadow:0 0 10px ${r.color};white-space:nowrap;">
+          ${np.name}${mut.label ? ' <span style="color:' + mut.color + ';">' + (typeof MUTATION_ICONS !== 'undefined' ? (MUTATION_ICONS[newMutation] || '✨') : '✨') + ' ' + mut.label + '</span>' : ''}<br>
+          <span style="font-size:14px;opacity:0.9;">${r.label}</span>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    // Animation convergence vers le centre
+    requestAnimationFrame(() => {
+      const p1 = overlay.querySelector('#cauldronP1');
+      const p2 = overlay.querySelector('#cauldronP2');
+      const p3 = overlay.querySelector('#cauldronP3');
+      p1.style.transform = 'translate(-50%,140px) scale(0.3) rotate(360deg)';
+      p1.style.opacity = '0';
+      p2.style.transform = 'translate(140px,-50%) scale(0.3) rotate(360deg)';
+      p2.style.opacity = '0';
+      p3.style.transform = 'translate(-140px,-50%) scale(0.3) rotate(-360deg)';
+      p3.style.opacity = '0';
+    });
+    // Burst + reveal après 1.2s
+    setTimeout(() => {
+      const burst = overlay.querySelector('#cauldronBurst');
+      burst.style.transform = 'translate(-50%,-50%) scale(4)';
+      burst.style.opacity = '1';
+      setTimeout(() => { burst.style.opacity = '0'; }, 300);
+    }, 1200);
+    setTimeout(() => {
+      const newEl = overlay.querySelector('#cauldronNew');
+      newEl.style.transform = 'translate(-50%,-50%) scale(1.2)';
+      newEl.style.opacity = '1';
+      setTimeout(() => { newEl.style.transform = 'translate(-50%,-50%) scale(1)'; }, 200);
+      overlay.querySelector('#cauldronLabel').style.opacity = '1';
+      if (typeof sfx === 'function') sfx('reward');
+    }, 1400);
+    // Close après 3s
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 0.4s';
+      overlay.style.opacity = '0';
+      setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 400);
+    }, 2800);
   }
 
   // --- PRESTIGE ---

@@ -1659,6 +1659,57 @@
   sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   scene.add(sun);
 
+  // === V6 : scène MAISON (onglet construction) ===
+  const sceneHouse = new THREE.Scene();
+  // Fond dégradé ciel-coucher de soleil (pour démarquer de la scène jardin)
+  sceneHouse.background = new THREE.Color(0xffaa77);
+  sceneHouse.fog = new THREE.Fog(0xffcc99, 50, 140);
+  const ambientHouse = new THREE.AmbientLight(0xffeedd, 0.7);
+  sceneHouse.add(ambientHouse);
+  const sunHouse = new THREE.DirectionalLight(0xffccaa, 0.85);
+  sunHouse.position.set(20, 30, 10);
+  sunHouse.castShadow = Q === 'high';
+  if (Q === 'high') sunHouse.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+  sceneHouse.add(sunHouse);
+  // Plateforme : grille 40×40
+  const HOUSE_GROUND_SIZE = 40;
+  const houseGround = new THREE.Mesh(
+    new THREE.BoxGeometry(HOUSE_GROUND_SIZE, 0.5, HOUSE_GROUND_SIZE),
+    new THREE.MeshStandardMaterial({ color: 0x7a8a5a, roughness: 0.9 })
+  );
+  houseGround.receiveShadow = Q === 'high';
+  sceneHouse.add(houseGround);
+  // Bordure de la plateforme
+  const houseEdge = new THREE.Mesh(
+    new THREE.BoxGeometry(HOUSE_GROUND_SIZE + 0.6, 0.8, HOUSE_GROUND_SIZE + 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x4a5a3a })
+  );
+  houseEdge.position.y = -0.15;
+  sceneHouse.add(houseEdge);
+  // Caméra maison (iso mais plus haute, angle vue librement orbitable)
+  const cameraHouse = new THREE.OrthographicCamera(-25, 25, 25, -25, 0.1, 300);
+  cameraHouse.position.set(25, 30, 25);
+  cameraHouse.lookAt(0, 0, 0);
+  function setupCameraHouse() {
+    const aspect = innerWidth / innerHeight;
+    const frustumH = 22;
+    cameraHouse.left = -frustumH * aspect;
+    cameraHouse.right = frustumH * aspect;
+    cameraHouse.top = frustumH;
+    cameraHouse.bottom = -frustumH;
+    cameraHouse.updateProjectionMatrix();
+  }
+  setupCameraHouse();
+
+  // === V6 : onglet actif (game OU house) ===
+  let activeTab = 'game'; // 'game' | 'house'
+  function setActiveTab(tab) {
+    activeTab = tab;
+    document.body.classList.toggle('tab-game', tab === 'game');
+    document.body.classList.toggle('tab-house', tab === 'house');
+    if (typeof updateTabSwitcherUI === 'function') updateTabSwitcherUI();
+  }
+
   // Ciel Vivant (Season 2 Feature #1) — RETIRÉ : rendait le jeu trop sombre la nuit.
   // Skybox et lumières restent aux valeurs par défaut (bleu ciel jour, ambient 0.55, sun 0.85).
 
@@ -1851,8 +1902,36 @@
         : `V6 · SOLO · P${game.prestige} · ${lanesPerGarden()} lanes`;
     };
     _updateV6Badge();
+    buildTabSwitcher();
     buildAdminPanel();
   });
+
+  // === V6 : Tab Switcher UI ===
+  function buildTabSwitcher() {
+    const bar = document.createElement('div');
+    bar.id = 'tab-switcher';
+    bar.style.cssText = 'position:fixed;top:46px;left:50%;transform:translateX(-50%);display:flex;gap:4px;background:rgba(0,0,0,0.55);padding:4px;border-radius:24px;z-index:9997;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);';
+    bar.innerHTML = `
+      <button id="tab-game" class="tab-btn tab-active">🌱 Jardin</button>
+      <button id="tab-house" class="tab-btn">🏠 Maison</button>
+    `;
+    document.body.appendChild(bar);
+    const st = document.createElement('style');
+    st.textContent = `
+      .tab-btn { padding:8px 18px;border:none;background:transparent;color:#ccc;font-family:var(--font-display,sans-serif);font-weight:700;font-size:13px;cursor:pointer;border-radius:20px;transition:background 0.2s;letter-spacing:0.5px; }
+      .tab-btn:hover { background:rgba(255,255,255,0.08); color:#fff; }
+      .tab-btn.tab-active { background:linear-gradient(90deg,#44cc88,#66aadd); color:#fff; box-shadow:0 2px 8px rgba(68,204,136,0.4); }
+      body.tab-house #inventory, body.tab-house #top-right, body.tab-house #hud { opacity:0.5; pointer-events:none; }
+      body.tab-house #build-shop-btn { display:block !important; }
+    `;
+    document.head.appendChild(st);
+    $('tab-game').onclick = () => { setActiveTab('game'); sfx && sfx('click'); };
+    $('tab-house').onclick = () => { setActiveTab('house'); sfx && sfx('click'); };
+    window.updateTabSwitcherUI = () => {
+      $('tab-game').classList.toggle('tab-active', activeTab === 'game');
+      $('tab-house').classList.toggle('tab-active', activeTab === 'house');
+    };
+  }
 
   // === ADMIN PANEL (test local seulement) ===
   function buildAdminPanel() {
@@ -5781,8 +5860,14 @@
     requestAnimationFrame(animate);
     const dt = Math.min(clock.getDelta(), 0.1);
     const now = clock.getElapsedTime();
+    // Update logique jeu continue TOUJOURS (même en mode maison : passif, spawns, etc.)
     update(dt, now);
-    renderer.render(scene, camera);
+    // Rendu selon l'onglet actif
+    if (activeTab === 'house') {
+      renderer.render(sceneHouse, cameraHouse);
+    } else {
+      renderer.render(scene, camera);
+    }
   }
 
   // --- MAP EDITOR ---
@@ -6216,6 +6301,7 @@
   addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
     setupCamera();
+    setupCameraHouse();
   });
   </script>
 </body>

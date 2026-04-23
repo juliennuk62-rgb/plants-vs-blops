@@ -1304,11 +1304,110 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(ambientLight);
   const sun = new THREE.DirectionalLight(0xffffff, 0.85);
   sun.position.set(15, 35, 15); sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   scene.add(sun);
+
+  // --- CIEL VIVANT (Season 2) : skybox suit l'heure locale ---
+  const SKY_PRESETS = [
+    { h: 5,  sky: 0x2a1f4a, fog: 0x2a1f4a, ambI: 0.25, sunI: 0.3,  sunC: 0x6677aa, ambC: 0x8899ff, name: 'nuit' },
+    { h: 6,  sky: 0xff9977, fog: 0xffaa99, ambI: 0.45, sunI: 0.6,  sunC: 0xffbb88, ambC: 0xffddcc, name: 'aube' },
+    { h: 8,  sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.55, sunI: 0.85, sunC: 0xffffff, ambC: 0xffffff, name: 'jour' },
+    { h: 17, sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.55, sunI: 0.85, sunC: 0xffffff, ambC: 0xffffff, name: 'jour' },
+    { h: 18, sky: 0xff7755, fog: 0xffaa77, ambI: 0.4,  sunI: 0.7,  sunC: 0xff8844, ambC: 0xff9966, name: 'crépuscule' },
+    { h: 20, sky: 0x1a1744, fog: 0x2a1f5a, ambI: 0.3,  sunI: 0.35, sunC: 0x6677aa, ambC: 0x8899ff, name: 'nuit' },
+    { h: 23, sky: 0x0f1035, fog: 0x1a1a45, ambI: 0.25, sunI: 0.3,  sunC: 0x5566aa, ambC: 0x7788dd, name: 'nuit profonde' },
+  ];
+  function lerpHex(a, b, t) {
+    const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+    const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+    return ((ar + (br - ar) * t) | 0) << 16 | ((ag + (bg - ag) * t) | 0) << 8 | ((ab + (bb - ab) * t) | 0);
+  }
+  function currentSkyState() {
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    let prev = SKY_PRESETS[SKY_PRESETS.length - 1], next = SKY_PRESETS[0];
+    for (let i = 0; i < SKY_PRESETS.length; i++) {
+      if (SKY_PRESETS[i].h <= h) prev = SKY_PRESETS[i];
+      if (SKY_PRESETS[i].h > h) { next = SKY_PRESETS[i]; break; }
+    }
+    const span = (next.h - prev.h + 24) % 24 || 1;
+    const t = Math.max(0, Math.min(1, (h - prev.h + 24) % 24 / span));
+    return {
+      sky: lerpHex(prev.sky, next.sky, t),
+      fog: lerpHex(prev.fog, next.fog, t),
+      ambI: prev.ambI + (next.ambI - prev.ambI) * t,
+      sunI: prev.sunI + (next.sunI - prev.sunI) * t,
+      sunC: lerpHex(prev.sunC, next.sunC, t),
+      ambC: lerpHex(prev.ambC, next.ambC, t),
+      name: t < 0.5 ? prev.name : next.name,
+      hour: h,
+      isNight: h < 6 || h >= 20,
+    };
+  }
+  function applySkyState() {
+    const s = currentSkyState();
+    scene.background = new THREE.Color(s.sky);
+    scene.fog = new THREE.Fog(s.fog, 40, 110);
+    ambientLight.intensity = s.ambI;
+    ambientLight.color.setHex(s.ambC);
+    sun.intensity = s.sunI;
+    sun.color.setHex(s.sunC);
+    // Soleil bas à l'aube/crépuscule, haut à midi
+    const sunAngle = ((s.hour - 6) / 12) * Math.PI; // 6h→0, 18h→π
+    const sunY = Math.max(8, Math.sin(sunAngle) * 35);
+    const sunX = Math.cos(sunAngle) * 20;
+    sun.position.set(sunX, sunY, 15);
+    game.skyState = s;
+  }
+  applySkyState();
+  setInterval(applySkyState, 60000); // refresh toutes les 60s
+
+  // --- SLOW-MO & FLASH (Season 2) ---
+  function triggerSlowMo(factor, duration) {
+    const now = clock ? clock.getElapsedTime() : performance.now() / 1000;
+    game.slowMoFactor = factor;
+    game.slowMoUntil = now + duration;
+    // Motion blur visuel via canvas filter
+    renderer.domElement.style.transition = 'filter 0.08s ease-out';
+    renderer.domElement.style.filter = 'blur(2px) saturate(1.8) brightness(1.15)';
+    setTimeout(() => { renderer.domElement.style.filter = ''; }, duration * 1000);
+  }
+  function flashScreen(hex, opacity) {
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:999;background:#' + hex.toString(16).padStart(6, '0') + ';opacity:' + opacity + ';transition:opacity 0.4s ease-out;';
+    document.body.appendChild(flash);
+    requestAnimationFrame(() => { flash.style.opacity = '0'; });
+    setTimeout(() => flash.remove(), 450);
+  }
+
+  // --- MEME FACE REVEAL (Season 2) ---
+  const MEME_FACES = {
+    gigachad:  { emoji: '💪', label: 'GIGACHAD', color: '#ffcc33', bg: 'rgba(40,30,0,0.9)' },
+    sus:       { emoji: '📮', label: 'SUS',      color: '#ff3377', bg: 'rgba(40,0,20,0.9)' },
+    skibidi:   { emoji: '🚽', label: 'SKIBIDI',  color: '#33ccff', bg: 'rgba(0,20,40,0.9)' },
+    fire:      { emoji: '🔥', label: 'W',        color: '#ff6600', bg: 'rgba(40,10,0,0.9)' },
+    clown:     { emoji: '🤡', label: 'CLOWN',    color: '#ff66cc', bg: 'rgba(20,0,20,0.9)' },
+    bruh:      { emoji: '😑', label: 'BRUH',     color: '#888',    bg: 'rgba(15,15,15,0.9)' },
+  };
+  let lastMemeAt = 0;
+  function showMemeFace(key) {
+    const m = MEME_FACES[key];
+    if (!m) return;
+    const now = performance.now();
+    if (now - lastMemeAt < 800) return; // anti-spam 0.8s
+    lastMemeAt = now;
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:50%;top:30%;transform:translate(-50%,-50%) scale(0.3);opacity:0;pointer-events:none;z-index:500;background:' + m.bg + ';border:3px solid ' + m.color + ';border-radius:16px;padding:14px 28px;color:' + m.color + ';font-size:32px;font-weight:900;text-shadow:0 0 10px ' + m.color + ';box-shadow:0 0 30px ' + m.color + ';display:flex;gap:10px;align-items:center;transition:all 0.15s cubic-bezier(0.4,2,0.6,1);font-family:Impact,sans-serif;letter-spacing:2px;';
+    el.innerHTML = '<span style="font-size:42px;">' + m.emoji + '</span><span>' + m.label + '</span>';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translate(-50%,-50%) scale(1.1) rotate(' + ((Math.random() - 0.5) * 10) + 'deg)'; });
+    setTimeout(() => { el.style.opacity = '0'; el.style.transform += ' translateY(-30px)'; }, 900);
+    setTimeout(() => el.remove(), 1200);
+  }
 
   // --- ETAT ---
   const game = {
@@ -1979,6 +2078,15 @@
     sfx('kill');
     if (ud.mechanic) sfx('crit');
     if (ud.variant && ud.variant !== 'none') sfx('rarity');
+    // Season 2 : Slow-mo GOAT + Meme Face Reveal
+    if (ud.rarity === 'goat' || ud.rarity === 'mythic') {
+      triggerSlowMo(ud.rarity === 'goat' ? 0.25 : 0.4, ud.rarity === 'goat' ? 1.8 : 1.2);
+      flashScreen(RARITIES[ud.rarity].hex, 0.35);
+      showMemeFace(ud.rarity === 'goat' ? 'gigachad' : 'fire');
+    } else if (ud.variant && ud.variant !== 'none' && ud.variant !== 'bronze') {
+      showMemeFace('sus');
+    }
+    if (ud.mechanic && Math.random() < 0.25) showMemeFace(ud.mechanic === 'rage-regen' ? 'fire' : 'skibidi');
     addCash(ud.value);
     game.kills++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
@@ -3950,7 +4058,12 @@
   // --- GAME LOOP ---
   const clock = new THREE.Clock();
   let brSpawnTimer = 0;
+  // Season 2 : slow-motion global (utilisé par Slow-Mo GOAT Kill)
+  game.slowMoUntil = 0;
+  game.slowMoFactor = 1;
   function update(dt, now) {
+    // Slow-mo : ralentit dt SAUF pour certains systèmes (shop, save)
+    if (now < game.slowMoUntil) dt = dt * game.slowMoFactor;
     game.stats.totalPlayTimeMs += dt * 1000;
     brSpawnTimer += dt;
     if (brSpawnTimer >= BRAINROT_SPAWN_INTERVAL) {
@@ -4424,6 +4537,16 @@
     await loadLibraryFromStorage();
     await restoreEditorPlacements();
     animate();
+    // Season 2 : Lettre des 30 jours — réveil doux après absence longue
+    if (savedData && savedData.lastSave) {
+      const daysAway = (Date.now() - savedData.lastSave) / (1000 * 60 * 60 * 24);
+      if (daysAway >= 30 && !localStorage.getItem('pvb_letter_shown_' + Math.floor(daysAway / 30))) {
+        setTimeout(() => {
+          showLongAbsenceLetter(daysAway);
+          localStorage.setItem('pvb_letter_shown_' + Math.floor(daysAway / 30), '1');
+        }, 1800);
+      }
+    }
     if (offlineResult && offlineResult.earned >= 1) {
       $('welcome-time').textContent = fmtDuration(offlineResult.elapsedSec);
       $('welcome-earned').textContent = fmtNumber(offlineResult.earned);
@@ -4432,6 +4555,27 @@
       showTutorial();
     }
   })();
+
+  function showLongAbsenceLetter(days) {
+    const d = Math.floor(days);
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9998;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);opacity:0;transition:opacity 0.6s ease;padding:20px;';
+    overlay.innerHTML = '<div style="max-width:420px;background:linear-gradient(180deg,#1e1a2e,#0f0d1a);border:1px solid #554;border-radius:16px;padding:28px 24px;text-align:center;color:#e8e4d8;font-family:Georgia,serif;box-shadow:0 20px 60px rgba(0,0,0,0.5);">'
+      + '<div style="font-size:40px;margin-bottom:8px;">🌱</div>'
+      + '<div style="font-size:20px;color:#ffcc88;margin-bottom:16px;font-style:italic;">Ton jardin va bien.</div>'
+      + '<div style="font-size:14px;line-height:1.7;color:#ccc;margin-bottom:20px;">Ça fait <strong>' + d + ' jours</strong> qu\'on ne s\'était pas vus.<br>'
+      + 'Les plantes ont continué sans toi, sans rancune.<br>'
+      + 'Tes Blops capturés dorment. Ton shop t\'attend.<br><br>'
+      + '<em style="color:#aaa;">Pas de pression. Reviens quand ça te dit — on est là.</em></div>'
+      + '<div class="btn gold" id="letter-close-btn" style="padding:10px 22px;">Revenir au jardin</div>'
+      + '<div style="margin-top:14px;font-size:11px;color:#666;">— Julien, le dev</div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.style.opacity = '1');
+    const close = () => { overlay.style.opacity = '0'; setTimeout(() => overlay.remove(), 600); };
+    overlay.querySelector('#letter-close-btn').onclick = close;
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  }
 
   addEventListener('beforeunload', saveGame);
   addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });

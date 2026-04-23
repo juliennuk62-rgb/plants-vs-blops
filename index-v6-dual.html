@@ -1705,43 +1705,109 @@
   // Prix progressifs : on commence par du nature peu cher, buildings plus chers.
   // file = chemin GLB relatif au repo (models/house/...). En attendant de les
   // télécharger, on utilise les GLB Kenney existants (Nature, Food, etc.) comme placeholder.
+  // V6 : Catalog construit sur les 112 GLB Kenney Racing Kit disponibles dans models/racing/
   const BUILD_CATALOG = [
-    // 🌳 Nature (pas cher, progression rapide)
-    { id: 'tree_pine', name: 'Sapin', price: 200, cat: 'nature', file: 'nature/tree_pine.glb', fallback: 'cone_green' },
-    { id: 'tree_round', name: 'Arbre rond', price: 250, cat: 'nature', file: 'nature/tree_round.glb', fallback: 'sphere_green' },
-    { id: 'bush', name: 'Buisson', price: 80, cat: 'nature', file: 'nature/bush.glb', fallback: 'sphere_small_green' },
-    { id: 'rock_small', name: 'Caillou', price: 50, cat: 'nature', file: 'nature/rock_small.glb', fallback: 'rock' },
-    { id: 'rock_big', name: 'Rocher', price: 300, cat: 'nature', file: 'nature/rock_big.glb', fallback: 'rock_big' },
-    { id: 'flower', name: 'Fleur', price: 40, cat: 'nature', file: 'nature/flower.glb', fallback: 'flower' },
-    { id: 'mushroom', name: 'Champignon', price: 120, cat: 'nature', file: 'nature/mushroom.glb', fallback: 'mushroom' },
-    { id: 'log', name: 'Tronc', price: 150, cat: 'nature', file: 'nature/log.glb', fallback: 'cylinder_brown' },
-    // 🏠 Bâtiments (plus cher, donne du sens au farming)
-    { id: 'shed', name: 'Cabane', price: 2500, cat: 'build', file: 'build/shed.glb', fallback: 'box_wood' },
-    { id: 'house_small', name: 'Maison simple', price: 8000, cat: 'build', file: 'build/house_small.glb', fallback: 'house_small' },
-    { id: 'house_big', name: 'Grande maison', price: 35000, cat: 'build', file: 'build/house_big.glb', fallback: 'house_big' },
-    { id: 'tower', name: 'Tour', price: 80000, cat: 'build', file: 'build/tower.glb', fallback: 'tower' },
-    { id: 'castle', name: 'Château', price: 500000, cat: 'build', file: 'build/castle.glb', fallback: 'castle' },
-    // 🪑 Mobilier
-    { id: 'bench', name: 'Banc', price: 400, cat: 'furniture', file: 'furniture/bench.glb', fallback: 'box_brown' },
-    { id: 'lamp', name: 'Lampadaire', price: 800, cat: 'furniture', file: 'furniture/lamp.glb', fallback: 'lamp' },
-    { id: 'fountain', name: 'Fontaine', price: 5000, cat: 'furniture', file: 'furniture/fountain.glb', fallback: 'fountain' },
-    { id: 'statue', name: 'Statue', price: 12000, cat: 'furniture', file: 'furniture/statue.glb', fallback: 'statue' },
-    { id: 'wellpool', name: 'Puits', price: 2000, cat: 'furniture', file: 'furniture/well.glb', fallback: 'well' },
-    // 🛣 Routes (pour faire des circuits)
-    { id: 'road_straight', name: 'Route droite', price: 300, cat: 'road', file: 'road/straight.glb', fallback: 'road_straight' },
-    { id: 'road_curve', name: 'Virage', price: 400, cat: 'road', file: 'road/curve.glb', fallback: 'road_curve' },
-    { id: 'road_cross', name: 'Carrefour', price: 600, cat: 'road', file: 'road/cross.glb', fallback: 'road_cross' },
-    // 🎨 Déco / Signalétique
-    { id: 'fence', name: 'Clôture', price: 100, cat: 'deco', file: 'deco/fence.glb', fallback: 'fence' },
-    { id: 'flag', name: 'Drapeau', price: 350, cat: 'deco', file: 'deco/flag.glb', fallback: 'flag' },
-    { id: 'sign', name: 'Panneau', price: 180, cat: 'deco', file: 'deco/sign.glb', fallback: 'sign' },
+    // 🌳 NATURE
+    { id: 'treeSmall',        name: 'Petit arbre',   price: 150,    cat: 'nature', file: 'racing/treeSmall.glb' },
+    { id: 'treeLarge',        name: 'Grand arbre',   price: 400,    cat: 'nature', file: 'racing/treeLarge.glb' },
+    { id: 'grass',            name: 'Herbe',         price: 30,     cat: 'nature', file: 'racing/grass.glb' },
+    // 🏁 DRAPEAUX / BANNIERES
+    { id: 'flagCheckers',     name: 'Drapeau Damier',price: 500,    cat: 'flags',  file: 'racing/flagCheckers.glb' },
+    { id: 'flagCheckersSmall',name: 'Mini Damier',   price: 200,    cat: 'flags',  file: 'racing/flagCheckersSmall.glb' },
+    { id: 'flagGreen',        name: 'Drapeau vert',  price: 150,    cat: 'flags',  file: 'racing/flagGreen.glb' },
+    { id: 'flagRed',          name: 'Drapeau rouge', price: 150,    cat: 'flags',  file: 'racing/flagRed.glb' },
+    { id: 'flagTankco',       name: 'Drapeau team',  price: 300,    cat: 'flags',  file: 'racing/flagTankco.glb' },
+    { id: 'bannerTowerGreen', name: 'Tour banniere vert', price: 1200, cat: 'flags', file: 'racing/bannerTowerGreen.glb' },
+    { id: 'bannerTowerRed',   name: 'Tour banniere rouge', price: 1200, cat: 'flags', file: 'racing/bannerTowerRed.glb' },
+    // 🏗 INFRASTRUCTURES
+    { id: 'grandStand',          name: 'Gradin simple',     price: 3000, cat: 'build', file: 'racing/grandStand.glb' },
+    { id: 'grandStandCovered',   name: 'Gradin couvert',    price: 5000, cat: 'build', file: 'racing/grandStandCovered.glb' },
+    { id: 'grandStandRound',     name: 'Gradin rond',       price: 4500, cat: 'build', file: 'racing/grandStandRound.glb' },
+    { id: 'grandStandAwning',    name: 'Gradin auvent',     price: 4000, cat: 'build', file: 'racing/grandStandAwning.glb' },
+    { id: 'grandStandCoveredRound', name: 'Gradin rond couvert', price: 6500, cat: 'build', file: 'racing/grandStandCoveredRound.glb' },
+    { id: 'pitsGarage',          name: 'Garage stand',      price: 8000, cat: 'build', file: 'racing/pitsGarage.glb' },
+    { id: 'pitsGarageClosed',    name: 'Garage fermé',      price: 9000, cat: 'build', file: 'racing/pitsGarageClosed.glb' },
+    { id: 'pitsGarageCorner',    name: 'Garage angle',      price: 8500, cat: 'build', file: 'racing/pitsGarageCorner.glb' },
+    { id: 'pitsOffice',          name: 'Bureau stand',      price: 12000,cat: 'build', file: 'racing/pitsOffice.glb' },
+    { id: 'pitsOfficeCorner',    name: 'Bureau angle',      price: 13000,cat: 'build', file: 'racing/pitsOfficeCorner.glb' },
+    { id: 'pitsOfficeRoof',      name: 'Bureau avec toit',  price: 15000,cat: 'build', file: 'racing/pitsOfficeRoof.glb' },
+    // ⛺ TENTES
+    { id: 'tent',           name: 'Tente',         price: 600,  cat: 'tents', file: 'racing/tent.glb' },
+    { id: 'tentClosed',     name: 'Tente fermée',  price: 750,  cat: 'tents', file: 'racing/tentClosed.glb' },
+    { id: 'tentLong',       name: 'Tente longue',  price: 1000, cat: 'tents', file: 'racing/tentLong.glb' },
+    { id: 'tentClosedLong', name: 'Tente longue fermée', price: 1200, cat: 'tents', file: 'racing/tentClosedLong.glb' },
+    { id: 'tentRoof',       name: 'Toit tente',    price: 400,  cat: 'tents', file: 'racing/tentRoof.glb' },
+    { id: 'tentRoofDouble', name: 'Double toit',   price: 700,  cat: 'tents', file: 'racing/tentRoofDouble.glb' },
+    // 🚗 VOITURES
+    { id: 'raceCarRed',    name: 'Voiture rouge', price: 25000, cat: 'cars', file: 'racing/raceCarRed.glb' },
+    { id: 'raceCarGreen',  name: 'Voiture verte', price: 25000, cat: 'cars', file: 'racing/raceCarGreen.glb' },
+    { id: 'raceCarOrange', name: 'Voiture orange',price: 25000, cat: 'cars', file: 'racing/raceCarOrange.glb' },
+    { id: 'raceCarWhite',  name: 'Voiture blanche',price: 25000, cat: 'cars', file: 'racing/raceCarWhite.glb' },
+    // 💡 LUMIERES
+    { id: 'lightColored',    name: 'Lampe colorée',  price: 250,  cat: 'lights', file: 'racing/lightColored.glb' },
+    { id: 'lightPostLarge',  name: 'Lampadaire',     price: 500,  cat: 'lights', file: 'racing/lightPostLarge.glb' },
+    { id: 'lightPostModern', name: 'Lampadaire moderne', price: 700, cat: 'lights', file: 'racing/lightPostModern.glb' },
+    { id: 'lightRed',        name: 'Feu rouge',      price: 180,  cat: 'lights', file: 'racing/lightRed.glb' },
+    { id: 'lightRedDouble',  name: 'Double feu',     price: 300,  cat: 'lights', file: 'racing/lightRedDouble.glb' },
+    // 🛣 ROUTES - Droites
+    { id: 'roadStraight',       name: 'Route droite',    price: 100, cat: 'road', file: 'racing/roadStraight.glb' },
+    { id: 'roadStraightLong',   name: 'Route longue',    price: 180, cat: 'road', file: 'racing/roadStraightLong.glb' },
+    { id: 'roadStraightArrow',  name: 'Route flèche',    price: 120, cat: 'road', file: 'racing/roadStraightArrow.glb' },
+    { id: 'roadBump',           name: 'Route bosse',     price: 150, cat: 'road', file: 'racing/roadBump.glb' },
+    { id: 'roadStraightSkew',   name: 'Route diagonale', price: 140, cat: 'road', file: 'racing/roadStraightSkew.glb' },
+    // 🛣 ROUTES - Virages
+    { id: 'roadCornerSmall',    name: 'Virage serré',   price: 160, cat: 'road', file: 'racing/roadCornerSmall.glb' },
+    { id: 'roadCornerLarge',    name: 'Virage large',   price: 200, cat: 'road', file: 'racing/roadCornerLarge.glb' },
+    { id: 'roadCornerLarger',   name: 'Grand virage',   price: 240, cat: 'road', file: 'racing/roadCornerLarger.glb' },
+    { id: 'roadCurved',         name: 'Courbe',         price: 180, cat: 'road', file: 'racing/roadCurved.glb' },
+    { id: 'roadCurvedSplit',    name: 'Courbe split',   price: 220, cat: 'road', file: 'racing/roadCurvedSplit.glb' },
+    // 🛣 ROUTES - Intersections
+    { id: 'roadCrossing',       name: 'Carrefour',      price: 400, cat: 'road', file: 'racing/roadCrossing.glb' },
+    { id: 'roadSplit',          name: 'Embranchement',  price: 320, cat: 'road', file: 'racing/roadSplit.glb' },
+    { id: 'roadSplitLarge',     name: 'Embranch. large',price: 380, cat: 'road', file: 'racing/roadSplitLarge.glb' },
+    { id: 'roadSplitRound',     name: 'Embranch. rond', price: 420, cat: 'road', file: 'racing/roadSplitRound.glb' },
+    { id: 'roadEnd',            name: 'Fin de route',   price: 90,  cat: 'road', file: 'racing/roadEnd.glb' },
+    { id: 'roadStart',          name: 'Départ',         price: 500, cat: 'road', file: 'racing/roadStart.glb' },
+    { id: 'roadStartPositions', name: 'Grille départ',  price: 800, cat: 'road', file: 'racing/roadStartPositions.glb' },
+    // 🛣 ROUTES - Ponts/Rampes
+    { id: 'ramp',               name: 'Rampe',          price: 350, cat: 'road', file: 'racing/ramp.glb' },
+    { id: 'roadRamp',           name: 'Route rampe',    price: 400, cat: 'road', file: 'racing/roadRamp.glb' },
+    { id: 'roadRampLong',       name: 'Longue rampe',   price: 500, cat: 'road', file: 'racing/roadRampLong.glb' },
+    { id: 'roadStraightBridge', name: 'Pont',           price: 700, cat: 'road', file: 'racing/roadStraightBridge.glb' },
+    // 🛣 STAND
+    { id: 'roadPitEntry',     name: 'Entrée stand',  price: 350, cat: 'road', file: 'racing/roadPitEntry.glb' },
+    { id: 'roadPitGarage',    name: 'Zone garage',   price: 600, cat: 'road', file: 'racing/roadPitGarage.glb' },
+    { id: 'roadPitStraight',  name: 'Stand droit',   price: 300, cat: 'road', file: 'racing/roadPitStraight.glb' },
+    // 🚧 BARRIERES / SIGNAL
+    { id: 'barrierRed',      name: 'Barrière rouge',  price: 60,  cat: 'deco', file: 'racing/barrierRed.glb' },
+    { id: 'barrierWhite',    name: 'Barrière blanche',price: 60,  cat: 'deco', file: 'racing/barrierWhite.glb' },
+    { id: 'barrierWall',     name: 'Mur de sécurité', price: 180, cat: 'deco', file: 'racing/barrierWall.glb' },
+    { id: 'fenceStraight',   name: 'Clôture droite',  price: 40,  cat: 'deco', file: 'racing/fenceStraight.glb' },
+    { id: 'fenceCurved',     name: 'Clôture courbée', price: 55,  cat: 'deco', file: 'racing/fenceCurved.glb' },
+    { id: 'rail',            name: 'Rail',            price: 80,  cat: 'deco', file: 'racing/rail.glb' },
+    { id: 'railDouble',      name: 'Double rail',     price: 140, cat: 'deco', file: 'racing/railDouble.glb' },
+    { id: 'pylon',           name: 'Cône',            price: 25,  cat: 'deco', file: 'racing/pylon.glb' },
+    // 📢 BILLBOARDS
+    { id: 'billboard',       name: 'Panneau pub',     price: 450, cat: 'deco', file: 'racing/billboard.glb' },
+    { id: 'billboardDouble_exclusive', name: 'Double pub', price: 700, cat: 'deco', file: 'racing/billboardDouble_exclusive.glb' },
+    { id: 'billboardLow',    name: 'Pub basse',       price: 280, cat: 'deco', file: 'racing/billboardLow.glb' },
+    { id: 'billboardLower',  name: 'Pub très basse',  price: 220, cat: 'deco', file: 'racing/billboardLower.glb' },
+    { id: 'overhead',        name: 'Portique',        price: 900, cat: 'deco', file: 'racing/overhead.glb' },
+    { id: 'overheadLights',  name: 'Portique lumineux',price:1200,cat: 'deco', file: 'racing/overheadLights.glb' },
+    { id: 'overheadRound',   name: 'Arche ronde',     price: 1500,cat: 'deco', file: 'racing/overheadRound.glb' },
+    { id: 'overheadRoundColored', name: 'Arche colorée', price: 1800, cat: 'deco', file: 'racing/overheadRoundColored.glb' },
+    { id: 'radarEquipment',  name: 'Radar',           price: 3500,cat: 'deco', file: 'racing/radarEquipment.glb' },
+    { id: 'camera_exclusive',name: 'Caméra TV',       price: 1000,cat: 'deco', file: 'racing/camera_exclusive.glb' },
   ];
   const BUILD_CATEGORIES = {
     nature: { label: '🌳 Nature', order: 1 },
-    build: { label: '🏠 Bâtiments', order: 2 },
-    furniture: { label: '🪑 Mobilier', order: 3 },
-    road: { label: '🛣 Routes', order: 4 },
-    deco: { label: '🎨 Déco', order: 5 },
+    flags:  { label: '🏁 Drapeaux', order: 2 },
+    build:  { label: '🏗 Bâtiments', order: 3 },
+    tents:  { label: '⛺ Tentes', order: 4 },
+    cars:   { label: '🚗 Voitures', order: 5 },
+    lights: { label: '💡 Lumières', order: 6 },
+    road:   { label: '🛣 Routes', order: 7 },
+    deco:   { label: '🚧 Déco', order: 8 },
   };
 
   // Primitives de fallback pour les GLB pas encore téléchargés (le jeu reste jouable)
@@ -1814,9 +1880,78 @@
     updateHud(); saveGame();
     return true;
   }
+  // Cache des GLB chargés pour réutilisation (évite de reloader à chaque placement)
+  const HOUSE_GLB_CACHE = {};
+  const HOUSE_THUMBS = {};
+
+  async function preloadHouseGLBs() {
+    if (!THREE.GLTFLoader) return;
+    const loader = new THREE.GLTFLoader();
+    const uniqueFiles = [...new Set(BUILD_CATALOG.map(i => i.file))];
+    await Promise.all(uniqueFiles.map(f => new Promise(res => {
+      loader.load('models/' + f.replace(/^racing\//, 'racing/'),
+        (gltf) => { HOUSE_GLB_CACHE[f] = gltf.scene; res(); },
+        undefined,
+        (err) => { console.warn('Failed load', f, err); res(); });
+    })));
+    console.log('[HOUSE] preloaded', Object.keys(HOUSE_GLB_CACHE).length, 'GLBs');
+    // Après chargement, génère les thumbnails individuels
+    generateHouseThumbnails();
+  }
+
   function houseGetPlacedMesh(item) {
-    // TODO : essayer de charger le vrai GLB plus tard ; pour l'instant fallback
-    return makeBuildFallback(item.fallback);
+    const cached = HOUSE_GLB_CACHE[item.file];
+    if (cached) {
+      const clone = cached.clone(true);
+      clone.scale.setScalar(3); // Kenney racing kit est en unités 1×1, on agrandit
+      clone.traverse(o => { if (o.isMesh) { o.castShadow = Q === 'high'; o.receiveShadow = Q === 'high'; } });
+      return clone;
+    }
+    // Fallback si GLB pas chargé (primitive simple)
+    return makeBuildFallback(item.id === 'grass' ? 'sphere_small_green' : 'box_wood');
+  }
+
+  // === Thumbnails par item (snapshot 3D 96×96) ===
+  function generateHouseThumbnails() {
+    try {
+      const tCanvas = document.createElement('canvas');
+      tCanvas.width = 96; tCanvas.height = 96;
+      const tRenderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+      tRenderer.setClearColor(0x000000, 0);
+      tRenderer.setSize(96, 96, false);
+      const tScene = new THREE.Scene();
+      tScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      const tDir = new THREE.DirectionalLight(0xffffff, 0.7);
+      tDir.position.set(3, 5, 3); tScene.add(tDir);
+      const tCam = new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 30);
+      tCam.position.set(4, 4.5, 4); tCam.lookAt(0, 1, 0);
+      for (const item of BUILD_CATALOG) {
+        try {
+          const m = houseGetPlacedMesh(item);
+          // Normaliser taille : bounding box → fit dans -2.5 à +2.5
+          const box = new THREE.Box3().setFromObject(m);
+          const size = new THREE.Vector3(); box.getSize(size);
+          const maxSize = Math.max(size.x, size.y, size.z);
+          if (maxSize > 0) {
+            const fitScale = 3.5 / maxSize;
+            m.scale.multiplyScalar(fitScale);
+          }
+          // Centrer
+          const center = new THREE.Vector3(); box.getCenter(center);
+          m.position.sub(center.multiplyScalar(m.scale.x));
+          tScene.add(m);
+          tRenderer.render(tScene, tCam);
+          HOUSE_THUMBS[item.id] = tCanvas.toDataURL('image/png');
+          tScene.remove(m);
+        } catch (e) { console.warn('thumb fail', item.id, e); }
+      }
+      tRenderer.dispose();
+      // Re-render shop si ouvert
+      if (typeof renderBuildShop === 'function' && document.getElementById('build-shop-modal') && !document.getElementById('build-shop-modal').classList.contains('hidden')) {
+        renderBuildShop();
+      }
+      if (typeof renderHouseDock === 'function') renderHouseDock();
+    } catch (err) { console.warn('Thumbnails init failed:', err); }
   }
   function housePlaceItem(itemId, x, z) {
     if (!gameHouse.purchased[itemId] || gameHouse.purchased[itemId] <= 0) return null;
@@ -2043,35 +2178,199 @@
     setupHousePlacementClicks();
   });
 
-  // Click handler : pose l'item sélectionné sur la plateforme maison
-  function setupHousePlacementClicks() {
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    renderer.domElement.addEventListener('click', (e) => {
-      if (activeTab !== 'house' || !housePlacingId) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, cameraHouse);
-      const hit = raycaster.intersectObject(houseGround)[0];
-      if (!hit) return;
-      const x = Math.round(hit.point.x * 2) / 2; // grid snap 0.5
-      const z = Math.round(hit.point.z * 2) / 2;
-      const placed = housePlaceItem(housePlacingId, x, z);
-      if (placed) {
-        sfx && sfx('plant');
-        showHint('Placé !', 1200);
-        renderHouseDock();
-        if (!gameHouse.purchased[housePlacingId]) housePlacingId = null;
-      }
+  // === V6 : Placement + select + drag items posés ===
+  let housePlacedSelected = null; // référence à l'item sélectionné (via mesh.userData)
+  let houseDragging = null;
+  let houseSelectionRing = null;
+  const GRID_SNAP = 1; // magnétisme 1 unité (plus gros snap visible)
+
+  function selectPlacedHouse(placed) {
+    housePlacedSelected = placed;
+    // Ring de sélection visuel (disque jaune au sol sous l'item)
+    if (houseSelectionRing) { sceneHouse.remove(houseSelectionRing); houseSelectionRing = null; }
+    if (placed) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.8, 1.1, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffdd00, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(placed.x, 0.27, placed.z);
+      sceneHouse.add(ring);
+      houseSelectionRing = ring;
+    }
+    renderHouseSelectionPanel();
+  }
+
+  function updateSelectionRing() {
+    if (houseSelectionRing && housePlacedSelected) {
+      houseSelectionRing.position.set(housePlacedSelected.x, 0.27, housePlacedSelected.z);
+    }
+  }
+
+  function deletePlaced(placed) {
+    if (!placed) return;
+    sceneHouse.remove(placed.mesh);
+    const idx = gameHouse.placed.indexOf(placed);
+    if (idx >= 0) gameHouse.placed.splice(idx, 1);
+    // Rendre l'item au dock (rembourse)
+    gameHouse.purchased[placed.itemId] = (gameHouse.purchased[placed.itemId] || 0) + 1;
+    selectPlacedHouse(null);
+    renderHouseDock();
+    saveGame();
+  }
+
+  function rotatePlaced(placed, delta) {
+    if (!placed) return;
+    placed.rotY = (placed.rotY || 0) + delta;
+    placed.mesh.rotation.y = placed.rotY;
+    saveGame();
+  }
+
+  function scalePlaced(placed, factor) {
+    if (!placed) return;
+    placed.scale = Math.max(0.3, Math.min(3, (placed.scale || 1) * factor));
+    placed.mesh.scale.setScalar(placed.scale * 3); // 3 = base scale GLB
+    saveGame();
+  }
+
+  // Panneau outils (visible quand un item est sélectionné)
+  function renderHouseSelectionPanel() {
+    let panel = document.getElementById('house-select-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'house-select-panel';
+      panel.style.cssText = 'position:fixed;top:110px;right:12px;background:rgba(0,0,0,0.85);padding:10px;border-radius:10px;z-index:500;display:none;font-family:var(--font-body,sans-serif);font-size:12px;color:#fff;border:1px solid #ffdd00;box-shadow:0 4px 14px rgba(0,0,0,0.5);';
+      document.body.appendChild(panel);
+    }
+    if (!housePlacedSelected || activeTab !== 'house') {
+      panel.style.display = 'none';
+      return;
+    }
+    const item = BUILD_CATALOG.find(i => i.id === housePlacedSelected.itemId);
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div style="font-weight:700;margin-bottom:8px;color:#ffdd00;">${item ? item.name : 'Item'}</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;min-width:180px;">
+        <button class="hp-btn" data-act="rotL">↺ Gauche</button>
+        <button class="hp-btn" data-act="rotR">↻ Droite</button>
+        <button class="hp-btn" data-act="sclUp">➕ Plus gros</button>
+        <button class="hp-btn" data-act="sclDown">➖ Plus petit</button>
+        <button class="hp-btn" data-act="delete" style="background:#aa3333;grid-column:1/3;">🗑 Supprimer (rembourse)</button>
+        <button class="hp-btn" data-act="close" style="grid-column:1/3;">Désélectionner</button>
+      </div>
+    `;
+    panel.querySelectorAll('.hp-btn').forEach(b => {
+      b.style.cssText = 'background:#2a2a3a;color:#fff;border:1px solid #555;padding:6px 8px;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;';
+      b.onclick = () => {
+        const a = b.dataset.act;
+        if (a === 'rotL') rotatePlaced(housePlacedSelected, -Math.PI / 8);
+        else if (a === 'rotR') rotatePlaced(housePlacedSelected, Math.PI / 8);
+        else if (a === 'sclUp') scalePlaced(housePlacedSelected, 1.15);
+        else if (a === 'sclDown') scalePlaced(housePlacedSelected, 1 / 1.15);
+        else if (a === 'delete') deletePlaced(housePlacedSelected);
+        else if (a === 'close') selectPlacedHouse(null);
+      };
     });
   }
 
-  // Update dock when tab changes
+  function setupHousePlacementClicks() {
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const canvas = renderer.domElement;
+
+    function getMousePoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, cameraHouse);
+      return mouse;
+    }
+
+    function raycastGroundPoint() {
+      const hit = raycaster.intersectObject(houseGround)[0];
+      return hit ? hit.point : null;
+    }
+
+    function raycastPlaced() {
+      const placedMeshes = gameHouse.placed.map(p => p.mesh);
+      const hits = raycaster.intersectObjects(placedMeshes, true);
+      if (hits.length === 0) return null;
+      // Remonte jusqu'au top-group de l'item posé
+      let node = hits[0].object;
+      while (node && !gameHouse.placed.find(p => p.mesh === node)) node = node.parent;
+      if (!node) return null;
+      return gameHouse.placed.find(p => p.mesh === node);
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (activeTab !== 'house') return;
+      if (e.button !== 0) return;
+      getMousePoint(e);
+      // Si on place un nouvel item
+      if (housePlacingId) {
+        const pt = raycastGroundPoint();
+        if (!pt) return;
+        const x = Math.round(pt.x / GRID_SNAP) * GRID_SNAP;
+        const z = Math.round(pt.z / GRID_SNAP) * GRID_SNAP;
+        const placed = housePlaceItem(housePlacingId, x, z);
+        if (placed) {
+          sfx && sfx('plant');
+          renderHouseDock();
+          selectPlacedHouse(placed);
+          if (!gameHouse.purchased[housePlacingId]) housePlacingId = null;
+        }
+        return;
+      }
+      // Sinon : test si on clique sur un item posé
+      const placed = raycastPlaced();
+      if (placed) {
+        selectPlacedHouse(placed);
+        houseDragging = placed;
+      } else {
+        selectPlacedHouse(null);
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (activeTab !== 'house') return;
+      if (!houseDragging) return;
+      getMousePoint(e);
+      const pt = raycastGroundPoint();
+      if (!pt) return;
+      const x = Math.round(pt.x / GRID_SNAP) * GRID_SNAP;
+      const z = Math.round(pt.z / GRID_SNAP) * GRID_SNAP;
+      houseDragging.x = x; houseDragging.z = z;
+      houseDragging.mesh.position.set(x, houseDragging.y, z);
+      updateSelectionRing();
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (houseDragging) { saveGame(); }
+      houseDragging = null;
+    });
+
+    // Touch support
+    canvas.addEventListener('touchstart', (e) => {
+      if (activeTab !== 'house' || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY, button: 0 }));
+    });
+    canvas.addEventListener('touchmove', (e) => {
+      if (activeTab !== 'house' || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: t.clientX, clientY: t.clientY }));
+    });
+    canvas.addEventListener('touchend', () => {
+      canvas.dispatchEvent(new MouseEvent('mouseup'));
+    });
+  }
+
+  // Update dock + selection panel when tab changes
   const _origSetActiveTab = setActiveTab;
   setActiveTab = function(tab) {
     _origSetActiveTab(tab);
     if (typeof renderHouseDock === 'function') renderHouseDock();
+    if (typeof renderHouseSelectionPanel === 'function') renderHouseSelectionPanel();
   };
 
   // === V6 : Banque de construction (catalog shop) ===
@@ -2084,12 +2383,13 @@
     btn.onclick = () => { sfx && sfx('click'); openModal('build-shop-modal'); renderBuildShop(); };
     document.body.appendChild(btn);
 
-    // Modal shop
+    // Modal shop — bouton × injecté manuellement car créé dynamiquement
     const modal = document.createElement('div');
     modal.className = 'modal hidden';
     modal.id = 'build-shop-modal';
     modal.innerHTML = `
-      <div class="modal-content modal-content--lg">
+      <div class="modal-content modal-content--lg" style="position:relative;">
+        <button class="modal-x" aria-label="Fermer" onclick="closeModal(document.getElementById('build-shop-modal'))">×</button>
         <div class="modal-title">🏪 Banque de construction</div>
         <div style="font-size:12px;color:#aaa;margin-bottom:10px;">Achète des éléments avec ton cash. Chaque achat débloque 1 unité à placer.</div>
         <div id="build-cat-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
@@ -2097,6 +2397,8 @@
       </div>
     `;
     document.body.appendChild(modal);
+    // Clic sur overlay = ferme
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
 
     // Dock du bas : items achetés à placer
     const dock = document.createElement('div');
@@ -2129,8 +2431,9 @@
       const owned = gameHouse.purchased[item.id] || 0;
       const afford = game.cash >= item.price;
       card.style.cssText = 'background:var(--bg-raised,#2a2a3a);border-radius:8px;padding:10px;text-align:center;border:2px solid ' + (afford ? '#444' : '#331a1a') + ';cursor:' + (afford ? 'pointer' : 'not-allowed') + ';position:relative;transition:all 0.2s;';
+      const thumb = HOUSE_THUMBS[item.id];
       card.innerHTML = `
-        <div style="font-size:32px;margin-bottom:4px;">${categoryEmoji(item.cat)}</div>
+        ${thumb ? `<img src="${thumb}" style="width:64px;height:64px;object-fit:contain;display:block;margin:0 auto 4px;" alt="${item.name}">` : `<div style="font-size:32px;margin-bottom:4px;">${categoryEmoji(item.cat)}</div>`}
         <div style="font-size:12px;font-weight:600;color:#fff;line-height:1.2;">${item.name}</div>
         <div style="font-size:14px;color:${afford ? '#ffcc33' : '#ff6666'};font-weight:700;margin-top:4px;">${fmtNumber(item.price)}$</div>
         ${owned > 0 ? `<div style="position:absolute;top:4px;right:6px;background:#44cc88;color:#fff;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:700;">×${owned}</div>` : ''}
@@ -2170,9 +2473,10 @@
       const count = purchased[id];
       const card = document.createElement('div');
       card.style.cssText = 'min-width:68px;background:var(--bg-raised,#2a2a3a);border-radius:8px;padding:6px;text-align:center;cursor:pointer;border:2px solid ' + (housePlacingId === id ? '#ffdd00' : 'transparent') + ';';
+      const thumb = HOUSE_THUMBS[id];
       card.innerHTML = `
-        <div style="font-size:22px;">${categoryEmoji(item.cat)}</div>
-        <div style="font-size:10px;color:#fff;line-height:1.1;">${item.name}</div>
+        ${thumb ? `<img src="${thumb}" style="width:44px;height:44px;object-fit:contain;display:block;margin:0 auto;">` : `<div style="font-size:22px;">${categoryEmoji(item.cat)}</div>`}
+        <div style="font-size:10px;color:#fff;line-height:1.1;margin-top:2px;">${item.name}</div>
         <div style="font-size:11px;color:#ffcc33;font-weight:700;">×${count}</div>
       `;
       card.onclick = () => {
@@ -6525,6 +6829,8 @@
     await preloadModels();
     generateBlopThumbnails();
     await preloadBakedDecorations();
+    // V6 : preload GLB maison en arrière-plan (non-bloquant)
+    preloadHouseGLBs();
     const savedData = loadGame();
     let offlineResult = null;
     if (savedData) {

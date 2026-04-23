@@ -1304,11 +1304,52 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(ambientLight);
   const sun = new THREE.DirectionalLight(0xffffff, 0.85);
   sun.position.set(15, 35, 15); sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   scene.add(sun);
+
+  // === SEASON 2 - Feature #1 : Ciel Vivant (skybox suit l'heure locale réelle) ===
+  // Aucune dépendance à `game` — pure calcul + Three.js.
+  const SKY_PRESETS = [
+    { h: 5,  sky: 0x4a3f6a, fog: 0x4a3f6a, ambI: 0.55, sunI: 0.55, sunC: 0x99aaff, ambC: 0xaabbff },
+    { h: 6,  sky: 0xff9977, fog: 0xffaa99, ambI: 0.6,  sunI: 0.75, sunC: 0xffbb88, ambC: 0xffddcc },
+    { h: 8,  sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.65, sunI: 0.95, sunC: 0xffffff, ambC: 0xffffff },
+    { h: 17, sky: 0x87CEEB, fog: 0x87CEEB, ambI: 0.65, sunI: 0.95, sunC: 0xffffff, ambC: 0xffffff },
+    { h: 18, sky: 0xff7755, fog: 0xffaa77, ambI: 0.55, sunI: 0.8,  sunC: 0xff8844, ambC: 0xff9966 },
+    { h: 20, sky: 0x3a3474, fog: 0x3a3474, ambI: 0.55, sunI: 0.6,  sunC: 0x99aaff, ambC: 0xaabbff },
+    { h: 23, sky: 0x2f3055, fog: 0x2f3055, ambI: 0.55, sunI: 0.55, sunC: 0x99aaff, ambC: 0xaabbff },
+  ];
+  function lerpHexColor(a, b, t) {
+    const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+    const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+    return ((ar + (br - ar) * t) | 0) << 16 | ((ag + (bg - ag) * t) | 0) << 8 | ((ab + (bb - ab) * t) | 0);
+  }
+  function applySkyByHour() {
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    let prev = SKY_PRESETS[SKY_PRESETS.length - 1], next = SKY_PRESETS[0];
+    for (let i = 0; i < SKY_PRESETS.length; i++) {
+      if (SKY_PRESETS[i].h <= h) prev = SKY_PRESETS[i];
+      if (SKY_PRESETS[i].h > h) { next = SKY_PRESETS[i]; break; }
+    }
+    const span = ((next.h - prev.h + 24) % 24) || 1;
+    const t = Math.max(0, Math.min(1, (((h - prev.h + 24) % 24) / span)));
+    scene.background = new THREE.Color(lerpHexColor(prev.sky, next.sky, t));
+    scene.fog = new THREE.Fog(lerpHexColor(prev.fog, next.fog, t), 40, 110);
+    ambientLight.intensity = prev.ambI + (next.ambI - prev.ambI) * t;
+    ambientLight.color.setHex(lerpHexColor(prev.ambC, next.ambC, t));
+    sun.intensity = prev.sunI + (next.sunI - prev.sunI) * t;
+    sun.color.setHex(lerpHexColor(prev.sunC, next.sunC, t));
+    const sunAngle = ((h - 6) / 12) * Math.PI;
+    const sunY = Math.max(10, Math.sin(sunAngle) * 35);
+    const sunX = Math.cos(sunAngle) * 20;
+    sun.position.set(sunX, sunY, 15);
+  }
+  applySkyByHour();
+  setInterval(applySkyByHour, 60000);
 
   // --- ETAT ---
   const game = {

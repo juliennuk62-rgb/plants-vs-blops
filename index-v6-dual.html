@@ -1782,15 +1782,23 @@
   // === V6 DUAL GARDEN ===
   const DUAL_GARDEN_PRESTIGE = 10; // à partir de prestige 10, 2 jardins
   const GARDEN_SPACING = 10;       // écart horizontal entre les 2 jardins (en unités monde)
-  function hasDualGarden() { return game.prestige >= DUAL_GARDEN_PRESTIGE; }
+  // Debug : URL ?dual=1 ou localStorage pvb_force_dual force le dual mode pour tester
+  const FORCE_DUAL = (function() {
+    try {
+      const params = new URLSearchParams(location.search);
+      return params.get('dual') === '1' || localStorage.getItem('pvb_force_dual') === '1';
+    } catch (e) { return false; }
+  })();
+  function hasDualGarden() { return FORCE_DUAL || game.prestige >= DUAL_GARDEN_PRESTIGE; }
   function gardenCount() { return hasDualGarden() ? 2 : 1; }
   // Lanes par jardin : prestige 0..9 = 3..12 lanes dans le jardin unique.
   // À partir du prestige 10 : chaque garden garde un nombre fixe de lanes de base
   // pour que la doublure ne soit pas absurdement large.
   function lanesPerGarden() {
     if (!hasDualGarden()) return BASE_LANE_COUNT + game.prestige;
-    // Au prestige 10+, on stabilise à 5 lanes par garden (chaque prestige supplémentaire ajoute +1)
-    return 5 + (game.prestige - DUAL_GARDEN_PRESTIGE);
+    // Au prestige 10 : 6 lanes par garden (= 12 total, identique à prestige 9 solo → pas de plante perdue)
+    // Chaque prestige suivant : +1 lane par garden
+    return 6 + (game.prestige - DUAL_GARDEN_PRESTIGE);
   }
   function currentLaneCount() { return lanesPerGarden() * gardenCount(); }
   function playfieldWidth() {

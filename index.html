@@ -5033,35 +5033,70 @@
     updateSelectionPanel();
   }
 
+  // --- DEBUG OVERLAY (Season 2) ---
+  function showDebugError(stage, err) {
+    console.error('[INIT FAIL]', stage, err);
+    let banner = document.getElementById('debug-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'debug-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);background:#aa0022;color:#fff;padding:12px 20px;font-family:monospace;font-size:12px;max-width:90vw;z-index:99999;border:2px solid #ff3366;border-radius:0 0 8px 8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);text-align:center;cursor:pointer;';
+      banner.onclick = () => banner.style.display = 'none';
+      document.body.appendChild(banner);
+    }
+    banner.innerHTML = '<strong>⚠ Erreur d\'init : ' + stage + '</strong><br><span style="font-size:11px;opacity:0.9;">' + (err && err.message ? err.message : err) + '</span><br><span style="font-size:10px;opacity:0.7;">Clique pour fermer — F12 pour voir la stack</span>';
+  }
+  window.addEventListener('error', e => { showDebugError('runtime', e.error || e.message); });
+  window.addEventListener('unhandledrejection', e => { showDebugError('promise', e.reason); });
+
+  // Emergency safe mode : Ctrl+Shift+R efface les saves si bloqué
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r') && e.altKey) {
+      if (confirm('SAFE MODE : effacer toutes les sauvegardes locales et recharger ?')) {
+        try {
+          Object.keys(localStorage).filter(k => k.startsWith('pvb_')).forEach(k => localStorage.removeItem(k));
+          location.reload();
+        } catch (err) { alert('Impossible : ' + err.message); }
+      }
+    }
+  });
+
   // --- INIT (async pour preload des modèles GLB avant de placer les plantes/blops) ---
   (async () => {
-    await preloadModels();
-    await preloadBakedDecorations();
-    const savedData = loadGame();
-    let offlineResult = null;
-    if (savedData) {
-      offlineResult = applyLoad(savedData);
-      if (game.shop.length === 0) rollShop();
-      else renderShop();
-    } else {
-      rebuildTerrain();
-      rebuildParcVisual();
-      rollShop();
-    }
-    renderInventory();
-    updatePrestigeButtonVisibility();
-    checkAchievements();
-    initMissions();
-    updateMissionsBadge();
-    updateHud();
-    updateAccountBadge();
-    captureReferralFromUrl();
-    initFirebase();
-    initEditorUI();
-    // Charge la librairie de l'éditeur + placements perso
-    await loadLibraryFromStorage();
-    await restoreEditorPlacements();
-    animate();
+    try {
+      console.log('[INIT] preloadModels...');
+      await preloadModels();
+      console.log('[INIT] preloadBakedDecorations...');
+      await preloadBakedDecorations();
+      console.log('[INIT] loadGame...');
+      const savedData = loadGame();
+      let offlineResult = null;
+      console.log('[INIT] applyLoad or rebuild...', !!savedData);
+      if (savedData) {
+        offlineResult = applyLoad(savedData);
+        if (game.shop.length === 0) rollShop();
+        else renderShop();
+      } else {
+        rebuildTerrain();
+        rebuildParcVisual();
+        rollShop();
+      }
+      console.log('[INIT] UI renders...');
+      renderInventory();
+      updatePrestigeButtonVisibility();
+      checkAchievements();
+      initMissions();
+      updateMissionsBadge();
+      updateHud();
+      updateAccountBadge();
+      captureReferralFromUrl();
+      initFirebase();
+      initEditorUI();
+      console.log('[INIT] loadLibrary / placements...');
+      await loadLibraryFromStorage();
+      await restoreEditorPlacements();
+      console.log('[INIT] animate start');
+      animate();
     // Season 2 : Lettre des 30 jours — réveil doux après absence longue
     if (savedData && savedData.lastSave) {
       const daysAway = (Date.now() - savedData.lastSave) / (1000 * 60 * 60 * 24);
@@ -5078,6 +5113,14 @@
       $('welcome-modal').classList.remove('hidden');
     } else if (!savedData) {
       showTutorial();
+    }
+      console.log('[INIT] complete');
+    } catch (err) {
+      showDebugError('init async', err);
+      // Fallback d'urgence : tente au moins de rebuild le terrain et lancer animate
+      try { rebuildTerrain(); } catch (e) {}
+      try { rollShop(); } catch (e) {}
+      try { animate(); } catch (e) {}
     }
   })();
 

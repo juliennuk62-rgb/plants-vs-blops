@@ -1776,11 +1776,38 @@
     // MONDE 1 — LA FERME
     'w1-1': {
       id: 'w1-1', background: 'farm', music: 'lofi',
-      lanes: 3, startCash: 200,
-      plantPool: ['sunflower', 'pea', 'cactus'], // 3 plantes dispos au loadout
+      lanes: 3, startCash: 300,
+      plantPool: ['sunflower', 'pea', 'cactus'],
       waves: [
-        w(5, [ s(0, 1, 'common'), s(1.5, 0, 'common'), s(3, 2, 'common') ]),
-        w('onPrevCleared', [ s(0, 0, 'common'), s(0.8, 2, 'common'), s(1.6, 1, 'common'), s(3, 1, 'common') ], { delayAfter: 5 }),
+        // Wave 1 : intro tranquille, 5 Blops sur 6 secondes
+        w(10, [
+          s(0,   1, 'common'),
+          s(1.5, 0, 'common'),
+          s(2.5, 2, 'common'),
+          s(4,   1, 'common'),
+          s(5.5, 0, 'common'),
+        ]),
+        // Wave 2 : plus dense, 7 Blops en 8 secondes
+        w('onPrevCleared', [
+          s(0,   0, 'common'),
+          s(0.8, 2, 'common'),
+          s(1.6, 1, 'common'),
+          s(2.4, 0, 'common'),
+          s(3.2, 2, 'common'),
+          s(4.5, 1, 'common'),
+          s(6,   1, 'common'),
+        ], { delayAfter: 8 }),
+        // Wave 3 : finale, 8 Blops avec 2 rares en fin
+        w('onPrevCleared', [
+          s(0,   0, 'common'),
+          s(0.6, 1, 'common'),
+          s(1.2, 2, 'common'),
+          s(1.8, 0, 'common'),
+          s(2.4, 1, 'common'),
+          s(3.0, 2, 'common'),
+          s(5.0, 0, 'rare'),
+          s(5.5, 2, 'rare'),
+        ], { delayAfter: 10 }),
       ],
       boss: null,
       winCondition: 'allWavesCleared',
@@ -1792,15 +1819,42 @@
       ],
       rewards: { cash: 300, firstClearBonus: 500, unlocks: [] },
       intro: 'Les premiers Blops approchent de la ferme. Plante des graines et défends ta base !',
+      tutorial: true, // déclenche hints pour novices
     },
     'w1-2': {
       id: 'w1-2', background: 'farm', music: 'lofi',
-      lanes: 3, startCash: 250,
+      lanes: 3, startCash: 350,
       plantPool: ['sunflower', 'pea', 'cactus', 'clover'],
       waves: [
-        w(4, [ s(0, 0, 'common'), s(1, 1, 'common'), s(2, 2, 'common'), s(3.5, 1, 'common') ]),
-        w('onPrevCleared', [ s(0, 2, 'common'), s(1, 0, 'rare'), s(2.5, 1, 'common') ], { delayAfter: 4 }),
-        w('onPrevCleared', [ s(0, 0, 'common'), s(0.8, 2, 'rare'), s(1.6, 1, 'common'), s(2.4, 0, 'common'), s(3.2, 1, 'rare') ], { delayAfter: 5 }),
+        w(8, [
+          s(0,   0, 'common'),
+          s(0.8, 1, 'common'),
+          s(1.6, 2, 'common'),
+          s(2.5, 0, 'common'),
+          s(3.5, 1, 'common'),
+          s(5,   2, 'rare'),
+        ]),
+        w('onPrevCleared', [
+          s(0,   2, 'common'),
+          s(0.8, 0, 'common'),
+          s(1.6, 1, 'common'),
+          s(2.4, 2, 'common'),
+          s(3.5, 0, 'rare'),
+          s(4.5, 1, 'common'),
+          s(5.5, 2, 'common'),
+          s(6.5, 0, 'common'),
+        ], { delayAfter: 8 }),
+        w('onPrevCleared', [
+          s(0,   0, 'common'),
+          s(0.6, 1, 'common'),
+          s(1.2, 2, 'common'),
+          s(2,   0, 'rare'),
+          s(2.8, 1, 'common'),
+          s(3.6, 2, 'rare'),
+          s(5,   1, 'rare'),
+          s(6,   0, 'common'),
+          s(6.6, 2, 'common'),
+        ], { delayAfter: 10 }),
       ],
       boss: null,
       winCondition: 'allWavesCleared',
@@ -1808,7 +1862,7 @@
       starGoals: [
         { id: 'clear',    desc: 'Terminer le niveau' },
         { id: 'noDamage', desc: 'Aucun Blop n\'atteint la base' },
-        { id: 'cheap',    desc: 'Dépenser moins de 500$' },
+        { id: 'cheap',    desc: 'Dépenser moins de 700$' },
       ],
       rewards: { cash: 500, firstClearBonus: 800, unlocks: ['ice'] },
       intro: 'Les Blops arrivent plus nombreux. Ouvre l\'œil sur les Rares !',
@@ -1988,10 +2042,25 @@
 
     // Scheduler
     game.campaignActive.scheduler = new WaveScheduler(data, {
-      onWaveStart: (i, w) => showHint('🌀 Vague ' + (i + 1) + '/' + data.waves.length, 2500),
-      onWaveCleared: (i) => { if (i < data.waves.length - 1) showHint('✅ Vague ' + (i + 1) + ' nettoyée !', 2000); },
+      onWaveStart: (i, w) => {
+        showWaveBanner('🌀 VAGUE ' + (i + 1) + '/' + data.waves.length, 'Les Blops arrivent !');
+        sfx && sfx('spawn');
+      },
+      onWaveCleared: (i) => {
+        if (i < data.waves.length - 1) {
+          showWaveBanner('✅ VAGUE ' + (i + 1) + ' NETTOYÉE', 'Prépare-toi...', 0x44ff88);
+          sfx && sfx('reward');
+        }
+      },
       onAllCleared: () => {/* géré dans campaignTick */},
     });
+
+    // Tutorial hints pour 1er niveau
+    if (data.tutorial) {
+      setTimeout(() => showHint('👆 Clique une graine à gauche, puis un slot sur une lane pour planter', 6000), 1500);
+      setTimeout(() => showHint('🌻 Les Tournesols génèrent du cash passif. Plantes-en d\'abord !', 5500), 7000);
+      setTimeout(() => showHint('🌀 1ère vague dans 10s — positionne bien tes plantes', 3500), 12500);
+    }
 
     // UI
     buildCampaignHUD();
@@ -2040,15 +2109,19 @@
     removeCampaignHUD();
     const hud = document.createElement('div');
     hud.id = 'campaign-hud';
-    hud.style.cssText = 'position:fixed;top:96px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.82);padding:10px 18px;border-radius:12px;z-index:400;color:#fff;font-family:var(--font-display,sans-serif);display:flex;gap:14px;align-items:center;border:2px solid #ffcc33;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+    hud.style.cssText = 'position:fixed;top:96px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);padding:10px 16px;border-radius:14px;z-index:400;color:#fff;font-family:var(--font-display,sans-serif);display:flex;gap:12px;align-items:center;border:2px solid #ffcc33;box-shadow:0 4px 20px rgba(0,0,0,0.6);backdrop-filter:blur(8px);';
     hud.innerHTML = `
-      <div style="font-size:14px;"><span id="camp-hud-title" style="color:#ffcc33;font-weight:700;"></span></div>
-      <div style="width:1px;height:24px;background:#444;"></div>
-      <div style="font-size:13px;">🌀 <span id="camp-hud-wave">-</span></div>
-      <div style="width:1px;height:24px;background:#444;"></div>
-      <div style="font-size:13px;">❤️ <span id="camp-hud-hp">3/3</span></div>
-      <div style="width:1px;height:24px;background:#444;"></div>
-      <button id="camp-abandon-btn" style="background:#cc3333;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;">❌ Abandonner</button>
+      <div style="font-size:13px;"><span id="camp-hud-title" style="color:#ffcc33;font-weight:700;"></span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:13px;">🌀 <span id="camp-hud-wave" style="font-weight:700;color:#88ccff;">-</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:13px;">👾 <span id="camp-hud-killed" style="font-weight:700;color:#ff9966;">0</span>/<span id="camp-hud-total">?</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:13px;">❤️ <span id="camp-hud-hp" style="font-weight:700;">3/3</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <div style="font-size:12px;color:#aaa;" id="camp-hud-timer">⏱ <span id="camp-hud-time">0:00</span></div>
+      <div style="width:1px;height:28px;background:#555;"></div>
+      <button id="camp-abandon-btn" style="background:#cc3333;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px;">❌ Abandonner</button>
     `;
     document.body.appendChild(hud);
     document.getElementById('camp-abandon-btn').onclick = () => {
@@ -2067,13 +2140,44 @@
     if (!game.campaignActive) return;
     const ca = game.campaignActive;
     const title = document.getElementById('camp-hud-title');
-    const wave = document.getElementById('camp-hud-wave');
-    const hp = document.getElementById('camp-hud-hp');
     if (!title) return;
     title.textContent = '📖 ' + ca.level.world + '-' + ca.level.idx + ' ' + ca.level.name;
     const w = ca.scheduler.currentWaveInfo();
-    wave.textContent = w.num + '/' + w.total;
-    hp.textContent = ca.baseHp + '/' + ca.baseHpMax;
+    document.getElementById('camp-hud-wave').textContent = w.num + '/' + w.total;
+    document.getElementById('camp-hud-killed').textContent = ca.stats.blopsKilled;
+    document.getElementById('camp-hud-total').textContent = levelBlopCount(ca.data);
+    const hpEl = document.getElementById('camp-hud-hp');
+    hpEl.textContent = ca.baseHp + '/' + ca.baseHpMax;
+    hpEl.style.color = ca.baseHp >= 2 ? '#66ff99' : ca.baseHp === 1 ? '#ffaa33' : '#ff3333';
+    const elapsed = (performance.now() - ca.startedAt) / 1000;
+    const m = Math.floor(elapsed / 60);
+    const s = Math.floor(elapsed % 60);
+    document.getElementById('camp-hud-time').textContent = m + ':' + String(s).padStart(2, '0');
+  }
+
+  // Point 5+ : bannière cinématique "VAGUE X"
+  function showWaveBanner(title, subtitle, colorHex) {
+    const col = colorHex || 0xff3366;
+    const hex = '#' + col.toString(16).padStart(6, '0');
+    const ex = document.getElementById('wave-banner');
+    if (ex) ex.remove();
+    const banner = document.createElement('div');
+    banner.id = 'wave-banner';
+    banner.style.cssText = 'position:fixed;top:35%;left:50%;transform:translate(-50%,-50%) scale(0.6);opacity:0;pointer-events:none;z-index:3000;text-align:center;transition:all 0.28s cubic-bezier(.2,1.5,.4,1);';
+    banner.innerHTML = `
+      <div style="font-family:var(--font-display,sans-serif);font-size:52px;font-weight:900;color:${hex};text-shadow:3px 3px 0 #000,0 0 20px ${hex},0 0 40px ${hex};letter-spacing:3px;">${title}</div>
+      <div style="font-family:var(--font-display,sans-serif);font-size:18px;color:#fff;margin-top:6px;text-shadow:2px 2px 0 rgba(0,0,0,0.5);">${subtitle || ''}</div>
+    `;
+    document.body.appendChild(banner);
+    requestAnimationFrame(() => {
+      banner.style.opacity = '1';
+      banner.style.transform = 'translate(-50%,-50%) scale(1)';
+    });
+    setTimeout(() => {
+      banner.style.opacity = '0';
+      banner.style.transform = 'translate(-50%,-50%) scale(1.15)';
+    }, 1600);
+    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 2000);
   }
 
   function campaignTick(dt) {
@@ -4826,6 +4930,7 @@
     }
     addCash(ud.value);
     game.kills++;
+    if (game.mode === 'campaign' && game.campaignActive) game.campaignActive.stats.blopsKilled++;
     game.collection[ud.rarity] = (game.collection[ud.rarity] || 0) + 1;
     addBlopToHolding(ud.rarity, ud.variant || 'none', ud.blopId);
     addXp(ud.value / XP_PER_KILL_DIVISOR);

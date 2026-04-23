@@ -1574,6 +1574,36 @@
     await Promise.all(ps);
   }
 
+  // === Blop thumbnails : snapshot PNG de chaque mesh 3D pour Collection/Parc ===
+  const BLOP_THUMBNAILS = {};
+  function generateBlopThumbnails() {
+    try {
+      const tCanvas = document.createElement('canvas');
+      tCanvas.width = 96; tCanvas.height = 96;
+      const tRenderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+      tRenderer.setClearColor(0x000000, 0);
+      tRenderer.setSize(96, 96, false);
+      const tScene = new THREE.Scene();
+      tScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      const tDir = new THREE.DirectionalLight(0xffffff, 0.8);
+      tDir.position.set(3, 4, 3); tScene.add(tDir);
+      const tFill = new THREE.DirectionalLight(0xaabbff, 0.3);
+      tFill.position.set(-3, 2, -3); tScene.add(tFill);
+      const tCam = new THREE.OrthographicCamera(-1.8, 1.8, 1.8, -1.8, 0.1, 20);
+      tCam.position.set(3, 3.5, 3); tCam.lookAt(0, 1, 0);
+      for (const rarity of RARITY_KEYS) {
+        try {
+          const mesh = createBlopMesh(rarity, 1);
+          tScene.add(mesh);
+          tRenderer.render(tScene, tCam);
+          BLOP_THUMBNAILS[rarity] = tCanvas.toDataURL('image/png');
+          tScene.remove(mesh);
+        } catch (e) { console.warn('Thumbnail fail for', rarity, e); }
+      }
+      tRenderer.dispose();
+    } catch (err) { console.warn('Thumbnails init failed:', err); }
+  }
+
   // --- SCENE ---
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87CEEB);
@@ -4210,7 +4240,11 @@
           div.style.border = `2px solid ${v.color}`;
           div.style.boxShadow = `0 0 10px ${v.color}`;
         }
-        div.innerHTML = `${(b.blopId && BLOP_ICONS_ID[b.blopId]) || BLOP_ICONS[b.rarity] || '👾'}
+        const thumb = BLOP_THUMBNAILS[b.rarity];
+        const iconHtml = thumb
+          ? `<img src="${thumb}" style="width:56px;height:56px;object-fit:contain;image-rendering:auto;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));" alt="${br.name}">`
+          : `${(b.blopId && BLOP_ICONS_ID[b.blopId]) || BLOP_ICONS[b.rarity] || '👾'}`;
+        div.innerHTML = `${iconHtml}
           ${v.label ? `<div style="position:absolute; top:2px; left:4px; font-size:9px; font-weight:bold; color:${v.color}; text-shadow:0 0 3px #000;">${v.label} ${'★'.repeat(Math.min(5, Math.ceil(v.mult/2)))}</div>` : ''}
           ${b.persona ? `<div style="position:absolute; bottom:16px; left:0; right:0; font-size:8px; color:#ffddaa; text-align:center; text-shadow:0 0 3px #000;">${b.persona.fullName.split(' ')[0]}</div>` : ''}
           <div class="parc-rate">+${rate.toFixed(2)}</div>`;
@@ -4251,8 +4285,12 @@
       div.className = 'inv-entry';
       div.style.borderLeftColor = r.color;
       if (v.label) div.style.boxShadow = `inset 0 0 0 2px ${v.color}`;
+      const thumb2 = BLOP_THUMBNAILS[rk];
+      const iconHtml2 = thumb2
+        ? `<img src="${thumb2}" style="width:48px;height:48px;object-fit:contain;" alt="${br.name}">`
+        : `${BLOP_ICONS[rk] || '👾'}`;
       div.innerHTML = `
-        <div class="icon">${BLOP_ICONS[rk] || '👾'}</div>
+        <div class="icon">${iconHtml2}</div>
         <div style="color:${r.color}; font-weight:bold; font-size:12px;">${r.label}</div>
         ${v.label ? `<div style="color:${v.color}; font-size:11px; font-weight:bold;">${v.label} ×${v.mult}</div>` : ''}
         <div class="count">${c}</div>
@@ -4669,7 +4707,10 @@
     $('fiche-title').innerHTML = persona ? persona.fullName : (br.name + ' (' + r.label + ')');
     $('fiche-title').style.color = r.color;
     const val = blopValue(blop);
-    let body = '<div><span style="color:#aaa;">Espèce :</span> <strong>' + br.name + '</strong></div>';
+    const thumbFiche = BLOP_THUMBNAILS[blop.rarity];
+    let body = '';
+    if (thumbFiche) body += '<div style="text-align:center;margin:10px 0;"><img src="' + thumbFiche + '" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 4px 12px ' + r.color + '88);" alt=""></div>';
+    body += '<div><span style="color:#aaa;">Espèce :</span> <strong>' + br.name + '</strong></div>';
     body += '<div><span style="color:#aaa;">Rareté :</span> <strong style="color:' + r.color + ';">' + r.label + '</strong></div>';
     if (v) body += '<div><span style="color:#aaa;">Variante :</span> <strong style="color:' + v.color + ';">' + v.label + ' ' + '★'.repeat(Math.min(5, Math.ceil(v.mult/2))) + ' (×' + v.mult + ')</strong></div>';
     body += '<div><span style="color:#aaa;">Revenu passif :</span> <strong>' + (val * PASSIVE_RATE).toFixed(2) + '$/s</strong></div>';
@@ -5506,6 +5547,7 @@
   // --- INIT (async pour preload des modèles GLB avant de placer les plantes/blops) ---
   (async () => {
     await preloadModels();
+    generateBlopThumbnails();
     await preloadBakedDecorations();
     const savedData = loadGame();
     let offlineResult = null;

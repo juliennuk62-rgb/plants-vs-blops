@@ -18036,7 +18036,8 @@
       var s = NS.state;
       s.running = true; s.isPaused = false; s.timer = 90000; s.tElapsed = 0;
       s.currentTier = 'safe'; s.selectedTier = 'safe';
-      s.roulette = { spinning: false, spinT: 0, spinDuration: 1200, pendingResult: null, timeToNextSpin: 5000, rareStreak: 0 };
+      // FIX #4 : premier spin à t=2s (au lieu de 5s) pour feedback rapide
+      s.roulette = { spinning: false, spinT: 0, spinDuration: 1200, pendingResult: null, timeToNextSpin: 2000, rareStreak: 0 };
       s.slots = [];
       for (var r = 0; r < NS.GRID.rows; r++) { var row = []; for (var c = 0; c < NS.GRID.cols; c++) row.push(null); s.slots.push(row); }
       s.enemies = []; s.projectiles = []; s.coinDrops = []; s.particles = []; s.popups = [];
@@ -18077,7 +18078,9 @@
     T.REROLLS_PER_RUN = 3;
     T.RUN_DURATION_MS = 90000;
     T.HOT_STREAK_THRESHOLD = 3; T.HOT_STREAK_BONUS_COINS = 15; T.HOT_STREAK_BANNER_MS = 3000;
-    T.enemySpawnRate = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); return 0.5 + Math.pow(t / 90, 1.4) * 2.5; };
+    // FIX #3 : spawn rate initial plus doux (0.2/s au lieu de 0.5/s)
+    // Donne au joueur le temps de voir les premières plantes apparaître avant le chaos.
+    T.enemySpawnRate = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); return 0.2 + Math.pow(t / 90, 1.4) * 2.8; };
     T.enemyHP = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); var base = 2 + (t / 90) * 10; var bump = (t >= 45 && t <= 50) ? 4 : 0; return base + bump; };
     T.enemySpeed = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); var base = 40 + Math.random() * 40; var mult = 1.0 + (t / 90) * 0.5; return base * mult; };
     T.bruteSpawnRate = function(tSec){ if (tSec < 30) return 0; var t = Math.min(90, tSec); return ((t - 30) / 60) * 0.3; };
@@ -18331,10 +18334,20 @@
     function slotCenter(row, col){ return { x: g.originX + col*g.cellSize + g.cellSize/2, y: g.originY + row*g.cellSize + g.cellSize/2 }; }
     function findFreeSlot(){
       var s = NS.state.slots;
-      for (var row = g.rows - 1; row >= 0; row--) {
-        for (var col = 0; col < g.cols; col++) {
-          if (s[row][col] === null) { var c = slotCenter(row, col); return { row:row, col:col, x:c.x, y:c.y }; }
-        }
+      // FIX #2 : priorité = lane (row) avec le moins de plantes
+      // Avant : bottom row se remplissait complètement avant de passer à la suivante,
+      //         laissant les 3 autres lanes sans défense pendant 30s = game over instant.
+      var rowCounts = [0, 0, 0, 0];
+      for (var r = 0; r < g.rows; r++) for (var c = 0; c < g.cols; c++) if (s[r][c]) rowCounts[r]++;
+      var minRow = -1, minCount = Infinity;
+      // Tie-break : prefer bottom row visuellement
+      for (var r2 = g.rows - 1; r2 >= 0; r2--) {
+        if (rowCounts[r2] < g.cols && rowCounts[r2] < minCount) { minCount = rowCounts[r2]; minRow = r2; }
+      }
+      if (minRow < 0) return null;
+      // Dans cette row, leftmost free col (col 0 = safe back row style PvZ)
+      for (var col = 0; col < g.cols; col++) {
+        if (s[minRow][col] === null) { var ctr = slotCenter(minRow, col); return { row:minRow, col:col, x:ctr.x, y:ctr.y }; }
       }
       return null;
     }
@@ -19037,6 +19050,13 @@
       modalRoot.addEventListener('click', function(e){ if (e.target === modalRoot) L.closeModal(); });
       return modalRoot;
     };
+    // FIX #5 : pré-place 4 tournesols au start (1 par lane col 0) pour que le joueur
+    // ne subisse pas 10s d'écran vide avec enemies qui passent tout droit.
+    function preplaceStarters() {
+      var tournesol = L.getPlantById && L.getPlantById('tournesol');
+      if (!tournesol || !L.placement || !L.placement.place) return;
+      for (var i = 0; i < 4; i++) L.placement.place(tournesol);
+    }
     L.openModal = function(){
       L.injectCss(); L.buildModal();
       modalRoot.classList.add('open');
@@ -19049,6 +19069,7 @@
       L.newGame();
       L.state.running = false; // wait tutorial
       if (L.juice && L.juice.reset) L.juice.reset();
+      preplaceStarters();
       if (L.debug && L.debug.hudBuild) L.debug.hudBuild(stage);
       if (L.debug && L.debug.enable) L.debug.enable();
       jackpotBurstT = -1;
@@ -19076,6 +19097,9 @@
       // Hitstop
       var hitstopped = L.juice && L.juice.isHitstopped && L.juice.isHitstopped();
       if (!hitstopped) {
+        // FIX #1 : timer decrement (était absent — le jeu ne se terminait jamais par timer)
+        L.state.tElapsed = (L.state.tElapsed || 0) + dt;
+        L.state.timer = Math.max(0, (L.state.timer || 0) - dt);
         L.roulette.tick(dt);
         L.combat.tick(dt);
         L.particles.update(dt);
@@ -19210,6 +19234,7 @@
         resultsEl = null;
         L.newGame();
         if (L.juice && L.juice.reset) L.juice.reset();
+        preplaceStarters();
         L.state.running = true;
         lastT = performance.now();
         rafHandle = requestAnimationFrame(L.loop);

@@ -20644,6 +20644,241 @@
     }
   })();
 
+  // ═══════════════════════════════════════════════════════════════════
+  // 🎉 PVB EVENTS — Système d'événements saisonniers admin-controlled
+  // Annonce Fortnite-style + décor saisonnier + persistance localStorage
+  // Test mode only. Admin pilote via panneau admin.
+  // ═══════════════════════════════════════════════════════════════════
+  (function() {
+    if (!window.__PVB_TEST_MODE__) return;
+    var SAVE_KEY = 'dev_pvb_active_event';
+    var EVENTS = {
+      none:   { id:'none',   name:'AUCUN',     icon:'—' },
+      spring: {
+        id:'spring',
+        name:'PRINTEMPS',
+        subtitle:'Les fleurs s\'éveillent · Le jardin renaît',
+        tag:'ÉVÉNEMENT SAISONNIER',
+        icon:'🌸',
+        accent:'#ff99cc',
+        accentSecondary:'#88ff99',
+        petalEmojis:['🌸', '🌺', '🌷', '🌼', '🦋', '🐝']
+      }
+      // Future : summer, autumn, winter, halloween, christmas
+    };
+
+    function injectCSS() {
+      if (document.getElementById('pvb-events-css')) return;
+      var s = document.createElement('style');
+      s.id = 'pvb-events-css';
+      s.textContent =
+        '.pvb-event-banner { position:fixed; top:-400px; left:50%; transform:translateX(-50%); width:min(92vw,640px); padding:28px 40px 24px; background:linear-gradient(135deg, rgba(10,5,30,0.96), rgba(50,15,70,0.96), rgba(15,5,40,0.96)); border-top:3px solid var(--pvb-accent,#ffeebb); border-bottom:3px solid var(--pvb-accent,#ffeebb); border-left:1px solid rgba(255,255,255,0.15); border-right:1px solid rgba(255,255,255,0.15); color:#fff; text-align:center; z-index:99999; box-shadow:0 0 100px var(--pvb-accent,#ffeebb), inset 0 0 60px rgba(0,0,0,0.4); transition:top 800ms cubic-bezier(0.16,1,0.3,1); pointer-events:none; overflow:hidden; }' +
+        '.pvb-event-banner.show { top:60px; }' +
+        '.pvb-event-banner::before { content:""; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent); animation:pvb-banner-shimmer 2.4s linear infinite; }' +
+        '@keyframes pvb-banner-shimmer { 0% { left:-100%; } 100% { left:200%; } }' +
+        '.pvb-event-banner .pvb-event-icon { font-size:64px; line-height:1; margin-bottom:6px; filter:drop-shadow(0 0 18px var(--pvb-accent,#ffeebb)); animation:pvb-event-icon-pulse 1.6s ease-in-out infinite; position:relative; }' +
+        '@keyframes pvb-event-icon-pulse { 0%,100% { transform:scale(1) rotate(-2deg); } 50% { transform:scale(1.1) rotate(2deg); } }' +
+        '.pvb-event-banner .pvb-event-tag { display:inline-block; padding:3px 14px; background:rgba(255,200,200,0.12); border:1px solid var(--pvb-accent,#ffeebb); border-radius:0; font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:3px; color:var(--pvb-accent,#ffeebb); margin-bottom:8px; position:relative; }' +
+        '.pvb-event-banner .pvb-event-title { font-family:"Rubik Mono One",sans-serif; font-size:42px; letter-spacing:8px; color:#fff; text-shadow:0 0 20px var(--pvb-accent,#ffeebb), 0 0 40px var(--pvb-accent,#ffeebb), 0 2px 0 rgba(0,0,0,0.5); position:relative; }' +
+        '.pvb-event-banner .pvb-event-title span { display:inline-block; opacity:0; animation:pvb-letter-reveal 600ms forwards; }' +
+        '@keyframes pvb-letter-reveal { 0% { opacity:0; transform:translateY(-12px) scale(0.8); } 60% { transform:translateY(2px) scale(1.05); } 100% { opacity:1; transform:translateY(0) scale(1); } }' +
+        '.pvb-event-banner .pvb-event-subtitle { font-family:"JetBrains Mono",monospace; font-size:12px; color:rgba(255,255,255,0.85); letter-spacing:3px; margin-top:10px; text-transform:uppercase; position:relative; }' +
+        '/* Decor container */' +
+        '#pvb-event-decor { position:fixed; inset:0; pointer-events:none; z-index:9998; overflow:hidden; }' +
+        /* SPRING : pétales + papillons + tint */
+        '#pvb-event-decor.spring::before { content:""; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,220,240,0.10), transparent 70%), radial-gradient(ellipse 60% 40% at 50% 100%, rgba(220,255,230,0.06), transparent 70%); pointer-events:none; }' +
+        '#pvb-event-decor.spring .pvb-petal { position:absolute; top:-40px; opacity:0; filter:drop-shadow(0 0 4px rgba(255,200,230,0.5)); animation:pvb-petal-fall 9s linear infinite; }' +
+        '#pvb-event-decor.spring .pvb-petal.alt { animation:pvb-petal-fall-alt 11s linear infinite; }' +
+        '#pvb-event-decor.spring .pvb-petal.flutter { animation:pvb-flutter 14s linear infinite; }' +
+        '@keyframes pvb-petal-fall { 0% { top:-40px; transform:translateX(0) rotate(0deg); opacity:0; } 8% { opacity:0.85; } 50% { transform:translateX(40px) rotate(180deg); } 92% { opacity:0.85; } 100% { top:110vh; transform:translateX(-30px) rotate(360deg); opacity:0; } }' +
+        '@keyframes pvb-petal-fall-alt { 0% { top:-40px; transform:translateX(0) rotate(0deg); opacity:0; } 8% { opacity:0.7; } 50% { transform:translateX(-50px) rotate(-180deg); } 92% { opacity:0.7; } 100% { top:110vh; transform:translateX(20px) rotate(-360deg); opacity:0; } }' +
+        '@keyframes pvb-flutter { 0% { top:50vh; left:-5vw; transform:rotate(-10deg) scale(0.9); opacity:0; } 10% { opacity:1; } 25% { top:20vh; left:25vw; transform:rotate(10deg) scale(1); } 50% { top:60vh; left:50vw; transform:rotate(-15deg) scale(1.05); } 75% { top:30vh; left:75vw; transform:rotate(15deg) scale(0.95); } 90% { opacity:1; } 100% { top:50vh; left:110vw; transform:rotate(-10deg) scale(0.9); opacity:0; } }' +
+        '/* Admin events section */' +
+        '.pvb-admin-events { margin-top:14px; padding-top:14px; border-top:1px dashed rgba(255,170,68,0.4); }' +
+        '.pvb-admin-events h4 { margin:0 0 8px; font-family:"JetBrains Mono",monospace; font-size:12px; color:#ffaa44; letter-spacing:2px; }' +
+        '.pvb-admin-events select { width:100%; padding:7px 8px; background:rgba(0,0,0,0.55); color:#fff; border:1px solid #ffaa44; border-radius:4px; font-family:"JetBrains Mono",monospace; font-size:12px; margin-bottom:6px; cursor:pointer; }' +
+        '.pvb-admin-events button { width:100%; padding:8px; background:linear-gradient(135deg, #ffaa44, #ff66aa); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:700; letter-spacing:1px; font-family:"JetBrains Mono",monospace; font-size:11px; transition:transform 100ms; }' +
+        '.pvb-admin-events button:hover { transform:translateY(-1px); }' +
+        '.pvb-admin-events button.replay { background:linear-gradient(135deg, #33ccff, #3388ff); margin-top:4px; }' +
+        '.pvb-admin-events button.clear { background:linear-gradient(135deg, #888, #666); margin-top:4px; }' +
+        '.pvb-admin-events .pvb-event-current { font-size:11px; color:rgba(255,170,68,0.85); margin-top:6px; padding:4px 6px; background:rgba(0,0,0,0.4); border-radius:4px; text-align:center; font-family:"JetBrains Mono",monospace; }';
+      document.head.appendChild(s);
+    }
+
+    function playAnnouncementSound() {
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        var ctx = new AC();
+        var master = ctx.createGain(); master.gain.value = 0.3; master.connect(ctx.destination);
+        var t = ctx.currentTime;
+        // Whoosh d'ouverture
+        var len = Math.floor(ctx.sampleRate * 0.4);
+        var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        var d = buf.getChannelData(0); for (var i = 0; i < len; i++) d[i] = Math.random()*2-1;
+        var src = ctx.createBufferSource(); src.buffer = buf;
+        var lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(200, t); lp.frequency.exponentialRampToValueAtTime(3000, t+0.4);
+        var ng = ctx.createGain();
+        ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(0.25, t+0.05); ng.gain.exponentialRampToValueAtTime(0.0001, t+0.4);
+        src.connect(lp).connect(ng).connect(master); src.start(t); src.stop(t+0.42);
+        // Fanfare 4 notes ascendantes (C5 E5 G5 C6)
+        var notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach(function(f, i) {
+          var nt = t + 0.3 + i * 0.18;
+          var sq = ctx.createOscillator(); sq.type = 'square'; sq.frequency.value = f;
+          var tr = ctx.createOscillator(); tr.type = 'triangle'; tr.frequency.value = f * 2;
+          var g = ctx.createGain();
+          g.gain.setValueAtTime(0, nt);
+          g.gain.linearRampToValueAtTime(0.22, nt + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, nt + 0.4);
+          sq.connect(g); tr.connect(g); g.connect(master);
+          sq.start(nt); tr.start(nt); sq.stop(nt+0.42); tr.stop(nt+0.42);
+        });
+        setTimeout(function(){ try { ctx.close(); } catch(e){} }, 2500);
+      } catch(e){}
+    }
+
+    function showAnnouncement(eventDef) {
+      if (!eventDef || eventDef.id === 'none') return;
+      var prev = document.getElementById('pvb-event-banner');
+      if (prev) prev.remove();
+      var banner = document.createElement('div');
+      banner.id = 'pvb-event-banner';
+      banner.className = 'pvb-event-banner';
+      banner.style.setProperty('--pvb-accent', eventDef.accent || '#ffeebb');
+      // Title letter-by-letter pour effet typewriter
+      var titleHtml = (eventDef.name || '').split('').map(function(ch, i) {
+        return '<span style="animation-delay:' + (300 + i * 60) + 'ms;">' + (ch === ' ' ? '&nbsp;' : ch) + '</span>';
+      }).join('');
+      banner.innerHTML =
+        '<div class="pvb-event-icon">' + (eventDef.icon || '🎉') + '</div>' +
+        '<div class="pvb-event-tag">' + (eventDef.tag || '⚡ ÉVÉNEMENT') + '</div>' +
+        '<div class="pvb-event-title">' + titleHtml + '</div>' +
+        '<div class="pvb-event-subtitle">' + (eventDef.subtitle || '') + '</div>';
+      document.body.appendChild(banner);
+      requestAnimationFrame(function() { banner.classList.add('show'); });
+      playAnnouncementSound();
+      setTimeout(function() {
+        banner.classList.remove('show');
+        setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 900);
+      }, 7000);
+    }
+
+    function removeDecor() {
+      var d = document.getElementById('pvb-event-decor');
+      if (d && d.parentNode) d.parentNode.removeChild(d);
+    }
+
+    function applyDecor(eventDef) {
+      removeDecor();
+      if (!eventDef || eventDef.id === 'none') return;
+      var decor = document.createElement('div');
+      decor.id = 'pvb-event-decor';
+      decor.className = eventDef.id;
+      if (eventDef.id === 'spring') {
+        var emojis = eventDef.petalEmojis || ['🌸'];
+        // 40 pétales + papillons (random delays/speeds/positions)
+        for (var i = 0; i < 42; i++) {
+          var p = document.createElement('span');
+          var emoji = emojis[Math.floor(Math.random() * emojis.length)];
+          var isFlutter = (emoji === '🦋' || emoji === '🐝');
+          p.className = 'pvb-petal' + (isFlutter ? ' flutter' : (Math.random() > 0.5 ? ' alt' : ''));
+          if (!isFlutter) {
+            p.style.left = Math.random() * 100 + '%';
+            p.style.animationDelay = Math.random() * 9 + 's';
+            p.style.animationDuration = (8 + Math.random() * 5) + 's';
+          } else {
+            p.style.animationDelay = Math.random() * 14 + 's';
+            p.style.animationDuration = (12 + Math.random() * 6) + 's';
+          }
+          p.style.fontSize = (isFlutter ? (20 + Math.random() * 8) : (14 + Math.random() * 14)) + 'px';
+          p.textContent = emoji;
+          decor.appendChild(p);
+        }
+      }
+      document.body.appendChild(decor);
+    }
+
+    function setEvent(eventId, opts) {
+      opts = opts || {};
+      var eventDef = EVENTS[eventId];
+      if (!eventDef) return;
+      try { localStorage.setItem(SAVE_KEY, eventId); } catch(e){}
+      window.PVB_EVENTS.current = eventId;
+      if (eventId === 'none') { removeDecor(); }
+      else { applyDecor(eventDef); if (!opts.silent) showAnnouncement(eventDef); }
+      // refresh admin UI
+      var sel = document.getElementById('admin-event-select');
+      if (sel) sel.value = eventId;
+      var label = document.getElementById('admin-event-current');
+      if (label) label.textContent = '🎯 En cours : ' + (eventDef.name || 'Aucun');
+    }
+
+    function loadSavedEvent() {
+      var saved; try { saved = localStorage.getItem(SAVE_KEY); } catch(e){}
+      if (saved && EVENTS[saved] && saved !== 'none') {
+        window.PVB_EVENTS.current = saved;
+        applyDecor(EVENTS[saved]);
+        // Pas d'annonce au reload (silent)
+      }
+    }
+
+    function injectAdminUI() {
+      var adminPanel = document.getElementById('admin-panel');
+      if (!adminPanel) return false;
+      if (document.getElementById('admin-event-select')) return true;
+      var section = document.createElement('div');
+      section.className = 'pvb-admin-events';
+      section.innerHTML =
+        '<h4>🎉 ÉVÉNEMENTS SAISONNIERS</h4>' +
+        '<select id="admin-event-select">' +
+          '<option value="none">— Aucun</option>' +
+          '<option value="spring">🌸 Printemps</option>' +
+        '</select>' +
+        '<button id="admin-event-apply">▶ DÉCLENCHER L\'ÉVÉNEMENT</button>' +
+        '<button id="admin-event-replay" class="replay">📢 Re-jouer l\'annonce</button>' +
+        '<button id="admin-event-clear" class="clear">✕ Couper l\'événement</button>' +
+        '<div id="admin-event-current" class="pvb-event-current">🎯 En cours : Aucun</div>';
+      adminPanel.appendChild(section);
+      var sel = document.getElementById('admin-event-select');
+      if (window.PVB_EVENTS.current) sel.value = window.PVB_EVENTS.current;
+      var label = document.getElementById('admin-event-current');
+      if (label && window.PVB_EVENTS.current) {
+        var def = EVENTS[window.PVB_EVENTS.current];
+        label.textContent = '🎯 En cours : ' + (def ? def.name : 'Aucun');
+      }
+      document.getElementById('admin-event-apply').addEventListener('click', function() { setEvent(sel.value); });
+      document.getElementById('admin-event-replay').addEventListener('click', function() {
+        if (window.PVB_EVENTS.current && window.PVB_EVENTS.current !== 'none') showAnnouncement(EVENTS[window.PVB_EVENTS.current]);
+      });
+      document.getElementById('admin-event-clear').addEventListener('click', function() { setEvent('none'); });
+      return true;
+    }
+
+    window.PVB_EVENTS = {
+      EVENTS: EVENTS,
+      current: null,
+      set: setEvent,
+      showAnnouncement: showAnnouncement,
+      applyDecor: applyDecor,
+      removeDecor: removeDecor,
+      injectAdminUI: injectAdminUI
+    };
+
+    injectCSS();
+    loadSavedEvent();
+
+    // Retry inject UI jusqu'à ce que l'admin panel existe (créé par buildAdminPanel)
+    var attempts = 0;
+    function tryInject() {
+      if (injectAdminUI()) return;
+      attempts++;
+      if (attempts < 40) setTimeout(tryInject, 500);
+    }
+    setTimeout(tryInject, 1500);
+  })();
+
   // ═══ Labo 2 install : HUD button + retrofit + meta hooks (test mode only)
   if (window.__PVB_TEST_MODE__) {
     setTimeout(function() {

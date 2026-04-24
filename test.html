@@ -16847,10 +16847,1158 @@
     }
   })();
 
-  // Install Labo 2 HUD button (test mode only)
+  // ═══════════════════════════════════════════════════════════════════
+  // 🧬 LABO 2 — META LAYER (partagé entre features A-F)
+  // Dispatch 10 agents (2026-04-24) : graines, atelier, achievements,
+  // daily seed, prestige, hub, notifications, retrofit A, debug.
+  // Patches inter-agents appliqués inline (bug !spent, field mismatches,
+  // array vs object, FEATURES extension, auto-install override).
+  // ═══════════════════════════════════════════════════════════════════
+
+  /* ── META Agent 1 : State & Persistence ──────────────────────── */
+  (function () {
+    'use strict';
+    const SAVE_KEY = 'dev_labo2_meta_state';
+    const CURRENT_VERSION = 1;
+    window.LABO2_META = window.LABO2_META || {};
+    const META = window.LABO2_META;
+    function defaults() {
+      return {
+        graines: 0, unlocks: [], achievements: [], prestige: 0, prestigeMultiplier: 1.0,
+        stats: {
+          totalKills: 0, totalRuns: 0, totalGraines: 0,
+          perFeature: {
+            A: { runs: 0, bestScore: 0, bestCombo: 0, totalKills: 0 },
+            B: { runs: 0, bestScore: 0, jackpots: 0 },
+            C: { runs: 0, bestScore: 0, bestChain: 0 },
+            D: { runs: 0, bestScore: 0, bestAccuracy: 0, totalCrits: 0 },
+            E: { runs: 0, bestScore: 0, totalNukes: 0, bestOverload: 0 },
+            F: { runs: 0, bestScore: 0, bestCritStreak: 0, totalCrits: 0 }
+          }
+        },
+        dailySeed: { id: null, runs: {} },
+        settings: { soundOn: true, reducedMotion: false },
+        version: CURRENT_VERSION
+      };
+    }
+    function isPlainObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+    function deepMerge(dst, src) {
+      if (!isPlainObj(src)) return dst;
+      for (const k of Object.keys(src)) {
+        const sv = src[k];
+        if (isPlainObj(sv) && isPlainObj(dst[k])) deepMerge(dst[k], sv);
+        else if (sv !== undefined) dst[k] = sv;
+      }
+      return dst;
+    }
+    META.state = defaults();
+    const persist = {
+      save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(META.state)); return true; } catch (e) { return false; } },
+      load() {
+        try {
+          const raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) { META.state = defaults(); return META.state; }
+          let parsed; try { parsed = JSON.parse(raw); } catch (e) { META.state = defaults(); return META.state; }
+          if (!isPlainObj(parsed)) { META.state = defaults(); return META.state; }
+          if (!parsed.version || parsed.version < CURRENT_VERSION) parsed = persist.migrate(parsed);
+          const merged = defaults();
+          deepMerge(merged, parsed);
+          merged.version = CURRENT_VERSION;
+          merged.prestigeMultiplier = 1 + (merged.prestige || 0) * 0.05;
+          // Force achievements as Array (fix si ancien save en object)
+          if (!Array.isArray(merged.achievements)) merged.achievements = [];
+          META.state = merged;
+          return META.state;
+        } catch (e) { META.state = defaults(); return META.state; }
+      },
+      reset() { META.state = defaults(); try { localStorage.removeItem(SAVE_KEY); } catch (e) {} persist.save(); return META.state; },
+      migrate(oldState) {
+        const out = defaults();
+        if (isPlainObj(oldState)) {
+          if (typeof oldState.graines === 'number') out.graines = oldState.graines;
+          if (Array.isArray(oldState.unlocks)) out.unlocks = oldState.unlocks.slice();
+          if (Array.isArray(oldState.achievements)) out.achievements = oldState.achievements.slice();
+          if (typeof oldState.prestige === 'number') out.prestige = oldState.prestige;
+          if (isPlainObj(oldState.stats)) deepMerge(out.stats, oldState.stats);
+          if (isPlainObj(oldState.settings)) deepMerge(out.settings, oldState.settings);
+          if (isPlainObj(oldState.dailySeed)) deepMerge(out.dailySeed, oldState.dailySeed);
+        }
+        out.version = CURRENT_VERSION;
+        out.prestigeMultiplier = 1 + out.prestige * 0.05;
+        return out;
+      },
+      exportJson() { try { return JSON.stringify(META.state); } catch (e) { return JSON.stringify(defaults()); } },
+      importJson(str) {
+        if (typeof str !== 'string' || !str.length) return false;
+        let parsed; try { parsed = JSON.parse(str); } catch (e) { return false; }
+        if (!isPlainObj(parsed)) return false;
+        if (!parsed.version || parsed.version < CURRENT_VERSION) parsed = persist.migrate(parsed);
+        const merged = defaults();
+        deepMerge(merged, parsed);
+        merged.version = CURRENT_VERSION;
+        merged.prestigeMultiplier = 1 + (merged.prestige || 0) * 0.05;
+        META.state = merged;
+        persist.save();
+        return true;
+      }
+    };
+    META.persist = persist;
+    META._defaults = defaults;
+    persist.load();
+  })();
+
+  /* ── META Agent 8 : Notifications (toasts) ───────────────────── */
+  (function(){
+    if(!window.LABO2_META) window.LABO2_META = {};
+    if(window.LABO2_META.notifications) return;
+    const CSS = `
+    .l2m-toast-container{position:fixed;top:16px;right:16px;z-index:30000;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none;max-width:340px;}
+    .l2m-toast{pointer-events:auto;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;color:#fff;padding:10px 14px;border-radius:10px;min-width:220px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2);display:flex;align-items:center;gap:10px;transform:translateX(120%);opacity:0;transition:transform 300ms cubic-bezier(0.34,1.56,0.64,1), opacity 300ms ease;border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(4px);line-height:1.3;word-break:break-word;}
+    .l2m-toast.l2m-toast-in{transform:translateX(0);opacity:1;}
+    .l2m-toast.l2m-toast-out{transform:translateX(120%);opacity:0;transition:transform 280ms ease-in, opacity 280ms ease-in;}
+    .l2m-toast-icon{font-size:18px;flex-shrink:0;}
+    .l2m-toast-msg{flex:1;}
+    .l2m-toast-graines{background:linear-gradient(135deg,#4ade80 0%,#f97316 100%);}
+    .l2m-toast-achievement{background:linear-gradient(135deg,#fbbf24 0%,#f59e0b 50%,#d97706 100%);box-shadow:0 0 20px rgba(251,191,36,.5),0 8px 24px rgba(0,0,0,.35);}
+    .l2m-toast-unlock{background:linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%);}
+    .l2m-toast-prestige{background:linear-gradient(135deg,#ec4899 0%,#fbbf24 100%);box-shadow:0 0 24px rgba(236,72,153,.5);}
+    .l2m-toast-info{background:linear-gradient(135deg,#4b5563 0%,#374151 100%);}
+    .l2m-toast-error,.l2m-toast-warn{background:linear-gradient(135deg,#ef4444 0%,#b91c1c 100%);}
+    .l2m-toast-success{background:linear-gradient(135deg,#10b981 0%,#059669 100%);}
+    `;
+    const TYPES = {
+      graines:{icon:'🌰',duration:3500}, achievement:{icon:'🏅',duration:4000},
+      unlock:{icon:'✨',duration:3500}, prestige:{icon:'🌟',duration:5000},
+      info:{icon:'ℹ️',duration:3000}, error:{icon:'⚠️',duration:3000},
+      warn:{icon:'⚠️',duration:3000}, success:{icon:'✓',duration:3000}
+    };
+    const MAX_VISIBLE = 4;
+    let styleEl = null, containerEl = null;
+    const visible = [], backlog = [];
+    function injectCSS(){ if(styleEl) return; styleEl = document.createElement('style'); styleEl.id = 'l2m-notifications-css'; styleEl.textContent = CSS; document.head.appendChild(styleEl); }
+    function ensureContainer(){ injectCSS(); if(containerEl && document.body.contains(containerEl)) return containerEl; containerEl = document.createElement('div'); containerEl.className = 'l2m-toast-container'; containerEl.setAttribute('role','status'); containerEl.setAttribute('aria-live','polite'); document.body.appendChild(containerEl); return containerEl; }
+    function removeToast(entry){ if(entry.removed) return; entry.removed = true; clearTimeout(entry.timer); const el = entry.el; el.classList.remove('l2m-toast-in'); el.classList.add('l2m-toast-out'); setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); const i = visible.indexOf(entry); if(i>=0) visible.splice(i,1); drainBacklog(); },300); }
+    function drainBacklog(){ while(visible.length < MAX_VISIBLE && backlog.length){ showToast(backlog.shift()); } }
+    function showToast({type,message,options}){
+      const cfg = TYPES[type] || TYPES.info;
+      const duration = (options && options.duration) || cfg.duration;
+      const icon = (options && options.icon) || cfg.icon;
+      const container = ensureContainer();
+      const el = document.createElement('div');
+      el.className = 'l2m-toast l2m-toast-'+type;
+      const iconEl = document.createElement('span'); iconEl.className = 'l2m-toast-icon'; iconEl.textContent = icon;
+      const msgEl = document.createElement('span'); msgEl.className = 'l2m-toast-msg'; msgEl.textContent = message;
+      el.appendChild(iconEl); el.appendChild(msgEl);
+      const entry = {el,type,timer:null,removed:false};
+      if(options && typeof options.onClick === 'function'){ el.style.cursor='pointer'; el.addEventListener('click',(ev)=>{ try{ options.onClick(ev); }catch(e){} removeToast(entry); }); }
+      container.appendChild(el);
+      visible.push(entry);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('l2m-toast-in')));
+      entry.timer = setTimeout(()=>removeToast(entry), duration);
+    }
+    function push(type, message, options){
+      if(!TYPES[type]) type = 'info';
+      const notif = {type,message:String(message==null?'':message),options:options||{}};
+      if(visible.length < MAX_VISIBLE) showToast(notif);
+      else { backlog.push(notif); while(backlog.length > 20) backlog.shift(); }
+      return notif;
+    }
+    function pushBatch(arr){ if(!Array.isArray(arr)) return; arr.forEach((n,i)=>{ setTimeout(()=>{ if(n && n.type) push(n.type, n.message, n.options); }, i*80); }); }
+    function clear(){ visible.slice().forEach(removeToast); backlog.length = 0; }
+    window.LABO2_META.notifications = { css: CSS, push, pushBatch, clear, get queue(){ return {visible:visible.slice(), backlog:backlog.slice()}; } };
+  })();
+
+  /* ── META Agent 2 : Economy graines ──────────────────────────── */
+  (function () {
+    'use strict';
+    if (typeof window === 'undefined') return;
+    window.LABO2_META = window.LABO2_META || {};
+    var META = window.LABO2_META;
+    var LOG_MAX = 50;
+    var economy = { log: [] };
+    function getState() { return (META.state = META.state || {}); }
+    function getMultiplier() { var s = getState(); return typeof s.prestigeMultiplier === 'number' && s.prestigeMultiplier > 0 ? s.prestigeMultiplier : 1; }
+    function pushLog(entry) { economy.log.push(entry); if (economy.log.length > LOG_MAX) economy.log.splice(0, economy.log.length - LOG_MAX); }
+    function safeSave() { if (META.persist && typeof META.persist.save === 'function') { try { META.persist.save(); } catch (e) {} } }
+    function safeNotify(kind, msg) { if (META.notifications && typeof META.notifications.push === 'function') { try { META.notifications.push(kind, msg); } catch (e) {} } }
+
+    economy.earn = function (amount, source, payload) {
+      var state = getState();
+      var stats = state.stats = state.stats || {};
+      var base = Math.max(0, Math.floor(Number(amount) || 0));
+      if (base <= 0) return 0;
+      var mult = getMultiplier();
+      var final = Math.floor(base * mult);
+      state.graines = (state.graines || 0) + final;
+      stats.totalGraines = (stats.totalGraines || 0) + final;
+      pushLog({ ts: Date.now(), type: 'earn', amount: final, source: source || 'unknown', payload: payload || null, balanceAfter: state.graines });
+      safeNotify('graines', '+' + final + ' 🌰');
+      safeSave();
+      return final;
+    };
+    economy.spend = function (amount, itemId) {
+      var state = getState();
+      var cost = Math.max(0, Math.floor(Number(amount) || 0));
+      if ((state.graines || 0) < cost) return { success: false, reason: 'insufficient' };
+      state.graines -= cost;
+      pushLog({ ts: Date.now(), type: 'spend', amount: cost, itemId: itemId || 'unknown', balanceAfter: state.graines });
+      safeSave();
+      return { success: true };
+    };
+    economy.canAfford = function (amount) { var state = getState(); return (state.graines || 0) >= Math.max(0, Math.floor(Number(amount) || 0)); };
+    economy.formula = function (feature, stats) {
+      var s = stats || {};
+      var score = +s.score || 0, comboMax = +s.comboMax || 0, kills = +s.kills || 0;
+      var jackpots = +s.jackpots || 0, bestChain = +s.bestChain || 0, crits = +s.crits || 0;
+      var accuracy = +s.accuracy || 0, totalNukes = +s.totalNukes || 0, bestOverload = +s.bestOverload || 0;
+      var totalCrits = +s.totalCrits || 0, bestCritStreak = +s.bestCritStreak || 0;
+      var noDamage = !!s.noDamage;
+      switch (feature) {
+        case 'feature_A': return Math.floor(10 + score / 100 + comboMax * 2 + kills * 0.5) + (noDamage ? 50 : 0);
+        case 'feature_B': return Math.floor(15 + score / 80 + jackpots * 25);
+        case 'feature_C': return Math.floor(score / 120 + bestChain * 3);
+        case 'feature_D': return Math.floor(20 + kills * 3 + crits * 10 + (accuracy > 0.5 ? 50 : 0));
+        case 'feature_E': return Math.floor(30 + totalNukes * 15 + (bestOverload >= 149 ? 100 : 0));
+        case 'feature_F': return Math.floor(15 + score / 80 + totalCrits * 5 + (bestCritStreak >= 5 ? 75 : 0));
+        default: return 0;
+      }
+    };
+    economy.rewardSummary = function (feature, stats) {
+      var s = stats || {}, lines = [], mult = getMultiplier(), raw = 0;
+      function add(label, amount) { var v = Math.floor(amount); if (v === 0) return; lines.push({ label: label, amount: v }); raw += v; }
+      switch (feature) {
+        case 'feature_A':
+          add('Base', 10); add('Score (×0.01)', (+s.score || 0) / 100);
+          add('Combo max (×2)', (+s.comboMax || 0) * 2); add('Kills (×0.5)', (+s.kills || 0) * 0.5);
+          if (s.noDamage) add('Bonus 0 damage', 50);
+          break;
+        case 'feature_B': add('Base', 15); add('Score', (+s.score||0)/80); add('Jackpots (×25)', (+s.jackpots||0)*25); break;
+        case 'feature_C': add('Score', (+s.score||0)/120); add('Meilleure chaîne (×3)', (+s.bestChain||0)*3); break;
+        case 'feature_D': add('Base', 20); add('Kills (×3)', (+s.kills||0)*3); add('Crits (×10)', (+s.crits||0)*10); if ((+s.accuracy||0) > 0.5) add('Bonus précision >50%', 50); break;
+        case 'feature_E': add('Base', 30); add('Nukes (×15)', (+s.totalNukes||0)*15); if ((+s.bestOverload||0) >= 149) add('Bonus overload 149+', 100); break;
+        case 'feature_F': add('Base', 15); add('Score', (+s.score||0)/80); add('Total crits (×5)', (+s.totalCrits||0)*5); if ((+s.bestCritStreak||0) >= 5) add('Bonus streak 5+', 75); break;
+      }
+      if (mult > 1 && raw > 0) { var bonus = Math.floor(raw * mult) - raw; if (bonus > 0) lines.push({ label: 'Bonus prestige (×' + mult.toFixed(2) + ')', amount: bonus }); }
+      return lines;
+    };
+    META.economy = economy;
+  })();
+
+  /* ── META Agent 5 : Achievements (CATALOG RÉÉCRIT pour aligner avec Agent 1 schema) ── */
+  (function(){
+    if(!window.LABO2_META) window.LABO2_META={};
+    const M = window.LABO2_META;
+    const ach = {};
+    // PATCH : catalog réécrit pour référencer les bons champs (bestCombo au lieu de maxCombo, totalGraines au lieu de totalSeeds, etc.)
+    ach.catalog = [
+      // Découverte (6) — reward 10
+      { id:'first_a_run', cat:'Découverte', name:'Premier sang', desc:'Jouer Feature A une fois', reward:10,
+        check:(s,e)=> ((s.perFeature && s.perFeature.A && s.perFeature.A.runs) || 0) >= 1 },
+      { id:'first_b_run', cat:'Découverte', name:'Tentation du tapis', desc:'Jouer Feature B une fois', reward:10,
+        check:(s,e)=> ((s.perFeature && s.perFeature.B && s.perFeature.B.runs) || 0) >= 1 },
+      { id:'first_100_seeds', cat:'Découverte', name:'Petit pécule', desc:'Accumuler 100 graines', reward:10,
+        check:(s,e)=> (s.totalGraines || 0) >= 100 },
+      { id:'first_item', cat:'Découverte', name:'Shopping thérapie', desc:"Acheter un premier item à l'atelier", reward:10,
+        check:(s,e)=> ((M.state && M.state.unlocks) || []).length >= 1 },
+      { id:'first_daily', cat:'Découverte', name:'Graine du jour', desc:'Compléter un daily seed', reward:10,
+        check:(s,e)=> Object.keys(((M.state && M.state.dailySeed && M.state.dailySeed.runs) || {})).length >= 1 },
+      { id:'first_combo_10', cat:'Découverte', name:'Dans le rythme', desc:'Atteindre un combo de 10', reward:10,
+        check:(s,e)=> ((s.perFeature && s.perFeature.A && s.perFeature.A.bestCombo) || 0) >= 10 },
+      // Maîtrise (10) — reward 25
+      { id:'combo_50_a', cat:'Maîtrise', name:'Orchestrateur', desc:'Combo 50 dans Feature A', reward:25,
+        check:(s,e)=> ((s.perFeature && s.perFeature.A && s.perFeature.A.bestCombo) || 0) >= 50 },
+      { id:'a_no_damage', cat:'Maîtrise', name:'Intouchable', desc:'Finir un run A sans prendre de damage', reward:25,
+        check:(s,e)=> e && e.name === 'run_end' && e.payload && e.payload.feature === 'A' && e.payload.noDamage === true },
+      { id:'b_jackpot', cat:'Maîtrise', name:"Cloche d'or", desc:'Déclencher un jackpot B', reward:25,
+        check:(s,e)=> ((s.perFeature && s.perFeature.B && s.perFeature.B.jackpots) || 0) >= 1 },
+      { id:'c_chain_10', cat:'Maîtrise', name:'Chaîne bien huilée', desc:'Chain 10+ dans C', reward:25,
+        check:(s,e)=> ((s.perFeature && s.perFeature.C && s.perFeature.C.bestChain) || 0) >= 10 },
+      { id:'d_5_crits_run', cat:'Maîtrise', name:'Œil de lynx', desc:'5 crits dans un run D', reward:25,
+        check:(s,e)=> e && e.name === 'run_end' && e.payload && e.payload.feature === 'D' && (e.payload.crits || 0) >= 5 },
+      { id:'e_perfect_overload', cat:'Maîtrise', name:'Surcharge parfaite', desc:'Overload 149%+', reward:25,
+        check:(s,e)=> ((s.perFeature && s.perFeature.E && s.perFeature.E.bestOverload) || 0) >= 149 },
+      { id:'f_3_crit_streak', cat:'Maîtrise', name:'Triple critique', desc:"Crit streak 3+ dans F", reward:25,
+        check:(s,e)=> ((s.perFeature && s.perFeature.F && s.perFeature.F.bestCritStreak) || 0) >= 3 },
+      { id:'kills_1000', cat:'Maîtrise', name:'Millier', desc:'1000 kills cumulés all features', reward:25,
+        check:(s,e)=> (s.totalKills || 0) >= 1000 },
+      { id:'runs_10', cat:'Maîtrise', name:'Habitué', desc:'10 runs totales', reward:25,
+        check:(s,e)=> (s.totalRuns || 0) >= 10 },
+      { id:'seeds_1000', cat:'Maîtrise', name:'Bourse garnie', desc:'1000 graines cumulées', reward:25,
+        check:(s,e)=> (s.totalGraines || 0) >= 1000 },
+      // Expert (10) — reward 75
+      { id:'combo_100_a', cat:'Expert', name:'Virtuose', desc:'Combo 100 dans Feature A', reward:75,
+        check:(s,e)=> ((s.perFeature && s.perFeature.A && s.perFeature.A.bestCombo) || 0) >= 100 },
+      { id:'a_big_score', cat:'Expert', name:'Botaniste', desc:'Score 5000+ dans A', reward:75,
+        check:(s,e)=> ((s.perFeature && s.perFeature.A && s.perFeature.A.bestScore) || 0) >= 5000 },
+      { id:'b_10_jackpots', cat:'Expert', name:"Marée d'or", desc:'10 jackpots cumulés dans B', reward:75,
+        check:(s,e)=> ((s.perFeature && s.perFeature.B && s.perFeature.B.jackpots) || 0) >= 10 },
+      { id:'c_chain_20', cat:'Expert', name:'Réaction nucléaire', desc:'Chain 20+ dans C', reward:75,
+        check:(s,e)=> ((s.perFeature && s.perFeature.C && s.perFeature.C.bestChain) || 0) >= 20 },
+      { id:'d_accuracy_80', cat:'Expert', name:"Tireur d'élite", desc:'Accuracy 80%+ dans D', reward:75,
+        check:(s,e)=> ((s.perFeature && s.perFeature.D && s.perFeature.D.bestAccuracy) || 0) >= 0.8 },
+      { id:'e_5_nukes_run', cat:'Expert', name:'Pyromane', desc:'5 nukes dans 1 run E', reward:75,
+        check:(s,e)=> e && e.name === 'run_end' && e.payload && e.payload.feature === 'E' && (e.payload.nukes || 0) >= 5 },
+      { id:'f_10_crits_run', cat:'Expert', name:'Pluie de critiques', desc:'10 crits dans 1 run F', reward:75,
+        check:(s,e)=> e && e.name === 'run_end' && e.payload && e.payload.feature === 'F' && (e.payload.crits || 0) >= 10 },
+      { id:'total_crits_50', cat:'Expert', name:'Critique chronique', desc:'50 crits totaux (D+F)', reward:75,
+        check:(s,e)=> (((s.perFeature && s.perFeature.D && s.perFeature.D.totalCrits) || 0) + ((s.perFeature && s.perFeature.F && s.perFeature.F.totalCrits) || 0)) >= 50 },
+      { id:'runs_50', cat:'Expert', name:'Vétéran', desc:'50 runs totales', reward:75,
+        check:(s,e)=> (s.totalRuns || 0) >= 50 },
+      { id:'kills_5000', cat:'Expert', name:'Moissonneur', desc:'5000 kills cumulés', reward:75,
+        check:(s,e)=> (s.totalKills || 0) >= 5000 },
+      // Légendaire (4) — reward 200
+      { id:'prestige_1', cat:'Légendaire', name:'Renaissance', desc:'Prestige 1 atteint', reward:200,
+        check:(s,e)=> ((M.state && M.state.prestige) || 0) >= 1 },
+      { id:'prestige_3', cat:'Légendaire', name:'Transcendance', desc:'Prestige 3 atteint', reward:200,
+        check:(s,e)=> ((M.state && M.state.prestige) || 0) >= 3 },
+      { id:'all_items', cat:'Légendaire', name:'Collectionneur absolu', desc:"Débloquer tous les items non-prestige", reward:200,
+        check:(s,e)=> {
+          var cat = (M.atelier && M.atelier.catalog) || [];
+          var nonP = cat.filter(function(it){ return it.cat !== 'prestige'; });
+          var unl = (M.state && M.state.unlocks) || [];
+          return nonP.length > 0 && nonP.every(function(it){ return unl.indexOf(it.id) !== -1; });
+        }},
+      { id:'seeds_10000', cat:'Légendaire', name:'Fortune amassée', desc:'10 000 graines cumulées', reward:200,
+        check:(s,e)=> (s.totalGraines || 0) >= 10000 }
+    ];
+    const TOTAL = ach.catalog.length;
+    const byId = Object.create(null);
+    ach.catalog.forEach(a => byId[a.id] = a);
+
+    function getState(){ const s = M.state || {}; if (!Array.isArray(s.achievements)) s.achievements = []; if (!s.stats) s.stats = {}; return s; }
+
+    ach.isUnlocked = function(id){ const s = getState(); return s.achievements.indexOf(id) !== -1; };
+    ach.unlock = function(id){
+      const s = getState(), item = byId[id];
+      if (!item) return false;
+      if (s.achievements.indexOf(id) !== -1) return false;
+      s.achievements.push(id);
+      try { if (M.economy && M.economy.earn) M.economy.earn(item.reward, 'achievement', { id: id }); } catch(e){}
+      try { if (M.notifications && M.notifications.push) M.notifications.push('achievement', '🏅 ' + item.name); } catch(e){}
+      try { if (M.persist && M.persist.save) M.persist.save(); } catch(e){}
+      return true;
+    };
+    ach.check = function(eventName, payload){
+      const s = getState(), stats = s.stats || {};
+      const evt = { name: eventName || 'tick', payload: payload || {} };
+      const unlocked = [];
+      for (let i = 0; i < ach.catalog.length; i++) {
+        const it = ach.catalog[i];
+        if (s.achievements.indexOf(it.id) !== -1) continue;
+        let ok = false;
+        try { ok = !!it.check(stats, evt); } catch(e){ ok = false; }
+        if (ok && ach.unlock(it.id)) unlocked.push(it.id);
+      }
+      return unlocked;
+    };
+    ach.getProgress = function(){
+      const s = getState(), owned = s.achievements || [];
+      const byCategory = {};
+      ach.catalog.forEach(a => { if (!byCategory[a.cat]) byCategory[a.cat] = { unlocked: 0, total: 0 }; byCategory[a.cat].total++; if (owned.indexOf(a.id) !== -1) byCategory[a.cat].unlocked++; });
+      return { unlocked: owned.length, total: TOTAL, byCategory: byCategory };
+    };
+    ach.css = `
+    .l2m-ach-modal{position:fixed;inset:0;background:rgba(5,8,14,.82);z-index:99980;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;}
+    .l2m-ach-panel{background:linear-gradient(145deg,#141a26,#0d1118);border:1px solid #2a3246;border-radius:14px;width:min(780px,94vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+    .l2m-ach-head{padding:18px 22px;border-bottom:1px solid #242b3c;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+    .l2m-ach-title{font-size:20px;font-weight:700;color:#f5d76e;letter-spacing:.5px;flex:1;}
+    .l2m-ach-close{background:#1d2433;border:1px solid #2d3548;color:#bfc6d6;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px;}
+    .l2m-ach-close:hover{background:#26304a;color:#fff;}
+    .l2m-ach-progwrap{width:100%;margin-top:10px;}
+    .l2m-ach-progtxt{font-size:13px;color:#a8b0c4;margin-bottom:6px;display:flex;justify-content:space-between;}
+    .l2m-ach-progbar{height:8px;background:#1a2030;border-radius:4px;overflow:hidden;}
+    .l2m-ach-progfill{height:100%;background:linear-gradient(90deg,#f5d76e,#d4a017);transition:width .4s;}
+    .l2m-ach-tabs{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid #242b3c;flex-wrap:wrap;align-items:center;}
+    .l2m-ach-tab{background:#1a2030;border:1px solid #2a3246;color:#bfc6d6;border-radius:20px;padding:5px 14px;font-size:12px;cursor:pointer;}
+    .l2m-ach-tab.active{background:#f5d76e;color:#1a1a1a;border-color:#f5d76e;font-weight:600;}
+    .l2m-ach-sort{margin-left:auto;background:#1a2030;border:1px solid #2a3246;color:#bfc6d6;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;}
+    .l2m-ach-list{padding:14px 18px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;flex:1;}
+    .l2m-ach-card{background:#141a26;border:1px solid #242b3c;border-radius:10px;padding:12px;}
+    .l2m-ach-card.owned{background:linear-gradient(145deg,#2a2110,#1e1908);border-color:#f5d76e;box-shadow:0 0 12px rgba(245,215,110,.15);}
+    .l2m-ach-card.locked{opacity:.72;filter:grayscale(.4);}
+    .l2m-ach-card-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+    .l2m-ach-icon{font-size:20px;}
+    .l2m-ach-name{font-weight:600;font-size:14px;color:#e6ecf8;flex:1;}
+    .l2m-ach-card.owned .l2m-ach-name{color:#f5d76e;}
+    .l2m-ach-desc{font-size:12px;color:#8a93a8;line-height:1.4;margin-bottom:6px;}
+    .l2m-ach-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;}
+    .l2m-ach-cat{color:#6b7489;text-transform:uppercase;letter-spacing:.4px;}
+    .l2m-ach-reward{color:#8fce7c;font-weight:600;}
+    .l2m-ach-card.owned .l2m-ach-reward{color:#f5d76e;}
+    `;
+    ach.buildModal = function(onClose){
+      if (!document.getElementById('l2m-ach-style')) {
+        const st = document.createElement('style'); st.id = 'l2m-ach-style'; st.textContent = ach.css; document.head.appendChild(st);
+      }
+      const overlay = document.createElement('div'); overlay.className = 'l2m-ach-modal';
+      const panel = document.createElement('div'); panel.className = 'l2m-ach-panel';
+      const cats = ['Tous','Découverte','Maîtrise','Expert','Légendaire'];
+      let currentCat = 'Tous'; let ownedFirst = true;
+      const head = document.createElement('div'); head.className = 'l2m-ach-head';
+      const title = document.createElement('div'); title.className = 'l2m-ach-title'; title.textContent = '🏅 SUCCÈS';
+      const close = document.createElement('button'); close.className = 'l2m-ach-close'; close.textContent = '✕ Fermer';
+      const progwrap = document.createElement('div'); progwrap.className = 'l2m-ach-progwrap';
+      const progtxt = document.createElement('div'); progtxt.className = 'l2m-ach-progtxt';
+      const progbar = document.createElement('div'); progbar.className = 'l2m-ach-progbar';
+      const progfill = document.createElement('div'); progfill.className = 'l2m-ach-progfill';
+      progbar.appendChild(progfill); progwrap.appendChild(progtxt); progwrap.appendChild(progbar);
+      head.appendChild(title); head.appendChild(close); head.appendChild(progwrap);
+      const tabs = document.createElement('div'); tabs.className = 'l2m-ach-tabs';
+      const tabEls = {};
+      cats.forEach(c => { const b = document.createElement('button'); b.className = 'l2m-ach-tab' + (c === currentCat ? ' active' : ''); b.textContent = c;
+        b.onclick = () => { currentCat = c; Object.keys(tabEls).forEach(k => tabEls[k].classList.toggle('active', k === c)); render(); };
+        tabEls[c] = b; tabs.appendChild(b);
+      });
+      const sortBtn = document.createElement('button'); sortBtn.className = 'l2m-ach-sort'; sortBtn.textContent = "Débloqués d'abord";
+      sortBtn.onclick = () => { ownedFirst = !ownedFirst; sortBtn.textContent = ownedFirst ? "Débloqués d'abord" : "Verrouillés d'abord"; render(); };
+      tabs.appendChild(sortBtn);
+      const list = document.createElement('div'); list.className = 'l2m-ach-list';
+      function render(){
+        const p = ach.getProgress();
+        progtxt.innerHTML = '<span>Progression</span><span>' + p.unlocked + ' / ' + p.total + '</span>';
+        progfill.style.width = (p.unlocked / p.total * 100).toFixed(1) + '%';
+        list.innerHTML = '';
+        const s = getState();
+        let items = ach.catalog.filter(a => currentCat === 'Tous' || a.cat === currentCat);
+        items.sort((a,b) => { const oa = s.achievements.indexOf(a.id) !== -1, ob = s.achievements.indexOf(b.id) !== -1;
+          if (oa !== ob) return ownedFirst ? (oa ? -1 : 1) : (oa ? 1 : -1); return 0; });
+        items.forEach(it => {
+          const owned = s.achievements.indexOf(it.id) !== -1;
+          const c = document.createElement('div'); c.className = 'l2m-ach-card ' + (owned ? 'owned' : 'locked');
+          c.innerHTML = '<div class="l2m-ach-card-top"><div class="l2m-ach-icon">' + (owned ? '🏅' : '🔒') + '</div><div class="l2m-ach-name">' + it.name + '</div></div>' +
+            '<div class="l2m-ach-desc">' + it.desc + '</div>' +
+            '<div class="l2m-ach-foot"><span class="l2m-ach-cat">' + it.cat + '</span><span class="l2m-ach-reward">+' + it.reward + ' 🌰</span></div>';
+          list.appendChild(c);
+        });
+      }
+      function doClose(){ if (overlay.parentNode) overlay.parentNode.removeChild(overlay); if (typeof onClose === 'function') onClose(); }
+      close.onclick = doClose;
+      overlay.addEventListener('click', e => { if (e.target === overlay) doClose(); });
+      panel.appendChild(head); panel.appendChild(tabs); panel.appendChild(list);
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+      render();
+      overlay.close = doClose;
+      return overlay;
+    };
+    M.achievements = ach;
+  })();
+
+  /* ── META Agent 4 : Daily Seed (FEATURES étendu à A-F) ─────── */
+  (function(){
+    if (typeof window === 'undefined') return;
+    window.LABO2_META = window.LABO2_META || {};
+    const META = window.LABO2_META;
+    META.state = META.state || {};
+    META.state.dailySeed = META.state.dailySeed || { id: null, runs: {} };
+    const HISTORY_KEY = 'dev_labo2_meta_daily_history';
+    const HISTORY_CAP = 30;
+    // PATCH : features étendu à A-F (agent original n'en avait que 4)
+    const FEATURES = [
+      { id:'A', icon:'🔪', name:'Boucherie 60s' },
+      { id:'B', icon:'🎰', name:'Roulette Végétale' },
+      { id:'C', icon:'⚡', name:'Chain Reaction' },
+      { id:'D', icon:'🎯', name:'Sniper Mode' },
+      { id:'E', icon:'🌋', name:'Overload Tower' },
+      { id:'F', icon:'🎲', name:'Dice Roll TD' }
+    ];
+    function fnv1a(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=(h+((h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24)))>>>0; } return h>>>0; }
+    function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h+str.charCodeAt(i))|0; } return h>>>0; }
+    function mulberry32(seed){ let a=seed>>>0; return function(){ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+    function getTodayId(){ const d=new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; }
+    function getSeedForDate(dateId){ return fnv1a(String(dateId)); }
+    function loadHistory(){ try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}') || {}; } catch(e){ return {}; } }
+    function saveHistory(h){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch(e){} }
+    function pushHistory(featureId, date, score){
+      const h = loadHistory();
+      h[featureId] = h[featureId] || [];
+      const existing = h[featureId].find(e => e.date === date);
+      if (existing) { if (score > existing.score) existing.score = score; }
+      else h[featureId].push({ date, score });
+      h[featureId].sort((a,b) => b.score - a.score);
+      h[featureId] = h[featureId].slice(0, HISTORY_CAP);
+      saveHistory(h);
+    }
+    function ensureToday(){ const today = getTodayId(); if (META.state.dailySeed.id !== today) META.state.dailySeed = { id: today, runs: {} }; return today; }
+    function getSeededRng(featureId){ const seed = (getSeedForDate(getTodayId()) ^ hashCode(String(featureId))) >>> 0; return mulberry32(seed); }
+    function startDailyRun(featureId){ ensureToday(); daily.isActive = true; daily.currentFeatureId = featureId; return { seed: getSeedForDate(getTodayId()), rng: getSeededRng(featureId) }; }
+    function endDailyRun(){ daily.isActive = false; daily.currentFeatureId = null; }
+    function submitRun(featureId, score, payload){
+      const today = ensureToday();
+      const prev = (META.state.dailySeed.runs[featureId] && META.state.dailySeed.runs[featureId].score) || 0;
+      const isNewDailyBest = score > prev;
+      if (isNewDailyBest) META.state.dailySeed.runs[featureId] = { score, ts: Date.now(), payload: payload || null };
+      pushHistory(featureId, today, score);
+      try { META.persist && META.persist.save && META.persist.save(); } catch(e){}
+      if (isNewDailyBest) { try { META.notifications && META.notifications.push && META.notifications.push('success', `🎯 Nouveau top du jour : ${score}`); } catch(e){} }
+      return { isNewDailyBest, previousBest: prev };
+    }
+    function getLeaderboard(featureId){ const h = loadHistory(); return (h[featureId] || []).slice().sort((a,b)=>b.score-a.score).slice(0,5); }
+    const css = `
+    .l2m-daily-backdrop{position:fixed;inset:0;background:rgba(8,10,14,.78);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:99985;font-family:system-ui,sans-serif;}
+    .l2m-daily-modal{background:linear-gradient(160deg,#1a1d24,#0f1116);border:1px solid #2c3038;border-radius:14px;padding:22px 26px;min-width:460px;max-width:92vw;max-height:88vh;overflow-y:auto;color:#e6e8ec;}
+    .l2m-daily-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #252932;padding-bottom:12px;}
+    .l2m-daily-title{font-size:20px;font-weight:700;margin:0;}
+    .l2m-daily-date{font-size:13px;color:#8a919c;margin-top:4px;}
+    .l2m-daily-close{background:none;border:none;color:#8a919c;font-size:22px;cursor:pointer;}
+    .l2m-daily-feature{background:#14171d;border:1px solid #23272f;border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+    .l2m-daily-feature-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+    .l2m-daily-feature-icon{font-size:22px;}
+    .l2m-daily-feature-name{font-weight:600;flex:1;}
+    .l2m-daily-feature-top{font-size:12px;color:#7eb8ff;}
+    .l2m-daily-lb{font-size:12px;color:#b2b7c0;margin:6px 0;}
+    .l2m-daily-lb-row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dotted #23272f;}
+    .l2m-daily-lb-empty{color:#5a5f6a;font-style:italic;}
+    .l2m-daily-launch{background:linear-gradient(90deg,#3b82f6,#6366f1);border:none;color:#fff;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px;margin-top:6px;}
+    .l2m-daily-launch:disabled{opacity:0.4;cursor:not-allowed;}
+    .l2m-daily-seed-info{font-size:11px;color:#5a5f6a;text-align:center;margin-top:10px;font-family:monospace;}
+    `;
+    function buildModal(onClose){
+      if (!document.getElementById('l2m-daily-style')) {
+        const st = document.createElement('style'); st.id = 'l2m-daily-style'; st.textContent = css; document.head.appendChild(st);
+      }
+      const today = ensureToday(); const seed = getSeedForDate(today);
+      const bd = document.createElement('div'); bd.className = 'l2m-daily-backdrop';
+      const modal = document.createElement('div'); modal.className = 'l2m-daily-modal';
+      const header = document.createElement('div'); header.className = 'l2m-daily-header';
+      header.innerHTML = '<div><h2 class="l2m-daily-title">🎯 Seed du Jour</h2><div class="l2m-daily-date">' + today + ' — Même seed pour tous aujourd\'hui</div></div>';
+      const closeBtn = document.createElement('button'); closeBtn.className = 'l2m-daily-close'; closeBtn.textContent = '×';
+      closeBtn.addEventListener('click', () => close());
+      header.appendChild(closeBtn);
+      modal.appendChild(header);
+      FEATURES.forEach(f => {
+        const top = (META.state.dailySeed.runs[f.id] && META.state.dailySeed.runs[f.id].score) || 0;
+        const lb = getLeaderboard(f.id);
+        const card = document.createElement('div'); card.className = 'l2m-daily-feature';
+        const head = document.createElement('div'); head.className = 'l2m-daily-feature-head';
+        head.innerHTML = '<span class="l2m-daily-feature-icon">' + f.icon + '</span><span class="l2m-daily-feature-name">' + f.name + '</span><span class="l2m-daily-feature-top">Top du jour : ' + top + '</span>';
+        card.appendChild(head);
+        const lbDiv = document.createElement('div'); lbDiv.className = 'l2m-daily-lb';
+        if (lb.length === 0) lbDiv.innerHTML = '<div class="l2m-daily-lb-empty">Aucun score encore</div>';
+        else lbDiv.innerHTML = '<strong>Ton top 5 (30j) :</strong>' + lb.map((e,i) => '<div class="l2m-daily-lb-row"><span>#' + (i+1) + ' · ' + e.date + '</span><span>' + e.score + '</span></div>').join('');
+        card.appendChild(lbDiv);
+        const launch = document.createElement('button'); launch.className = 'l2m-daily-launch';
+        if (f.id === 'A') {
+          launch.textContent = '▶ LANCER';
+          launch.addEventListener('click', () => {
+            startDailyRun(f.id); close();
+            if (META.hub && typeof META.hub.close === 'function') META.hub.close();
+            setTimeout(() => { if (window.LABO2_A && LABO2_A.openModal) LABO2_A.openModal(); }, 100);
+          });
+        } else {
+          launch.textContent = '⏳ BIENTÔT'; launch.disabled = true;
+        }
+        card.appendChild(launch);
+        modal.appendChild(card);
+      });
+      const seedInfo = document.createElement('div'); seedInfo.className = 'l2m-daily-seed-info';
+      seedInfo.textContent = 'seed: 0x' + seed.toString(16);
+      modal.appendChild(seedInfo);
+      bd.appendChild(modal);
+      bd.addEventListener('click', e => { if (e.target === bd) close(); });
+      function close(){ if (bd.parentNode) bd.parentNode.removeChild(bd); if (typeof onClose === 'function') onClose(); }
+      document.body.appendChild(bd);
+      bd.close = close;
+      return bd;
+    }
+    let _lastId = getTodayId();
+    setInterval(() => { const cur = getTodayId(); if (cur !== _lastId) { _lastId = cur; ensureToday(); } }, 30000);
+    const daily = { getTodayId, getSeedForDate, isActive: false, currentFeatureId: null, getSeededRng, startDailyRun, endDailyRun, submitRun, getLeaderboard, css, buildModal, _features: FEATURES };
+    META.daily = daily;
+  })();
+
+  /* ── META Agent 6 : Prestige (PATCHED : array achievements) ── */
+  (function(){
+    const M = window.LABO2_META = window.LABO2_META || {};
+    const state = M.state = M.state || {};
+    if (typeof state.prestige !== 'number') state.prestige = 0;
+    if (typeof state.prestigeMultiplier !== 'number') state.prestigeMultiplier = 1.0;
+    if (typeof state.graines !== 'number') state.graines = 0;
+    state.unlocks = state.unlocks || [];
+    if (!Array.isArray(state.achievements)) state.achievements = [];
+    state.dailySeed = state.dailySeed || { runs: {} };
+    const prestige = {};
+    prestige.level = function(){ return state.prestige | 0; };
+    prestige.multiplier = function(){ return state.prestigeMultiplier; };
+    function countOwnedItems(){ return (state.unlocks || []).filter(id => id && id !== 'prestige_reset').length; }
+    // PATCH : achievements est un Array d'IDs, on lookup via catalog pour trouver les Expert
+    function countExpertAchievements(){
+      const arr = state.achievements || [];
+      if (!Array.isArray(arr)) return 0;
+      const cat = (M.achievements && M.achievements.catalog) || [];
+      return arr.filter(id => { const item = cat.find(c => c.id === id); return item && item.cat === 'Expert'; }).length;
+    }
+    prestige.canPrestige = function(){ return countOwnedItems() >= 10 || countExpertAchievements() >= 10; };
+    prestige.preview = function(){
+      const cur = state.prestige | 0, nextLevel = cur + 1;
+      return { currentLevel: cur, currentMultiplier: state.prestigeMultiplier, nextLevel, nextMultiplier: 1.0 + nextLevel * 0.05,
+        requirementsStatus: { itemsOwned: countOwnedItems(), itemsRequired: 10, itemsOK: countOwnedItems() >= 10, expertAchievements: countExpertAchievements(), expertRequired: 10, expertOK: countExpertAchievements() >= 10, canPrestige: prestige.canPrestige() }
+      };
+    };
+    prestige.doPrestige = function(){
+      if (!prestige.canPrestige()) return { success: false };
+      state.prestige = (state.prestige | 0) + 1;
+      state.prestigeMultiplier = 1.0 + state.prestige * 0.05;
+      state.graines = 0;
+      state.unlocks = (state.unlocks || []).filter(id => typeof id === 'string' && id.indexOf('buff_') === 0);
+      if (state.dailySeed) state.dailySeed.runs = {};
+      try { M.notifications && M.notifications.push && M.notifications.push('prestige', '🌟 PRESTIGE ' + state.prestige + ' · ×' + state.prestigeMultiplier.toFixed(2)); } catch(e){}
+      try { M.persist && M.persist.save && M.persist.save(); } catch(e){}
+      try { M.achievements && M.achievements.check && M.achievements.check('prestige', { level: state.prestige }); } catch(e){}
+      return { success: true, newLevel: state.prestige, newMultiplier: state.prestigeMultiplier };
+    };
+    prestige.css = `
+    @keyframes l2m-prestige-gold { 0%,100%{filter:brightness(1) drop-shadow(0 0 0 #ffd700)} 50%{filter:brightness(1.4) drop-shadow(0 0 24px #ffd700)} }
+    @keyframes l2m-prestige-float { 0%{transform:translateY(0) rotate(0)} 100%{transform:translateY(-100vh) rotate(360deg)} }
+    @keyframes l2m-prestige-pop { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.1);opacity:1} 100%{transform:scale(1);opacity:1} }
+    .l2m-prestige-backdrop{position:fixed;inset:0;background:rgba(8,6,2,.85);backdrop-filter:blur(6px);z-index:99988;display:flex;align-items:center;justify-content:center}
+    .l2m-prestige-modal{background:linear-gradient(160deg,#1a140a,#0c0903);border:2px solid #ffd700;border-radius:14px;padding:28px;max-width:520px;width:92%;color:#fff6d8;box-shadow:0 0 60px rgba(255,215,0,.4);animation:l2m-prestige-pop .4s ease}
+    .l2m-prestige-title{font-family:'Rubik Mono One',monospace;font-size:42px;text-align:center;color:#ffd700;animation:l2m-prestige-gold 2s infinite;margin:0 0 12px}
+    .l2m-prestige-sub{text-align:center;opacity:.85;margin-bottom:14px;font-size:14px}
+    .l2m-prestige-preview{background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.3);border-radius:8px;padding:12px;text-align:center;margin:14px 0;font-size:16px;font-weight:700}
+    .l2m-prestige-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+    .l2m-prestige-col{background:rgba(0,0,0,.3);border-radius:8px;padding:10px;font-size:12px}
+    .l2m-prestige-reset h4{color:#ff6b6b;margin:0 0 6px}
+    .l2m-prestige-keep h4{color:#7fffa0;margin:0 0 6px}
+    .l2m-prestige-actions{display:flex;gap:10px;margin-top:16px}
+    .l2m-prestige-btn{flex:1;padding:12px;border-radius:8px;border:none;font-weight:700;cursor:pointer;font-size:14px}
+    .l2m-prestige-btn-confirm{background:linear-gradient(90deg,#c02828,#ff5c00);color:#fff}
+    .l2m-prestige-btn-confirm:disabled{opacity:.5;cursor:not-allowed}
+    .l2m-prestige-btn-cancel{background:#333;color:#ccc}
+    .l2m-prestige-ceremony{position:fixed;inset:0;z-index:100000;background:radial-gradient(circle,rgba(255,215,0,.35),rgba(0,0,0,.95));display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .l2m-prestige-ceremony-text{font-family:'Rubik Mono One',monospace;font-size:64px;color:#ffd700;text-shadow:0 0 40px #ffd700;animation:l2m-prestige-gold 1.2s infinite}
+    .l2m-prestige-particle{position:absolute;bottom:-20px;width:8px;height:8px;background:#ffd700;border-radius:50%;animation:l2m-prestige-float linear forwards;box-shadow:0 0 8px #ffd700}
+    `;
+    if (!document.getElementById('l2m-prestige-style')) { const s = document.createElement('style'); s.id = 'l2m-prestige-style'; s.textContent = prestige.css; document.head.appendChild(s); }
+    prestige.buildModal = function(onClose){
+      const p = prestige.preview();
+      const bd = document.createElement('div'); bd.className = 'l2m-prestige-backdrop';
+      const modal = document.createElement('div'); modal.className = 'l2m-prestige-modal';
+      const canGo = p.requirementsStatus.canPrestige;
+      modal.innerHTML = '<h1 class="l2m-prestige-title">🌟 PRESTIGE</h1>' +
+        '<div class="l2m-prestige-sub">Reset ton progrès contre <b>+5% permanent à TOUT</b>.</div>' +
+        '<div class="l2m-prestige-preview">Level ' + p.currentLevel + ' → ' + p.nextLevel + ' · ×' + p.currentMultiplier.toFixed(2) + ' → ×' + p.nextMultiplier.toFixed(2) + '</div>' +
+        '<div class="l2m-prestige-cols"><div class="l2m-prestige-col l2m-prestige-reset"><h4>❌ Reset</h4>· graines<br>· items (hors buffs)<br>· daily records</div>' +
+        '<div class="l2m-prestige-col l2m-prestige-keep"><h4>✅ Gardé</h4>· achievements<br>· records personnels<br>· buffs permanents</div></div>' +
+        '<div class="l2m-prestige-sub" style="font-size:12px">Items: ' + p.requirementsStatus.itemsOwned + '/10 ' + (p.requirementsStatus.itemsOK ? '✓' : '') + ' · Expert: ' + p.requirementsStatus.expertAchievements + '/10 ' + (p.requirementsStatus.expertOK ? '✓' : '') + '</div>' +
+        '<div class="l2m-prestige-actions">' +
+          '<button class="l2m-prestige-btn l2m-prestige-btn-cancel" data-act="cancel">Annuler</button>' +
+          '<button class="l2m-prestige-btn l2m-prestige-btn-confirm" data-act="confirm"' + (canGo ? '' : ' disabled') + '>🔥 CONFIRMER</button>' +
+        '</div>';
+      let confirmStep = 0;
+      const close = (result) => { if (bd.parentNode) bd.parentNode.removeChild(bd); if (onClose) onClose(result); };
+      modal.addEventListener('click', e => {
+        const act = e.target && e.target.getAttribute && e.target.getAttribute('data-act');
+        if (!act) return;
+        if (act === 'cancel') return close({ action: 'cancel' });
+        if (act === 'confirm') {
+          confirmStep++;
+          if (confirmStep < 2) { e.target.textContent = '⚠️ RE-CLIC POUR VALIDER'; return; }
+          const res = prestige.doPrestige();
+          close({ action: 'confirm', result: res });
+          if (res.success) prestige.runCeremony();
+        }
+      });
+      bd.appendChild(modal);
+      bd.addEventListener('click', e => { if (e.target === bd) close({ action: 'dismiss' }); });
+      document.body.appendChild(bd);
+      return bd;
+    };
+    prestige.runCeremony = function(onComplete){
+      const ov = document.createElement('div'); ov.className = 'l2m-prestige-ceremony';
+      const txt = document.createElement('div'); txt.className = 'l2m-prestige-ceremony-text';
+      txt.textContent = 'PRESTIGE ' + state.prestige + ' ATTEINT';
+      ov.appendChild(txt);
+      for (let i = 0; i < 60; i++) {
+        const part = document.createElement('div'); part.className = 'l2m-prestige-particle';
+        part.style.left = (Math.random() * 100) + '%';
+        part.style.animationDuration = (2 + Math.random() * 2) + 's';
+        part.style.animationDelay = (Math.random() * 1) + 's';
+        part.style.width = part.style.height = (4 + Math.random() * 8) + 'px';
+        ov.appendChild(part);
+      }
+      document.body.appendChild(ov);
+      setTimeout(() => { if (ov.parentNode) ov.parentNode.removeChild(ov); if (onComplete) onComplete(); }, 3000);
+    };
+    M.prestige = prestige;
+  })();
+
+  /* ── META Agent 3 : Atelier (PATCHED : !spent.success check) ── */
+  (function(){
+    const M = window.LABO2_META = window.LABO2_META || {};
+    const state = M.state = M.state || { unlocks: [], graines: 0 };
+    state.unlocks = state.unlocks || [];
+    const economy = M.economy || { spend: () => ({success:false}), canAfford: () => false };
+    const notifications = M.notifications || { push: () => {} };
+    const atelier = {};
+    atelier.catalog = [
+      { id:'plant_cactus',   cat:'plant',    name:'🌵 Cactus Pierce',  desc:'Projectiles traversent +1 ennemi',         cost:50,  featureScope:'all' },
+      { id:'plant_rose',     cat:'plant',    name:'🌹 Rose Crit',      desc:'+20% chance de crit partout',              cost:100, featureScope:'all' },
+      { id:'plant_mush',     cat:'plant',    name:'🍄 Mush Venom',     desc:'Damage-over-time 3s sur les ennemis',      cost:150, featureScope:'all' },
+      { id:'plant_wheat',    cat:'plant',    name:'🌾 Blé Rapide',     desc:'Cadence de tir ×2',                        cost:200, featureScope:'all' },
+      { id:'plant_pumpkin',  cat:'plant',    name:'🎃 Citrouille',     desc:'Explose à la mort, AoE',                   cost:500, featureScope:'all' },
+      { id:'mod_furie',      cat:'modifier', name:'🔥 Mod Furie',      desc:'+20% damage / -10% HP',                    cost:150, featureScope:'all' },
+      { id:'mod_glace',      cat:'modifier', name:'❄️ Mod Glace',       desc:'Ennemis -20% vitesse',                     cost:200, featureScope:'all' },
+      { id:'mod_eclair',     cat:'modifier', name:'⚡ Mod Éclair',      desc:'1% chance chain lightning / tir',          cost:300, featureScope:'all' },
+      { id:'buff_damage',    cat:'buff',     name:'💪 +5% Damage',     desc:'Toutes features, permanent',               cost:200, featureScope:'all' },
+      { id:'buff_hp',        cat:'buff',     name:'💚 +5 HP Start',    desc:'Plante commence avec +5 HP',               cost:200, featureScope:'all' },
+      { id:'buff_slot',      cat:'buff',     name:'➕ +1 Slot',        desc:'+1 reroll/ammo/charge selon feature',      cost:300, featureScope:'all' },
+      { id:'prestige_reset', cat:'prestige', name:'🌟 Prestige +1',    desc:'Reset mais +5% permanent', cost:0, featureScope:'all', requires:'10_items_owned' }
+    ];
+    atelier.getItem = id => atelier.catalog.find(it => it.id === id) || null;
+    atelier.isOwned = id => Array.isArray(state.unlocks) && state.unlocks.indexOf(id) !== -1;
+    function meetsRequires(item){
+      if (!item.requires) return true;
+      if (item.requires === '10_items_owned') {
+        const owned = (state.unlocks || []).filter(id => { const it = atelier.getItem(id); return it && it.cat !== 'prestige'; }).length;
+        return owned >= 10;
+      }
+      return true;
+    }
+    atelier.canPurchase = id => {
+      const item = atelier.getItem(id);
+      if (!item) return false;
+      if (atelier.isOwned(id)) return false;
+      if (!meetsRequires(item)) return false;
+      return M.economy && M.economy.canAfford ? M.economy.canAfford(item.cost) : (state.graines >= item.cost);
+    };
+    atelier.purchase = id => {
+      const item = atelier.getItem(id);
+      if (!item || !atelier.canPurchase(id)) return false;
+      if (id === 'prestige_reset') {
+        if (M.prestige && typeof M.prestige.doPrestige === 'function') { M.prestige.doPrestige(); return true; }
+        return false;
+      }
+      // PATCH : spend() retourne {success:true/false}, pas un boolean — on check .success
+      const spent = M.economy && M.economy.spend ? M.economy.spend(item.cost, id) : { success: false };
+      if (!spent || !spent.success) return false;
+      state.unlocks = state.unlocks || [];
+      state.unlocks.push(id);
+      if (M.notifications && M.notifications.push) M.notifications.push('unlock', '✓ ' + item.name + ' débloqué !');
+      if (M.persist && M.persist.save) M.persist.save();
+      if (M.achievements && M.achievements.check) M.achievements.check('item_purchased', { id: id });
+      return true;
+    };
+    atelier.css = `
+    .l2m-atelier-overlay{position:fixed;inset:0;z-index:99990;background:radial-gradient(ellipse at center,#2a1220 0%,#120815 70%);display:flex;flex-direction:column;font-family:'JetBrains Mono',monospace;color:#fff;opacity:0;transform:scale(0.92);transition:opacity 350ms cubic-bezier(0.34,1.56,0.64,1),transform 350ms cubic-bezier(0.34,1.56,0.64,1);overflow:hidden}
+    .l2m-atelier-overlay.l2m-atelier-open{opacity:1;transform:scale(1)}
+    .l2m-atelier-overlay.l2m-atelier-closing{opacity:0;transform:scale(0.95)}
+    .l2m-atelier-header{display:flex;align-items:center;justify-content:space-between;padding:22px 36px;background:linear-gradient(180deg,rgba(255,87,119,0.12),transparent);border-bottom:1px solid rgba(255,136,68,0.25)}
+    .l2m-atelier-title{font-family:'Rubik Mono One',sans-serif;font-size:28px;letter-spacing:3px;background:linear-gradient(135deg,#ff8844,#ff5577);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .l2m-atelier-graines{font-family:'JetBrains Mono',monospace;font-size:18px;color:#ffd23d;background:rgba(255,210,61,0.08);padding:10px 18px;border-radius:10px;border:1px solid rgba(255,210,61,0.3)}
+    .l2m-atelier-close{background:linear-gradient(135deg,#ff5577,#aa2244);border:none;color:#fff;font-family:'Rubik Mono One',sans-serif;font-size:13px;padding:10px 20px;border-radius:8px;cursor:pointer;letter-spacing:2px}
+    .l2m-atelier-body{flex:1;overflow-y:auto;padding:24px 36px 60px}
+    .l2m-atelier-section{margin-bottom:32px}
+    .l2m-atelier-section-title{font-family:'Rubik Mono One',sans-serif;font-size:15px;letter-spacing:2px;color:#ff8844;margin-bottom:14px;padding-bottom:6px;border-bottom:1px dashed rgba(255,136,68,0.3)}
+    .l2m-atelier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .l2m-atelier-card{position:relative;background:linear-gradient(135deg,rgba(255,136,68,0.15),rgba(255,85,119,0.15));border:1px solid rgba(255,136,68,0.3);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;transition:all 0.25s;min-height:180px}
+    .l2m-atelier-card.l2m-card-affordable{background:linear-gradient(135deg,rgba(255,136,68,0.35),rgba(255,85,119,0.35));border-color:#ff8844}
+    .l2m-atelier-card.l2m-card-owned{background:linear-gradient(135deg,rgba(255,210,61,0.25),rgba(255,170,30,0.18));border-color:#ffd23d}
+    .l2m-atelier-card.l2m-card-locked{opacity:0.55;filter:grayscale(0.5)}
+    .l2m-atelier-card-name{font-family:'Rubik Mono One',sans-serif;font-size:14px}
+    .l2m-atelier-card.l2m-card-owned .l2m-atelier-card-name{color:#ffd23d}
+    .l2m-atelier-card-desc{font-family:'JetBrains Mono',monospace;font-size:12px;color:#ddd;line-height:1.45;flex:1}
+    .l2m-atelier-card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}
+    .l2m-atelier-card-cost{font-family:'JetBrains Mono',monospace;font-size:13px;color:#ffd23d;font-weight:600}
+    .l2m-atelier-card-cost.l2m-cost-locked{color:#888}
+    .l2m-atelier-buy-btn{background:linear-gradient(135deg,#ff8844,#ff5577);border:none;color:#fff;font-family:'Rubik Mono One',sans-serif;font-size:11px;letter-spacing:1.5px;padding:8px 14px;border-radius:7px;cursor:pointer}
+    .l2m-atelier-owned-badge{font-family:'Rubik Mono One',sans-serif;font-size:11px;color:#ffd23d;padding:6px 10px;border:1px solid rgba(255,210,61,0.5);border-radius:7px;background:rgba(255,210,61,0.12)}
+    `;
+    function injectCSS(){ if (document.getElementById('l2m-atelier-css')) return; const s = document.createElement('style'); s.id = 'l2m-atelier-css'; s.textContent = atelier.css; document.head.appendChild(s); }
+    let currentModal = null;
+    atelier.buildModal = function(onClose){
+      injectCSS();
+      if (currentModal) atelier.closeModal();
+      const overlay = document.createElement('div'); overlay.className = 'l2m-atelier-overlay';
+      const header = document.createElement('div'); header.className = 'l2m-atelier-header';
+      const title = document.createElement('div'); title.className = 'l2m-atelier-title'; title.textContent = '🏪 ATELIER';
+      const right = document.createElement('div'); right.style.cssText = 'display:flex;gap:14px;align-items:center';
+      const graines = document.createElement('div'); graines.className = 'l2m-atelier-graines';
+      const closeBtn = document.createElement('button'); closeBtn.className = 'l2m-atelier-close'; closeBtn.textContent = 'FERMER ✕';
+      closeBtn.addEventListener('click', () => atelier.closeModal());
+      right.appendChild(graines); right.appendChild(closeBtn);
+      header.appendChild(title); header.appendChild(right);
+      const body = document.createElement('div'); body.className = 'l2m-atelier-body';
+      const sections = [ { cat:'plant', label:'🌱 PLANTES' }, { cat:'modifier', label:'⚙️ MODIFIERS' }, { cat:'buff', label:'✨ BUFFS PERMANENTS' }, { cat:'prestige', label:'🌟 PRESTIGE' } ];
+      const cardRefs = {};
+      function renderCard(item){
+        const card = document.createElement('div'); card.className = 'l2m-atelier-card'; card.dataset.id = item.id;
+        const name = document.createElement('div'); name.className = 'l2m-atelier-card-name'; name.textContent = item.name;
+        const desc = document.createElement('div'); desc.className = 'l2m-atelier-card-desc'; desc.textContent = item.desc;
+        const footer = document.createElement('div'); footer.className = 'l2m-atelier-card-footer';
+        card.appendChild(name); card.appendChild(desc); card.appendChild(footer);
+        cardRefs[item.id] = { card, footer };
+        updateCardState(item);
+        return card;
+      }
+      function updateCardState(item){
+        const ref = cardRefs[item.id]; if (!ref) return;
+        const { card, footer } = ref; footer.innerHTML = '';
+        card.classList.remove('l2m-card-owned','l2m-card-affordable','l2m-card-locked');
+        const owned = atelier.isOwned(item.id), canBuy = atelier.canPurchase(item.id);
+        if (owned) {
+          card.classList.add('l2m-card-owned');
+          const badge = document.createElement('div'); badge.className = 'l2m-atelier-owned-badge'; badge.textContent = '✓ DÉBLOQUÉ'; footer.appendChild(badge);
+        } else if (canBuy) {
+          card.classList.add('l2m-card-affordable');
+          const cost = document.createElement('div'); cost.className = 'l2m-atelier-card-cost'; cost.textContent = item.cost > 0 ? '🌰 ' + item.cost : '🌟 GRATUIT';
+          const btn = document.createElement('button'); btn.className = 'l2m-atelier-buy-btn'; btn.textContent = 'ACHETER';
+          btn.addEventListener('click', () => { if (atelier.purchase(item.id)) refreshAll(); });
+          footer.appendChild(cost); footer.appendChild(btn);
+        } else {
+          card.classList.add('l2m-card-locked');
+          const cost = document.createElement('div'); cost.className = 'l2m-atelier-card-cost l2m-cost-locked';
+          if (item.requires === '10_items_owned' && !meetsRequires(item)) cost.textContent = '🔒 10 items requis';
+          else cost.textContent = '🌰 ' + item.cost + ' graines';
+          footer.appendChild(cost);
+        }
+      }
+      function refreshAll(){ graines.textContent = '🌰 ' + (state.graines || 0); atelier.catalog.forEach(updateCardState); }
+      sections.forEach(sec => {
+        const items = atelier.catalog.filter(it => it.cat === sec.cat);
+        if (!items.length) return;
+        const section = document.createElement('div'); section.className = 'l2m-atelier-section';
+        const stitle = document.createElement('div'); stitle.className = 'l2m-atelier-section-title'; stitle.textContent = sec.label;
+        const grid = document.createElement('div'); grid.className = 'l2m-atelier-grid';
+        items.forEach(item => grid.appendChild(renderCard(item)));
+        section.appendChild(stitle); section.appendChild(grid); body.appendChild(section);
+      });
+      overlay.appendChild(header); overlay.appendChild(body);
+      document.body.appendChild(overlay);
+      refreshAll();
+      requestAnimationFrame(() => overlay.classList.add('l2m-atelier-open'));
+      overlay.close = () => atelier.closeModal();
+      overlay._onClose = onClose;
+      currentModal = overlay;
+      return overlay;
+    };
+    atelier.closeModal = function(){
+      if (!currentModal) return;
+      const modal = currentModal; currentModal = null;
+      modal.classList.remove('l2m-atelier-open'); modal.classList.add('l2m-atelier-closing');
+      setTimeout(() => { if (modal.parentNode) modal.parentNode.removeChild(modal); if (typeof modal._onClose === 'function') modal._onClose(); }, 350);
+    };
+    M.atelier = atelier;
+  })();
+
+  /* ── META Agent 7 : Hub (PATCHED : formulas, test check, no FAB) ── */
+  (function(){
+    const M = window.LABO2_META = window.LABO2_META || {};
+    const hub = {};
+    hub.css = `
+    #labo2-hub { position:fixed; inset:0; z-index:29999; background:radial-gradient(ellipse at center, #1a0a2e 0%, #0a0515 70%, #000 100%); display:none; overflow-y:auto; font-family:system-ui,sans-serif; color:#fff; }
+    #labo2-hub.l2m-hub-open { display:block; animation:l2mHubFadeIn .3s ease; }
+    @keyframes l2mHubFadeIn { from{opacity:0;} to{opacity:1;} }
+    @keyframes l2mHubCardIn { from{opacity:0; transform:translateY(20px) scale(.95);} to{opacity:1; transform:translateY(0) scale(1);} }
+    @keyframes l2mHubGlow { 0%,100%{box-shadow:0 0 20px rgba(255,215,0,.4);} 50%{box-shadow:0 0 35px rgba(255,215,0,.7);} }
+    .l2m-hub-wrap { max-width:1200px; margin:0 auto; padding:32px 24px; }
+    .l2m-hub-header { display:flex; justify-content:space-between; align-items:center; padding:20px 28px; background:linear-gradient(135deg, rgba(255,0,128,.15), rgba(128,0,255,.15)); border:1px solid rgba(255,0,200,.3); border-radius:16px; margin-bottom:28px; }
+    .l2m-hub-title { font-size:28px; font-weight:800; background:linear-gradient(90deg,#ff3399,#cc33ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:2px; }
+    .l2m-hub-counters { display:flex; gap:16px; }
+    .l2m-hub-counter { padding:8px 16px; background:rgba(0,0,0,.4); border:1px solid rgba(255,0,200,.4); border-radius:8px; font-size:14px; font-weight:600; }
+    .l2m-hub-counter span { color:#ff66cc; font-weight:800; }
+    .l2m-hub-close { position:fixed; top:20px; right:20px; width:44px; height:44px; border-radius:50%; background:rgba(255,0,100,.2); border:2px solid rgba(255,0,150,.5); color:#fff; font-size:22px; cursor:pointer; z-index:30000; }
+    .l2m-hub-close:hover { background:rgba(255,0,100,.5); transform:rotate(90deg); }
+    .l2m-hub-section-title { font-size:18px; font-weight:700; letter-spacing:3px; color:#ff99dd; margin:8px 0 16px; padding-left:8px; border-left:4px solid #ff3399; }
+    .l2m-hub-grid-features { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px; }
+    .l2m-hub-card-feature { height:140px; padding:16px; border-radius:12px; position:relative; cursor:pointer; transition:transform .2s, box-shadow .2s; overflow:hidden; opacity:0; animation:l2mHubCardIn .4s ease forwards; border:1px solid rgba(255,255,255,.1); }
+    .l2m-hub-card-feature:hover { transform:scale(1.03); box-shadow:0 8px 30px rgba(255,0,200,.4); }
+    .l2m-hub-card-feature.l2m-locked { opacity:.5; cursor:not-allowed; background-image:repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,.3) 10px, rgba(0,0,0,.3) 20px) !important; }
+    .l2m-card-A { background:linear-gradient(135deg,#c0392b,#ff3366); }
+    .l2m-card-B { background:linear-gradient(135deg,#d4a017,#ffd700); }
+    .l2m-card-C { background:linear-gradient(135deg,#0066ff,#00ccff); }
+    .l2m-card-D { background:linear-gradient(135deg,#228b22,#66ff66); }
+    .l2m-card-E { background:linear-gradient(135deg,#6a0dad,#cc00ff); }
+    .l2m-card-F { background:linear-gradient(135deg,#008b8b,#00ffd0); }
+    .l2m-card-icon { font-size:32px; margin-bottom:6px; }
+    .l2m-card-title { font-size:16px; font-weight:800; letter-spacing:1px; text-shadow:0 2px 4px rgba(0,0,0,.5); }
+    .l2m-card-pitch { font-size:12px; opacity:.9; margin-top:4px; }
+    .l2m-card-status { position:absolute; top:10px; right:10px; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:800; }
+    .l2m-status-live { background:#00ff88; color:#000; }
+    .l2m-status-soon { background:rgba(0,0,0,.5); color:#fff; }
+    .l2m-card-best { position:absolute; bottom:8px; left:16px; font-size:10px; opacity:.85; }
+    .l2m-card-btn { position:absolute; bottom:10px; right:10px; padding:6px 14px; background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.4); border-radius:6px; color:#fff; font-size:12px; font-weight:700; cursor:pointer; }
+    .l2m-card-lock { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; opacity:.7; }
+    .l2m-hub-grid-meta { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px; }
+    .l2m-hub-card-meta { height:90px; padding:14px; border-radius:12px; display:flex; align-items:center; gap:14px; background:linear-gradient(135deg, rgba(50,20,80,.8), rgba(80,20,100,.8)); border:1px solid rgba(200,100,255,.3); cursor:pointer; opacity:0; animation:l2mHubCardIn .4s ease forwards; }
+    .l2m-hub-card-meta:hover { transform:scale(1.03); border-color:#ff66cc; box-shadow:0 0 25px rgba(255,100,200,.4); }
+    .l2m-meta-icon { font-size:42px; line-height:1; }
+    .l2m-meta-info { display:flex; flex-direction:column; }
+    .l2m-meta-title { font-size:13px; font-weight:800; letter-spacing:1px; color:#ffccee; }
+    .l2m-meta-count { font-size:11px; opacity:.8; margin-top:2px; }
+    .l2m-hub-card-meta.l2m-prestige-active { animation:l2mHubGlow 2s ease-in-out infinite; border-color:#ffd700; background:linear-gradient(135deg,#3a2a0a,#6a4a0a); }
+    .l2m-hub-footer { text-align:center; padding:16px; font-size:11px; opacity:.5; letter-spacing:2px; border-top:1px solid rgba(255,255,255,.1); margin-top:20px; }
+    .l2m-hub-toast { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(20,10,30,.95); border:1px solid #ff66cc; color:#fff; padding:14px 24px; border-radius:10px; font-size:13px; font-weight:600; z-index:30002; }
+    `;
+    const FEATURES = [
+      {id:'A', icon:'🔪', title:'BOUCHERIE 60s', pitch:'Auto-shoot, combo × combo', status:'LIVE'},
+      {id:'B', icon:'🎰', title:'ROULETTE VÉGÉTALE', pitch:'Spin auto, jackpots', status:'SOON'},
+      {id:'C', icon:'⚡', title:'CHAIN REACTION', pitch:'Chaîne lightning exponentielle', status:'SOON'},
+      {id:'D', icon:'🎯', title:'SNIPER MODE', pitch:'Scope zoomé, headshots', status:'SOON'},
+      {id:'E', icon:'🌋', title:'OVERLOAD TOWER', pitch:'Charge, overload, NUKE', status:'SOON'},
+      {id:'F', icon:'🎲', title:'DICE ROLL TD', pitch:'d20 par tir, crits/fumbles', status:'SOON'}
+    ];
+    // PATCH : utilise M.achievements.catalog (pas .list qui n'existe pas) et multiplier correct (0.05 pas 0.1)
+    const METAS = [
+      {key:'atelier', icon:'🏪', title:'ATELIER', countFn: () => ((M.state && M.state.graines) || 0) + ' graines'},
+      {key:'success', icon:'🏅', title:'SUCCÈS', countFn: () => {
+        const total = (M.achievements && M.achievements.catalog && M.achievements.catalog.length) || 0;
+        const unl = (M.state && M.state.achievements && M.state.achievements.length) || 0;
+        return unl + '/' + total;
+      }},
+      {key:'daily', icon:'🎯', title:'SEED DU JOUR', countFn: () => 'défi quotidien'},
+      {key:'prestige', icon:'🌟', title:'PRESTIGE', countFn: () => {
+        const lv = M.prestige && M.prestige.level ? M.prestige.level() : 0;
+        const mult = 1 + lv * 0.05;
+        return 'Niv ' + lv + ' · ×' + mult.toFixed(2);
+      }}
+    ];
+    function injectCSS(){ if (document.getElementById('l2m-hub-style')) return; const s = document.createElement('style'); s.id = 'l2m-hub-style'; s.textContent = hub.css; document.head.appendChild(s); }
+    function getBest(id){ const pf = (M.state && M.state.stats && M.state.stats.perFeature && M.state.stats.perFeature[id]); return (pf && pf.bestScore) || 0; }
+    hub.build = function(){
+      injectCSS();
+      if (document.getElementById('labo2-hub')) return;
+      const modal = document.createElement('div'); modal.id = 'labo2-hub';
+      const btnClose = document.createElement('button'); btnClose.className = 'l2m-hub-close'; btnClose.innerHTML = '×'; btnClose.onclick = () => hub.close(); modal.appendChild(btnClose);
+      const wrap = document.createElement('div'); wrap.className = 'l2m-hub-wrap';
+      const header = document.createElement('div'); header.className = 'l2m-hub-header';
+      header.innerHTML = '<div class="l2m-hub-title">🧬 LABO 2 — Prototypes Vivants</div>' +
+        '<div class="l2m-hub-counters">' +
+          '<div class="l2m-hub-counter">🌰 <span id="l2m-hub-graines">0</span></div>' +
+          '<div class="l2m-hub-counter">🌟 Prestige <span id="l2m-hub-prestige">0</span></div>' +
+        '</div>';
+      wrap.appendChild(header);
+      const sectF = document.createElement('div'); sectF.className = 'l2m-hub-section-title'; sectF.textContent = 'FEATURES'; wrap.appendChild(sectF);
+      const gridF = document.createElement('div'); gridF.className = 'l2m-hub-grid-features';
+      FEATURES.forEach((f, i) => {
+        const c = document.createElement('div'); c.className = 'l2m-hub-card-feature l2m-card-' + f.id;
+        c.style.animationDelay = (i * 60) + 'ms';
+        if (f.status !== 'LIVE') c.classList.add('l2m-locked');
+        c.innerHTML = '<div class="l2m-card-status ' + (f.status === 'LIVE' ? 'l2m-status-live' : 'l2m-status-soon') + '">' + (f.status === 'LIVE' ? 'LIVE' : 'BIENTÔT') + '</div>' +
+          '<div class="l2m-card-icon">' + f.icon + '</div>' +
+          '<div class="l2m-card-title">' + f.title + '</div>' +
+          '<div class="l2m-card-pitch">' + f.pitch + '</div>' +
+          (f.status !== 'LIVE' ? '<div class="l2m-card-lock">🔒</div>' : '') +
+          '<div class="l2m-card-best" data-fid="' + f.id + '">BEST: 0</div>' +
+          '<button class="l2m-card-btn">' + (f.status === 'LIVE' ? '▶ JOUER' : '⏳ BIENTÔT') + '</button>';
+        c.querySelector('.l2m-card-btn').onclick = (e) => { e.stopPropagation(); hub.openFeature(f.id); };
+        c.onclick = () => hub.openFeature(f.id);
+        gridF.appendChild(c);
+      });
+      wrap.appendChild(gridF);
+      const sectM = document.createElement('div'); sectM.className = 'l2m-hub-section-title'; sectM.textContent = 'MÉTA'; wrap.appendChild(sectM);
+      const gridM = document.createElement('div'); gridM.className = 'l2m-hub-grid-meta';
+      METAS.forEach((mc, i) => {
+        const c = document.createElement('div'); c.className = 'l2m-hub-card-meta'; c.dataset.key = mc.key;
+        c.style.animationDelay = ((FEATURES.length + i) * 60) + 'ms';
+        c.innerHTML = '<div class="l2m-meta-icon">' + mc.icon + '</div><div class="l2m-meta-info"><div class="l2m-meta-title">' + mc.title + '</div><div class="l2m-meta-count" data-key="' + mc.key + '">...</div></div>';
+        c.onclick = () => {
+          hub.close();
+          setTimeout(() => {
+            if (mc.key === 'atelier' && M.atelier && M.atelier.buildModal) M.atelier.buildModal();
+            else if (mc.key === 'success' && M.achievements && M.achievements.buildModal) M.achievements.buildModal();
+            else if (mc.key === 'daily' && M.daily && M.daily.buildModal) M.daily.buildModal();
+            else if (mc.key === 'prestige' && M.prestige && M.prestige.buildModal) M.prestige.buildModal();
+            else showToast('Module indisponible');
+          }, 200);
+        };
+        gridM.appendChild(c);
+      });
+      wrap.appendChild(gridM);
+      const footer = document.createElement('div'); footer.className = 'l2m-hub-footer'; footer.innerHTML = 'LABO 2 v0.2 • META LAYER • DEV MODE'; wrap.appendChild(footer);
+      modal.appendChild(wrap);
+      document.body.appendChild(modal);
+    };
+    function showToast(msg){ const t = document.createElement('div'); t.className = 'l2m-hub-toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 2200); }
+    hub.open = function(){
+      if (!document.getElementById('labo2-hub')) hub.build();
+      const modal = document.getElementById('labo2-hub'); if (!modal) return;
+      const gr = (M.state && M.state.graines) || 0;
+      const lv = M.prestige && M.prestige.level ? M.prestige.level() : 0;
+      const gEl = document.getElementById('l2m-hub-graines'); if (gEl) gEl.textContent = gr;
+      const pEl = document.getElementById('l2m-hub-prestige'); if (pEl) pEl.textContent = lv;
+      modal.querySelectorAll('.l2m-card-best').forEach(el => { el.textContent = 'BEST: ' + getBest(el.dataset.fid); });
+      modal.querySelectorAll('.l2m-meta-count').forEach(el => { const m = METAS.find(x => x.key === el.dataset.key); if (m) el.textContent = m.countFn(); });
+      const prestigeCard = modal.querySelector('.l2m-hub-card-meta[data-key="prestige"]');
+      if (prestigeCard) { if (lv > 0) prestigeCard.classList.add('l2m-prestige-active'); else prestigeCard.classList.remove('l2m-prestige-active'); }
+      modal.querySelectorAll('.l2m-hub-card-feature, .l2m-hub-card-meta').forEach(c => { c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; });
+      modal.classList.add('l2m-hub-open'); modal.style.display = 'block';
+    };
+    hub.close = function(){ const modal = document.getElementById('labo2-hub'); if (modal) { modal.classList.remove('l2m-hub-open'); modal.style.display = 'none'; } };
+    hub.openFeature = function(id){
+      if (id === 'A') {
+        hub.close();
+        setTimeout(() => { if (window.LABO2_A && window.LABO2_A.openModal) window.LABO2_A.openModal(); else showToast('Feature A indisponible'); }, 180);
+      } else {
+        showToast('BIENTÔT — construit au prochain dispatch 10 agents');
+      }
+    };
+    M.hub = hub;
+    // PATCH : on NE fait PAS l'auto-install ici (c'est l'orchestrateur qui gère via le setTimeout test-mode plus bas)
+    if (document.readyState !== 'loading') { hub.build(); }
+    else { document.addEventListener('DOMContentLoaded', () => hub.build()); }
+  })();
+
+  /* ── META Agent 9 : Retrofit Feature A ─────────────────────── */
+  (function () {
+    'use strict';
+    var INSTALL_FLAG = '__LABO2_META_RETROFIT_A_INSTALLED__';
+    var MAX_HISTORY = 50;
+    function ensureMeta() { if (typeof window === 'undefined') return null; window.LABO2_META = window.LABO2_META || {}; window.LABO2_META.retrofit = window.LABO2_META.retrofit || {}; window.LABO2_META.retrofit.A = window.LABO2_META.retrofit.A || {}; return window.LABO2_META; }
+    function safeGet(obj, path, fallback) { try { var parts = path.split('.'), cur = obj; for (var i = 0; i < parts.length; i++) { if (cur == null) return fallback; cur = cur[parts[i]]; } return (cur === undefined) ? fallback : cur; } catch (e) { return fallback; } }
+    function buildPayload() {
+      var A = window.LABO2_A, s = (A && A.state) || {}, plant = s.plant || {};
+      var maxHp = (plant.maxHp != null) ? plant.maxHp : plant.hp;
+      return { feature: 'A', score: s.score || 0, comboMax: s.comboMax || 0, kills: s.kills || 0, noDamage: (plant.hp === maxHp), tElapsed: s.tElapsed || 0 };
+    }
+    function updatePerFeatureStats(meta, payload) {
+      meta.state = meta.state || {}; meta.state.stats = meta.state.stats || {}; meta.state.stats.perFeature = meta.state.stats.perFeature || {};
+      var pf = meta.state.stats.perFeature.A = meta.state.stats.perFeature.A || { runs: 0, bestScore: 0, bestCombo: 0, totalKills: 0 };
+      pf.runs = (pf.runs || 0) + 1;
+      if ((payload.score || 0) > (pf.bestScore || 0)) pf.bestScore = payload.score;
+      if ((payload.comboMax || 0) > (pf.bestCombo || 0)) pf.bestCombo = payload.comboMax;
+      pf.totalKills = (pf.totalKills || 0) + (payload.kills || 0);
+      meta.state.stats.totalRuns = (meta.state.stats.totalRuns || 0) + 1;
+      meta.state.stats.totalKills = (meta.state.stats.totalKills || 0) + (payload.kills || 0);
+    }
+    function onRunEnd() {
+      var meta = ensureMeta(); if (!meta) return;
+      try {
+        var payload = buildPayload();
+        updatePerFeatureStats(meta, payload);
+        var graines = 0;
+        if (meta.economy && typeof meta.economy.formula === 'function') graines = meta.economy.formula('feature_A', payload) || 0;
+        if (meta.economy && typeof meta.economy.earn === 'function') meta.economy.earn(graines, 'feature_A', payload);
+        if (meta.daily && meta.daily.isActive) {
+          if (typeof meta.daily.submitRun === 'function') meta.daily.submitRun('A', payload.score, payload);
+          if (typeof meta.daily.endDailyRun === 'function') meta.daily.endDailyRun();
+        }
+        if (meta.achievements && typeof meta.achievements.check === 'function') meta.achievements.check('run_end', payload);
+        meta.state = meta.state || {}; meta.state.stats = meta.state.stats || {};
+        var hist = meta.state.stats.history = meta.state.stats.history || [];
+        hist.push({ t: Date.now(), feature: 'A', payload: payload, graines: graines });
+        if (hist.length > MAX_HISTORY) hist.splice(0, hist.length - MAX_HISTORY);
+      } catch (e) { console.warn('[META retrofit A] onRunEnd:', e); }
+    }
+    function onNewGame() {
+      var meta = ensureMeta(), A = window.LABO2_A;
+      if (!meta || !A || !A.state) return;
+      try {
+        if (meta.daily && meta.daily.isActive && typeof meta.daily.getSeededRng === 'function') A.state.rng = meta.daily.getSeededRng('A');
+        if (meta.atelier && typeof meta.atelier.isOwned === 'function') {
+          A.state.plant = A.state.plant || {};
+          if (meta.atelier.isOwned('buff_hp')) { A.state.plant.maxHp = (A.state.plant.maxHp || 0) + 5; A.state.plant.hp = (A.state.plant.hp || 0) + 5; }
+          if (meta.atelier.isOwned('buff_damage')) A.state.damageBuff = 1.05;
+          if (meta.atelier.isOwned('mod_furie')) A.state.mod_furie = true;
+          if (meta.atelier.isOwned('mod_glace')) A.state.mod_glace = true;
+        }
+      } catch (e) { console.warn('[META retrofit A] onNewGame:', e); }
+    }
+    function onKill(enemy) {
+      var meta = ensureMeta(), A = window.LABO2_A;
+      if (!meta || !A) return;
+      try {
+        if (meta.achievements && typeof meta.achievements.check === 'function') {
+          meta.achievements.check('kill', { feature: 'A', combo: safeGet(A, 'state.combo', 0), enemy: enemy });
+        }
+      } catch (e) {}
+    }
+    function wrapFn(host, name, after) {
+      if (!host || typeof host[name] !== 'function') return false;
+      var original = host[name];
+      if (original[INSTALL_FLAG]) return false;
+      var wrapped = function () { var result = original.apply(this, arguments); try { after.apply(this, arguments); } catch (e) { console.warn('[META] hook error on ' + name + ':', e); } return result; };
+      wrapped[INSTALL_FLAG] = true;
+      host[name] = wrapped;
+      return true;
+    }
+    function install() {
+      var meta = ensureMeta(); if (!meta) return false;
+      if (meta.retrofit.A[INSTALL_FLAG]) return true;
+      if (typeof window.LABO2_A === 'undefined') { setTimeout(install, 200); return false; }
+      var A = window.LABO2_A;
+      wrapFn(A, 'endRun', function () { onRunEnd(); });
+      wrapFn(A, 'newGame', function () { onNewGame(); });
+      wrapFn(A, 'kill', function (enemy) { onKill(enemy); });
+      meta.retrofit.A[INSTALL_FLAG] = true;
+      console.info('[META retrofit A] install OK');
+      return true;
+    }
+    var meta = ensureMeta();
+    if (meta) meta.retrofit.A.install = install;
+  })();
+
+  /* ── META Agent 10 : Debug cheats (test mode only) ─────────── */
+  (function(){
+    'use strict';
+    window.LABO2_META = window.LABO2_META || {};
+    const M = window.LABO2_META;
+    const notify = (t, msg) => { try { M.notifications && M.notifications.push && M.notifications.push(t, msg); } catch(e){} };
+    let listenerAttached = false;
+    function cheatGraines(n){ try { M.economy && M.economy.earn && M.economy.earn(n, 'debug'); } catch(e){} notify('info', 'DEBUG: +' + n + ' graines'); }
+    function cheatUnlockAll(){
+      try {
+        const cat = (M.atelier && M.atelier.catalog) || [];
+        cat.forEach(it => { if (it.cat !== 'prestige' && M.state.unlocks.indexOf(it.id) === -1) M.state.unlocks.push(it.id); });
+        M.persist && M.persist.save && M.persist.save();
+      } catch(e){}
+      notify('info', 'DEBUG: all items unlocked');
+    }
+    function cheatAchAll(){
+      try {
+        const cat = (M.achievements && M.achievements.catalog) || [];
+        cat.forEach(a => { if (M.state.achievements.indexOf(a.id) === -1) M.achievements.unlock(a.id); });
+      } catch(e){}
+      notify('info', 'DEBUG: all achievements unlocked');
+    }
+    function cheatPrestige(){
+      try { M.state.prestige = (M.state.prestige|0) + 1; M.state.prestigeMultiplier = 1 + M.state.prestige * 0.05; M.persist && M.persist.save && M.persist.save(); } catch(e){}
+      notify('info', 'DEBUG: prestige +1');
+    }
+    function cheatReset(){
+      if (!confirm('RESET complet LABO2_META ? (reload)')) return;
+      try { M.persist && M.persist.reset && M.persist.reset(); } catch(e){}
+      notify('warn', 'DEBUG: reset → reload');
+      setTimeout(() => location.reload(), 400);
+    }
+    function onKey(e){
+      if (!window.__PVB_TEST_MODE__) return;
+      if (!(e.ctrlKey && e.shiftKey)) return;
+      const k = (e.key || '').toLowerCase();
+      let handled = true;
+      if (k === 'g' && e.altKey) cheatGraines(1000);
+      else if (k === 'g') cheatGraines(100);
+      else if (k === 'u') cheatUnlockAll();
+      else if (k === 'a') cheatAchAll();
+      else if (k === 'p') cheatPrestige();
+      else if (k === 'r') cheatReset();
+      else handled = false;
+      if (handled) { e.preventDefault(); e.stopPropagation(); }
+    }
+    M.debug = {
+      enable(){ if (listenerAttached) return; window.addEventListener('keydown', onKey, true); listenerAttached = true; console.log('[META debug] enabled'); },
+      disable(){ if (!listenerAttached) return; window.removeEventListener('keydown', onKey, true); listenerAttached = false; },
+      _cheats: { graines: cheatGraines, unlockAll: cheatUnlockAll, achAll: cheatAchAll, prestige: cheatPrestige, reset: cheatReset }
+    };
+  })();
+
+  // ═══ Labo 2 install : HUD button + retrofit + meta hooks (test mode only)
   if (window.__PVB_TEST_MODE__) {
     setTimeout(function() {
       if (window.LABO2_A && LABO2_A.installHudButton) LABO2_A.installHudButton();
+      // Override labo2-btn onclick : ouvre désormais le HUB (pas directement Feature A)
+      var labo2Btn = document.getElementById('labo2-btn');
+      if (labo2Btn && window.LABO2_META && LABO2_META.hub) {
+        labo2Btn.onclick = function() { LABO2_META.hub.open(); };
+      }
+      // Install retrofit A (wraps endRun/newGame/kill)
+      if (window.LABO2_META && LABO2_META.retrofit && LABO2_META.retrofit.A && LABO2_META.retrofit.A.install) {
+        LABO2_META.retrofit.A.install();
+      }
+      // Enable cheat codes (Ctrl+Shift+G, U, A, P, R)
+      if (window.LABO2_META && LABO2_META.debug && LABO2_META.debug.enable) {
+        LABO2_META.debug.enable();
+      }
     }, 2500);
   }
   </script>

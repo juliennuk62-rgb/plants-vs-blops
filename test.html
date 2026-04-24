@@ -19260,7 +19260,7 @@
     function makeRng(seed) { var a = (seed >>> 0) || 1; return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
     NS.makeRng = makeRng;
     NS.PLANT_CENTER = { x: 400, y: 300 };
-    NS.RUN_DURATION_MS = 45000;
+    NS.RUN_DURATION_MS = 90000;
     NS.SAVE_KEY = 'dev_labo2_c_best';
     NS.PRERUN_POWERS = [
       { id:'overload', name:'Overload', emoji:'♾️', desc:'Chaîne sans limite de sauts', apply:function(st){ st.chainMaxJumps = Infinity; } },
@@ -19327,14 +19327,14 @@
     'use strict';
     window.LABO2_C = window.LABO2_C || {};
     var T = window.LABO2_C.tuning = {};
-    T.RUN_DURATION_MS = 45000;
-    T.BASE_DAMAGE = 10; T.CHAIN_RADIUS = 150; T.CHAIN_MAX_JUMPS = 15; T.DAMAGE_FALLOFF = 0.85;
+    T.RUN_DURATION_MS = 90000;
+    T.BASE_DAMAGE = 10; T.CHAIN_RADIUS = 150; T.CHAIN_MAX_JUMPS = 15; T.DAMAGE_FALLOFF = 0.9;
     T.BASE_COOLDOWN_MS = 600; T.PLANT_MAX_HP = 100;
-    T.enemySpawnRate = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return 1.0 + Math.pow(t / 45, 1.3) * 4.5; };
-    // POLISH : enemy HP scale 3→8 (était 3→12) pour que la chaîne propage en fin de run
-    T.enemyHP = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return Math.max(2, 3 + (t / 45) * 5); };
-    T.enemySpeed = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return 50 + (t / 45) * 60; };
-    T.bruteSpawnRate = function(tSec){ if (tSec < 20) return 0; var t = Math.max(20, Math.min(45, tSec)); return ((t - 20) / 25) * 0.2; };
+    // POLISH : durée 45s → 90s, curves rescalées /90 avec brute à partir t=40
+    T.enemySpawnRate = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); return 1.0 + Math.pow(t / 90, 1.3) * 4.5; };
+    T.enemyHP = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); return Math.max(2, 3 + (t / 90) * 5); };
+    T.enemySpeed = function(tSec){ var t = Math.max(0, Math.min(90, tSec)); return 50 + (t / 90) * 60; };
+    T.bruteSpawnRate = function(tSec){ if (tSec < 40) return 0; var t = Math.max(40, Math.min(90, tSec)); return ((t - 40) / 50) * 0.2; };
     T.scoreForChain = function(chainLength){ var n = Math.max(0, chainLength|0); return n * n * 10; };
     T.KILLS_PER_UPGRADE = 5; T.BIG_CHAIN_THRESHOLD = 10; T.MEGA_CHAIN_THRESHOLD = 20;
     T.CHAIN_PROPAGATION_DELAY_MS = 40; T.CHAIN_ARC_LIFE_MS = 300;
@@ -19831,6 +19831,10 @@
 .l2c-upgrade-progress-fill { height:100%; background:linear-gradient(90deg,#33ccff,#ffee33); transform-origin:left center; transform:scaleX(0); transition:transform 0.3s; }
 .l2c-stats-mini { position:absolute; bottom:12px; right:16px; font-size:10px; color:#aac; letter-spacing:0.5px; background:rgba(10,15,25,0.6); padding:6px 10px; border-radius:6px; border:1px solid rgba(51,204,255,0.25); font-variant-numeric:tabular-nums; line-height:1.5; }
 .l2c-stats-mini span { color:#33ccff; font-weight:700; }
+.l2c-active-buffs { position:absolute; bottom:50px; right:16px; display:flex; flex-direction:column; gap:3px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#fff; max-width:200px; align-items:flex-end; }
+.l2c-active-buffs .l2c-buff { background:rgba(10,15,25,0.75); padding:3px 9px; border-radius:4px; border:1px solid rgba(51,204,255,0.3); display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.l2c-active-buffs .l2c-buff-count { color:#33ccff; font-weight:700; }
+.l2c-active-buffs .l2c-buff-power { border-color:#ffee33; color:#ffee33; background:rgba(40,35,0,0.75); font-weight:700; }
 .l2c-modal-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.88); pointer-events:auto; animation:l2c-fade-in 0.3s ease-out; z-index:100; }
 .l2c-modal-overlay.levelup { background:rgba(5,10,20,0.72); backdrop-filter:blur(6px); }
 .l2c-modal-overlay.hiding { opacity:0; transition:opacity 0.3s; }
@@ -19862,8 +19866,9 @@
       var ub = el('div', 'l2c-upgrade-progress-bar'); var uf = el('div', 'l2c-upgrade-progress-fill'); ub.appendChild(uf);
       up.appendChild(ul); up.appendChild(ub); _root.appendChild(up);
       var st = el('div', 'l2c-stats-mini'); st.innerHTML = 'RADIUS <span>150</span> · JUMPS <span>15</span> · DMG <span>10</span>'; _root.appendChild(st);
+      var buffs = el('div', 'l2c-active-buffs'); _root.appendChild(buffs);
       root.appendChild(_root);
-      _els = { tf:tf, sc:sc, ki:ki, bc:bc, pf:pf, pl:pl, php:php, ch:ch, ul:ul, uf:uf, st:st };
+      _els = { tf:tf, sc:sc, ki:ki, bc:bc, pf:pf, pl:pl, php:php, ch:ch, ul:ul, uf:uf, st:st, buffs:buffs };
       _prevChain = 0;
     };
     NS.hud.update = function(state, best) {
@@ -19886,7 +19891,23 @@
       _els.uf.style.transform = 'scaleX(' + Math.max(0, Math.min(1, su/upT)) + ')';
       var upCount = (s.upgrades || []).length;
       _els.ul.textContent = 'Upgrade ' + (upCount + 1) + ' in ' + Math.max(0, upT - su) + ' kills';
-      _els.st.innerHTML = 'RADIUS <span>' + (s.chainRadius|0) + '</span> · JUMPS <span>' + ((s.chainMaxJumps === Infinity) ? '∞' : (s.chainMaxJumps|0)) + '</span> · DMG <span>' + (s.baseDamage|0) + '</span>';
+      _els.st.innerHTML = 'RADIUS <span>' + (s.chainRadius|0) + '</span> · JUMPS <span>' + ((s.chainMaxJumps === Infinity) ? '∞' : (s.chainMaxJumps|0)) + '</span> · DMG <span>' + (s.baseDamage|0) + '</span> · CD <span>' + (s.cooldownMs|0) + '</span>';
+      // Active buffs display (prerun power + stacks d'upgrades)
+      if (_els.buffs) {
+        var html = '';
+        if (s.prerunPower) {
+          var pw = (NS.PRERUN_POWERS || []).filter(function(p){ return p.id === s.prerunPower; })[0];
+          if (pw) html += '<div class="l2c-buff l2c-buff-power">' + pw.emoji + ' ' + pw.name + '</div>';
+        }
+        var counts = {};
+        (s.upgrades || []).forEach(function(id){ counts[id] = (counts[id] || 0) + 1; });
+        Object.keys(counts).forEach(function(id) {
+          var u = (NS.INRUN_UPGRADES || []).filter(function(upg){ return upg.id === id; })[0];
+          if (!u) return;
+          html += '<div class="l2c-buff">' + u.emoji + ' <span class="l2c-buff-count">×' + counts[id] + '</span></div>';
+        });
+        if (_els.buffs.innerHTML !== html) _els.buffs.innerHTML = html;
+      }
     };
     NS.hud.showChainCounter = function(length) {
       if (!_els.ch) return; var c = _els.ch;
@@ -20055,8 +20076,24 @@
 #labo2-c-modal { position:fixed; inset:0; z-index:20000; background:rgba(2,5,10,0.94); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; animation:l2cModalFade 300ms ease-out; }
 #labo2-c-modal.open { display:flex; }
 @keyframes l2cModalFade { from{opacity:0;} to{opacity:1;} }
-.l2c-stage { position:relative; width:800px; height:600px; background:radial-gradient(ellipse at center, #0a1020 0%, #050810 70%, #000 100%); border:2px solid rgba(51,204,255,0.4); border-radius:12px; box-shadow:0 30px 80px rgba(51,204,255,0.25); overflow:hidden; cursor:none; }
+.l2c-stage { position:relative; width:800px; height:600px; background:radial-gradient(ellipse at center, #0a1020 0%, #050810 70%, #000 100%); border:2px solid rgba(51,204,255,0.4); border-radius:12px; box-shadow:0 30px 80px rgba(51,204,255,0.25); overflow:hidden; cursor:none; transform-origin:center; transition:transform 200ms; }
 .l2c-canvas { display:block; position:absolute; inset:0; cursor:none; }
+.l2c-top-btns { position:absolute; top:-42px; right:0; display:flex; gap:6px; pointer-events:auto; }
+.l2c-top-btn { background:rgba(51,204,255,0.5); color:#fff; border:1px solid rgba(51,204,255,0.8); padding:6px 12px; border-radius:6px; cursor:pointer; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; transition:background 120ms, transform 120ms; }
+.l2c-top-btn:hover { background:rgba(51,204,255,0.85); transform:translateY(-1px); }
+.l2c-top-btn.l2c-close { background:rgba(255,51,102,0.5); border-color:rgba(255,51,102,0.8); }
+.l2c-top-btn.l2c-close:hover { background:rgba(255,51,102,0.85); }
+.l2c-top-btn.l2c-stop-btn { background:rgba(255,170,0,0.4); border-color:rgba(255,170,0,0.7); }
+.l2c-top-btn.l2c-stop-btn:hover { background:rgba(255,170,0,0.75); }
+.l2c-pause-overlay { position:absolute; inset:0; background:rgba(0,10,20,0.72); display:flex; align-items:center; justify-content:center; z-index:90; backdrop-filter:blur(4px); animation:l2cModalFade 200ms ease-out; }
+.l2c-pause-box { background:rgba(10,20,40,0.95); border:2px solid #33ccff; border-radius:14px; padding:36px 52px; text-align:center; box-shadow:0 0 40px rgba(51,204,255,0.4); }
+.l2c-pause-title { font-family:'Rubik Mono One',sans-serif; font-size:38px; color:#33ccff; letter-spacing:4px; margin-bottom:10px; text-shadow:0 0 20px rgba(51,204,255,0.8); }
+.l2c-pause-sub { font-family:'JetBrains Mono',monospace; font-size:12px; color:rgba(255,255,255,0.6); margin-bottom:22px; }
+.l2c-pause-resume { background:linear-gradient(135deg,#33ccff,#ffee33); color:#000; border:none; padding:14px 32px; border-radius:10px; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:16px; letter-spacing:1px; cursor:pointer; transition:transform 180ms; }
+.l2c-pause-resume:hover { transform:scale(1.06); }
+#labo2-c-modal:fullscreen { background:#000; }
+#labo2-c-modal:fullscreen .l2c-top-btns { top:10px; right:10px; z-index:1000; }
+#labo2-c-modal:fullscreen .l2c-cheat-hint { top:10px; left:10px; z-index:1000; }
 .l2c-close-btn { position:absolute; top:-42px; right:0; background:rgba(51,204,255,0.8); color:#000; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; letter-spacing:0.1em; }
 .l2c-cheat-hint { position:absolute; top:-42px; left:0; font-family:'JetBrains Mono',monospace; font-size:11px; color:rgba(255,255,255,0.5); letter-spacing:0.08em; }
 .l2c-results { position:absolute; inset:20px; background:linear-gradient(160deg, rgba(10,20,40,0.98), rgba(5,10,25,0.98)); border:2px solid rgba(51,204,255,0.6); border-radius:10px; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:30px; z-index:100; animation:l2cResultsPop 420ms cubic-bezier(0.34,1.56,0.64,1); }
@@ -20083,12 +20120,68 @@
     L.buildModal = function() {
       if (modalRoot) return modalRoot;
       modalRoot = document.createElement('div'); modalRoot.id = 'labo2-c-modal';
-      modalRoot.innerHTML = '<div class="l2c-stage"><div class="l2c-cheat-hint">H:debug · B:burst · K:killAll · P:pause · 1/2/3:power</div><button class="l2c-close-btn" data-l2c-close>× FERMER</button><canvas class="l2c-canvas" width="800" height="600"></canvas></div>';
+      modalRoot.innerHTML = '<div class="l2c-stage"><div class="l2c-cheat-hint">H:debug · B:burst · 1/2/3:power</div>' +
+        '<div class="l2c-top-btns">' +
+          '<button class="l2c-top-btn" data-l2c-fullscreen title="Plein écran">⛶</button>' +
+          '<button class="l2c-top-btn l2c-pause-btn" data-l2c-pause title="Pause">⏸</button>' +
+          '<button class="l2c-top-btn l2c-stop-btn" data-l2c-stop title="Arrêter la run">⏹</button>' +
+          '<button class="l2c-top-btn l2c-close" data-l2c-close title="Fermer">✕</button>' +
+        '</div>' +
+        '<canvas class="l2c-canvas" width="800" height="600"></canvas>' +
+        '<div class="l2c-pause-overlay" data-l2c-pauseoverlay style="display:none;">' +
+          '<div class="l2c-pause-box">' +
+            '<div class="l2c-pause-title">⏸ PAUSE</div>' +
+            '<div class="l2c-pause-sub">La run est en pause. Respire.</div>' +
+            '<button class="l2c-pause-resume" data-l2c-resume>▶ REPRENDRE</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
       document.body.appendChild(modalRoot);
       modalRoot.querySelector('[data-l2c-close]').onclick = function(){ L.closeModal(); };
+      // Fullscreen toggle
+      modalRoot.querySelector('[data-l2c-fullscreen]').onclick = function(){
+        if (!document.fullscreenElement) { if (modalRoot.requestFullscreen) modalRoot.requestFullscreen().catch(function(){}); }
+        else { if (document.exitFullscreen) document.exitFullscreen().catch(function(){}); }
+      };
+      // Pause toggle
+      modalRoot.querySelector('[data-l2c-pause]').onclick = function(){
+        if (!L.state || !L.state.running) return;
+        L.state.isPaused = !L.state.isPaused;
+        updatePauseOverlay();
+      };
+      modalRoot.querySelector('[data-l2c-resume]').onclick = function(){
+        if (!L.state) return;
+        L.state.isPaused = false;
+        updatePauseOverlay();
+      };
+      // Stop (fin de run immédiate)
+      modalRoot.querySelector('[data-l2c-stop]').onclick = function(){
+        if (!L.state || !L.state.running) return;
+        if (!confirm('Arrêter la run maintenant ?')) return;
+        L.endRun();
+      };
       modalRoot.addEventListener('click', function(e){ if (e.target === modalRoot) L.closeModal(); });
+      // Fullscreen scale handler
+      document.addEventListener('fullscreenchange', applyFullscreenScale);
+      window.addEventListener('resize', applyFullscreenScale);
       return modalRoot;
     };
+    function updatePauseOverlay() {
+      if (!modalRoot) return;
+      var ov = modalRoot.querySelector('[data-l2c-pauseoverlay]');
+      if (ov) ov.style.display = (L.state && L.state.isPaused) ? 'flex' : 'none';
+    }
+    function applyFullscreenScale() {
+      if (!modalRoot) return;
+      var stage = modalRoot.querySelector('.l2c-stage');
+      if (!stage) return;
+      if (document.fullscreenElement === modalRoot) {
+        var s = Math.min(window.innerWidth / 800, window.innerHeight / 600);
+        stage.style.transform = 'scale(' + s + ')';
+      } else {
+        stage.style.transform = '';
+      }
+    }
     L.openModal = function() {
       L.injectCss(); L.buildModal();
       modalRoot.classList.add('open');
@@ -20114,6 +20207,9 @@
       });
     };
     L.closeModal = function() {
+      if (document.fullscreenElement === modalRoot && document.exitFullscreen) {
+        document.exitFullscreen().catch(function(){});
+      }
       if (rafHandle) { cancelAnimationFrame(rafHandle); rafHandle = null; }
       if (L.state) L.state.running = false;
       if (L.aim && L.aim.detach) L.aim.detach();

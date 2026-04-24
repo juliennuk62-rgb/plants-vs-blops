@@ -19275,7 +19275,9 @@
       { id:'up_cooldown', emoji:'⏱', name:'-10% cooldown',  desc:'Tu tires plus souvent',                    apply:function(st){ st.cooldownMs = Math.max(150, st.cooldownMs * 0.9); } },
       { id:'up_pierce',   emoji:'🎯', name:'Pierce +1',     desc:'Le tir direct traverse +1 ennemi',        apply:function(st){ st.pierce = (st.pierce||0) + 1; } },
       { id:'up_splash',   emoji:'💥', name:'Splash final',  desc:'Dernier ennemi de chaîne explose 80px',   apply:function(st){ st.finalSplash = true; } },
-      { id:'up_heal',     emoji:'💚', name:'Soin +30 HP',   desc:'Soigne la plante',                        apply:function(st){ st.plant.hp = Math.min(st.plant.maxHp, (st.plant.hp||0) + 30); } }
+      { id:'up_heal',     emoji:'💚', name:'Soin +30 HP',   desc:'Soigne la plante',                        apply:function(st){ st.plant.hp = Math.min(st.plant.maxHp, (st.plant.hp||0) + 30); } },
+      { id:'up_harmonic', emoji:'🎵', name:'Résonance Lock', desc:'Les charges de résonance ne s\'effacent plus sur ennemis vivants', apply:function(st){ st.harmonicLock = true; } },
+      { id:'up_conductor',emoji:'🔌', name:'Conducteur',     desc:'+10% chance que chaque ennemi soit conductif (chain sans perte)',  apply:function(st){ st.conductorBonus = (st.conductorBonus||0) + 0.1; } }
     ];
     NS.state = {};
     NS.newGame = function () {
@@ -19291,6 +19293,12 @@
       s.pierce = 0; s.finalSplash = false;
       s.kills = 0; s.score = 0; s.chainMaxThisRun = 0; s._chainRunningLength = 0;
       s.upgrades = []; s.killsSinceLastUpgrade = 0; s.levelupPending = false; s.prerunPower = null;
+      // PULSE PROTOCOL state
+      s._lastAct = null; s.calm1EliteSpawned = false; s.calm2EliteSpawned = false;
+      s.scoreMultUntil = 0; s.scoreMult = 1; s.plantShieldUntil = 0;
+      s.actAnnounceT = 0; s.actAnnounceName = '';
+      // RÉSONANCE + BESTIAIRE state
+      s.harmonicLock = false; s.conductorBonus = 0;
       s.shakeT = 0; s.shakeMag = 0; s.shakeInitT = 0; s.hitstopUntil = 0; s.screenFlash = null; s.slowmoUntil = 0;
       s.godMode = false; s.rng = makeRng(Date.now()); s.gameOverReached = false; s.startedAt = Date.now();
       if (NS.combat) { NS.combat._spawnAccum = 0; NS.combat._enemyId = 0; }
@@ -19342,6 +19350,50 @@
     T.ENEMY_RADIUS = 12; T.BRUTE_RADIUS = 16; T.PLANT_RADIUS = 25; T.CURSOR_HIT_TOLERANCE = 12;
     T.ENEMY_COLORS = ['#ff4444', '#ff5a55', '#ee3333']; T.BRUTE_COLOR = '#8844ff';
     T.ENEMY_EMOJIS = ['🧟']; T.BRUTE_EMOJI = '👹';
+    // BESTIAIRE ÉLECTRIQUE : 6 enemy types + 2 élites. hp/speed sont des multiplicateurs du base.
+    T.ENEMY_TYPES = {
+      grunt:     { hp: 1.0, speed: 1.0, radius: 12, emoji: '🧟', color: '#ff4444', weight: 100, introT: 0 },
+      brute:     { hp: 2.0, speed: 0.7, radius: 16, emoji: '👹', color: '#8844ff', weight: 10,  introT: 40 },
+      dodger:    { hp: 0.6, speed: 1.4, radius: 10, emoji: '🦎', color: '#44ff88', weight: 18,  introT: 15 },
+      swarmer:   { hp: 0.4, speed: 1.5, radius: 8,  emoji: '🐝', color: '#ffee44', weight: 16,  introT: 20, groupSize: 5 },
+      reflector: { hp: 1.5, speed: 0.8, radius: 13, emoji: '🪞', color: '#cceeff', weight: 8,   introT: 35 },
+      splitter:  { hp: 1.5, speed: 0.9, radius: 12, emoji: '🧬', color: '#ff88cc', weight: 12,  introT: 50 },
+      prowler:   { hp: 4.0, speed: 0.5, radius: 22, emoji: '🐺', color: '#ffaa00', elite: true },
+      juggernaut:{ hp: 5.0, speed: 0.3, radius: 28, emoji: '🦏', color: '#bb44ff', elite: true }
+    };
+    // PULSE PROTOCOL : 3 actes + 2 calm windows. tint = overlay canvas full-screen.
+    T.ACTS = {
+      surge:    { start:0,  end:25, name:'ACTE I · SURGE',    shortName:'SURGE',    tint:'rgba(20,60,100,0.08)',  spawnMult:1.0 },
+      calm1:    { start:25, end:30, name:'CALM · PROWLER',    shortName:'PROWLER',  tint:'rgba(100,80,20,0.18)',  spawnMult:0 },
+      fracture: { start:30, end:55, name:'ACTE II · FRACTURE', shortName:'FRACTURE', tint:'rgba(100,30,30,0.10)',  spawnMult:1.0 },
+      calm2:    { start:55, end:60, name:'CALM · JUGGERNAUT', shortName:'JUGGERNAUT', tint:'rgba(80,30,120,0.20)', spawnMult:0 },
+      climax:   { start:60, end:90, name:'ACTE III · CLIMAX', shortName:'CLIMAX',   tint:'rgba(140,60,80,0.15)',  spawnMult:1.5 }
+    };
+    T.getAct = function(tSec) {
+      var keys = ['surge','calm1','fracture','calm2','climax'];
+      for (var i = 0; i < keys.length; i++) { var k = keys[i], a = T.ACTS[k]; if (tSec >= a.start && tSec < a.end) return { key:k, def:a }; }
+      return { key:'climax', def:T.ACTS.climax };
+    };
+    T.pickEnemyType = function(tSec) {
+      var active = []; var total = 0;
+      Object.keys(T.ENEMY_TYPES).forEach(function(key) {
+        var t = T.ENEMY_TYPES[key];
+        if (t.elite) return;
+        if ((t.introT || 0) > tSec) return;
+        active.push({ key: key, weight: t.weight || 10 });
+        total += t.weight || 10;
+      });
+      if (total === 0 || !active.length) return 'grunt';
+      var r = Math.random() * total;
+      for (var i = 0; i < active.length; i++) { r -= active[i].weight; if (r <= 0) return active[i].key; }
+      return active[0].key;
+    };
+    // RÉSONANCE HARMONIQUE
+    T.RESONANCE_STACK_MAX = 3;
+    T.RESONANCE_TIMER_MS = 2000;
+    T.RESONANCE_AOE_BASE = 60;
+    T.RESONANCE_AOE_PER_STACK = 30;
+    T.RESONANCE_DMG_MULT_PER_STACK = 0.5;
   })();
 
   /* ── C Agent 5 : Particules (lightning arcs + sparks) ──────────── */
@@ -19598,7 +19650,10 @@
     }
     function finishChain(lastEnemy) {
       var len = state._chainRunningLength || 0; if (len <= 0) { state._chainRunningLength = 0; return; }
-      var bonus = len * len * 10;
+      var rawBonus = len * len * 10;
+      // PULSE PROTOCOL : score multiplier après kill de Prowler (8s)
+      var mult = (state.scoreMultUntil && Date.now() < state.scoreMultUntil) ? (state.scoreMult || 1) : 1;
+      var bonus = Math.floor(rawBonus * mult);
       state.score = (state.score || 0) + bonus;
       if (len > (state.chainMaxThisRun || 0)) state.chainMaxThisRun = len;
       if (len >= 20) {
@@ -19639,18 +19694,77 @@
         var p = pending[i]; if (nowT < p.fireAt) continue;
         pending.splice(i, 1);
         var target = p.enemy;
-        if (!target || target.dead) { state.chainVisibleArcs.push({ fromX:p.fromX, fromY:p.fromY, toX:p.toX, toY:p.toY, createdAt:nowT, life:ARC_LIFE }); continue; }
+        if (!target || target.dead) {
+          state.chainVisibleArcs.push({ fromX:p.fromX, fromY:p.fromY, toX:p.toX, toY:p.toY, createdAt:nowT, life:ARC_LIFE });
+          continue;
+        }
         state.chainVisibleArcs.push({ fromX:p.fromX, fromY:p.fromY, toX:target.x, toY:target.y, createdAt:nowT, life:ARC_LIFE });
         try { window.LABO2_C.audio.zap(p.jumpIndex); } catch(e){}
         try { window.LABO2_C.particles.emit(target.x, target.y, 'spark', 8); } catch(e){}
+
+        // ─── RÉSONANCE DETONATION : si target a des charges, détonate AoE + reset falloff ───
+        var detonated = false;
+        if ((target.resonance || 0) > 0) {
+          detonated = true;
+          var stack = target.resonance;
+          var detRadius = 60 + 30 * stack;
+          var detDmg = p.damage * (1 + 0.5 * stack);
+          // Dégâts AoE aux voisins + cascade de charges
+          var arr = state.enemies || [];
+          for (var nb = arr.length - 1; nb >= 0; nb--) {
+            var ne = arr[nb];
+            if (!ne || ne.dead || ne === target) continue;
+            var ndx = ne.x - target.x, ndy = ne.y - target.y;
+            if (ndx*ndx + ndy*ndy > detRadius*detRadius) continue;
+            ne.hp -= detDmg;
+            ne.resonance = Math.min(3, (ne.resonance || 0) + 1);
+            ne.resonanceTimer = 2000;
+            if (ne.hp <= 0) {
+              state._chainRunningLength = (state._chainRunningLength || 0) + 1;
+              if (window.LABO2_C.hud && window.LABO2_C.hud.showChainCounter) window.LABO2_C.hud.showChainCounter(state._chainRunningLength);
+              try { window.LABO2_C.combat.markEnemyDead(ne); } catch(e){}
+              lastKilled = ne;
+            }
+          }
+          try { window.LABO2_C.particles.emit(target.x, target.y, 'chainZap', 20 + stack * 5); } catch(e){}
+          try { window.LABO2_C.juice.flashScreen('#ff66dd', 0.2 + stack * 0.1, 200); } catch(e){}
+          try { window.LABO2_C.juice.shake(3 + stack * 2, 100); } catch(e){}
+          target.resonance = 0; target.resonanceTimer = 0;
+        }
+
+        // ─── REFLECTOR : renvoie le 1er zap au closest other enemy (stun 500ms) ───
+        if (target.type === 'reflector' && !target.reflectorUsed) {
+          target.reflectorUsed = true;
+          target.stunUntil = Date.now() + 500;
+          var reflectTargets = findClosestN(target.x, target.y, 1, state.chainRadius, target);
+          if (reflectTargets.length > 0) {
+            state.chainPending.push({
+              fromX: target.x, fromY: target.y,
+              toX: reflectTargets[0].x, toY: reflectTargets[0].y,
+              enemy: reflectTargets[0], damage: p.damage,
+              fireAt: Date.now() + STAGGER_MS, jumpIndex: p.jumpIndex
+            });
+            try { window.LABO2_C.juice.numberPopup(target.x, target.y - 20, 'REFLECT', '#cceeff', 18); } catch(e){}
+          }
+        }
+
+        // ─── Apply damage ───
         target.hp -= p.damage;
+
         if (target.hp <= 0) {
           state._chainRunningLength = (state._chainRunningLength || 0) + 1;
           if (window.LABO2_C.hud && window.LABO2_C.hud.showChainCounter) window.LABO2_C.hud.showChainCounter(state._chainRunningLength);
           try { window.LABO2_C.combat.markEnemyDead(target); } catch(e){}
           lastKilled = target;
-          var nextDmg = p.damage * (state.damageFalloff || 0.85);
-          if (p.jumpIndex < (state.chainMaxJumps || 20) && nextDmg >= 1) enqueueJumps(target, target.x, target.y, nextDmg, p.jumpIndex + 1);
+          // CONDUCTIVE (swarmer) ou DETONATED : pas de falloff sur le next jump
+          var noFalloff = detonated || target.conductive;
+          var nextDmg = noFalloff ? p.damage : p.damage * (state.damageFalloff || 0.85);
+          if (p.jumpIndex < (state.chainMaxJumps || 20) && nextDmg >= 1)
+            enqueueJumps(target, target.x, target.y, nextDmg, p.jumpIndex + 1);
+        } else {
+          // Ennemi survit : add resonance stack
+          target.resonance = Math.min(3, (target.resonance || 0) + 1);
+          target.resonanceTimer = 2000;
         }
       }
       var arcs = state.chainVisibleArcs;
@@ -19702,8 +19816,11 @@
       combat.spawnEnemies(dtMs);
       combat.updateEnemies(dtMs);
     };
-    combat.spawnEnemy = function(forceX, forceY) {
+    // BESTIAIRE : spawnEnemy avec typeKey optionnel (utilise ENEMY_TYPES)
+    combat.spawnEnemy = function(forceType, forceX, forceY) {
       var s = NS.state; var tuning = getT(); var tSec = (s.tElapsed || 0) / 1000;
+      var typeKey = forceType || (tuning.pickEnemyType ? tuning.pickEnemyType(tSec) : 'grunt');
+      var typeDef = (tuning.ENEMY_TYPES && tuning.ENEMY_TYPES[typeKey]) || null;
       var x, y;
       if (forceX !== undefined && forceY !== undefined) { x = forceX; y = forceY; }
       else {
@@ -19714,35 +19831,95 @@
         else { x = -30; y = Math.random()*600; }
       }
       var vx = 400 - x, vy = 300 - y; var len = Math.sqrt(vx*vx+vy*vy) || 1;
-      var speed = tuning.enemySpeed ? tuning.enemySpeed(tSec) : 60;
-      var hp = tuning.enemyHP ? tuning.enemyHP(tSec) : 3;
-      var bruteRate = tuning.bruteSpawnRate ? tuning.bruteSpawnRate(tSec) : 0;
-      var isBrute = Math.random() < bruteRate;
-      if (isBrute) { hp = Math.ceil(hp * 2); speed = speed * 0.7; }
-      var color = isBrute ? '#8844ff' : (['#ff4444','#ff5a55','#ee3333'][Math.floor(Math.random()*3)]);
-      var emoji = isBrute ? '👹' : '🧟';
-      s.enemies.push({ id:++combat._enemyId, x:x, y:y, dirX:vx/len, dirY:vy/len, speed:speed, hp:hp, maxHp:hp, isBrute:isBrute, color:color, emoji:emoji, radius:isBrute?16:12, dead:false });
+      var baseSpeed = tuning.enemySpeed ? tuning.enemySpeed(tSec) : 60;
+      var baseHp = tuning.enemyHP ? tuning.enemyHP(tSec) : 3;
+      var hpMult = typeDef ? typeDef.hp : 1;
+      var spdMult = typeDef ? typeDef.speed : 1;
+      var hp = Math.max(1, Math.ceil(baseHp * hpMult));
+      var speed = baseSpeed * spdMult;
+      var radius = typeDef ? typeDef.radius : 12;
+      var color = typeDef ? typeDef.color : '#ff4444';
+      var emoji = typeDef ? typeDef.emoji : '🧟';
+      // Conductor bonus : 10% chance per upgrade stack que ce soit conductif (même non-swarmer)
+      var isConductive = typeKey === 'swarmer' || (Math.random() < (s.conductorBonus || 0));
+      s.enemies.push({
+        id:++combat._enemyId, x:x, y:y, dirX:vx/len, dirY:vy/len, speed:speed,
+        hp:hp, maxHp:hp, type:typeKey, isBrute: typeKey === 'brute', isElite: !!(typeDef && typeDef.elite),
+        color:color, emoji:emoji, radius:radius, dead:false,
+        resonance:0, resonanceTimer:0,
+        conductive: isConductive,
+        reflectorUsed: false, stunUntil: 0,
+        dodgerT: 0, dodgerSide: 0,
+        splitGen: 0
+      });
     };
+    // PULSE PROTOCOL : spawnEnemies gère les 3 actes + 2 calm windows
     combat.spawnEnemies = function(dtMs) {
       var s = NS.state; var tuning = getT();
-      var rate = tuning.enemySpawnRate ? tuning.enemySpawnRate((s.tElapsed||0)/1000) : 1;
+      var tSec = (s.tElapsed || 0) / 1000;
+      var actInfo = tuning.getAct ? tuning.getAct(tSec) : { key:'surge', def:{ spawnMult:1, name:'' } };
+      var curAct = actInfo.key;
+      // Détection transition d'acte
+      if (s._lastAct !== curAct) {
+        s._lastAct = curAct;
+        if (NS.hud && NS.hud.announceAct) NS.hud.announceAct(actInfo.def);
+        if (curAct === 'calm1' && !s.calm1EliteSpawned) { s.calm1EliteSpawned = true; combat.spawnEnemy('prowler'); }
+        if (curAct === 'calm2' && !s.calm2EliteSpawned) { s.calm2EliteSpawned = true; combat.spawnEnemy('juggernaut'); }
+      }
+      var spawnMult = (actInfo.def && typeof actInfo.def.spawnMult === 'number') ? actInfo.def.spawnMult : 1;
+      if (spawnMult <= 0) return; // calm window : pas de spawn normal
+      var rate = (tuning.enemySpawnRate ? tuning.enemySpawnRate(tSec) : 1) * spawnMult;
       if (rate <= 0) return;
       combat._spawnAccum += (dtMs/1000) * rate;
-      while (combat._spawnAccum >= 1) { combat.spawnEnemy(); combat._spawnAccum -= 1; }
+      while (combat._spawnAccum >= 1) {
+        combat._spawnAccum -= 1;
+        var typeKey = tuning.pickEnemyType ? tuning.pickEnemyType(tSec) : 'grunt';
+        var typeDef = tuning.ENEMY_TYPES ? tuning.ENEMY_TYPES[typeKey] : null;
+        if (typeDef && typeDef.groupSize && typeDef.groupSize > 1) {
+          // Swarmer spawn en groupe (5)
+          for (var g = 0; g < typeDef.groupSize; g++) combat.spawnEnemy(typeKey);
+        } else {
+          combat.spawnEnemy(typeKey);
+        }
+      }
     };
     combat.updateEnemies = function(dtMs) {
       var s = NS.state; var dt = dtMs/1000;
       var enemies = s.enemies; var plant = s.plant;
+      var nowT = Date.now();
+      var shieldActive = s.plantShieldUntil && nowT < s.plantShieldUntil;
       for (var i = enemies.length - 1; i >= 0; i--) {
         var e = enemies[i];
         if (e.dead) { enemies.splice(i, 1); continue; }
-        e.x += e.dirX * e.speed * dt; e.y += e.dirY * e.speed * dt;
+        // Stun (reflector après reflect)
+        if (e.stunUntil && nowT < e.stunUntil) continue;
+        // Résonance decay (sauf si harmonicLock actif)
+        if ((e.resonance || 0) > 0 && !s.harmonicLock) {
+          e.resonanceTimer = (e.resonanceTimer || 0) - dtMs;
+          if (e.resonanceTimer <= 0) { e.resonance = 0; e.resonanceTimer = 0; }
+        }
+        // Mouvement : dodger = zig-zag, sinon direct
+        var dx = e.dirX, dy = e.dirY;
+        if (e.type === 'dodger') {
+          e.dodgerT = (e.dodgerT || 0) + dtMs;
+          if (e.dodgerT > 800) { e.dodgerT = 0; e.dodgerSide = (Math.random() > 0.5 ? 1 : -1); }
+          var perpX = -e.dirY * (e.dodgerSide || 0) * 0.7;
+          var perpY = e.dirX * (e.dodgerSide || 0) * 0.7;
+          dx = e.dirX + perpX; dy = e.dirY + perpY;
+          var nlen = Math.sqrt(dx*dx + dy*dy) || 1; dx /= nlen; dy /= nlen;
+        }
+        e.x += dx * e.speed * dt; e.y += dy * e.speed * dt;
+        // Collision plant
         var d = dist(e.x, e.y, plant.x, plant.y);
         if (d < (plant.radius || 25) + e.radius) {
-          var dmg = e.isBrute ? 5 : 2;
-          if (!s.godMode) plant.hp -= dmg;
+          var dmg = e.isElite ? 10 : (e.isBrute ? 5 : 2);
+          if (!s.godMode && !shieldActive) plant.hp -= dmg;
           if (NS.audio) NS.audio.plantHit();
-          if (NS.juice) { NS.juice.flashScreen('#ff2222', 0.3, 200); NS.juice.shake(5, 100); /* PATCH : args order (x, y, text, color, size) */ NS.juice.numberPopup(plant.x, plant.y, '-' + dmg, '#ff2222', 16); }
+          if (NS.juice) {
+            NS.juice.flashScreen(shieldActive ? '#44ff88' : '#ff2222', 0.3, 200);
+            NS.juice.shake(5, 100);
+            NS.juice.numberPopup(plant.x, plant.y, shieldActive ? 'BLOCK' : ('-' + dmg), shieldActive ? '#44ff88' : '#ff2222', 16);
+          }
           e.dead = true; enemies.splice(i, 1);
           if (plant.hp <= 0) { plant.hp = 0; s.gameOverReached = true; }
         }
@@ -19773,6 +19950,12 @@
       }
       if (hits.length === 0) return;
       hits.sort(function(a,b){ return a.t - b.t; });
+      // DODGER : 40% chance d'esquiver le tir direct (1er hit seulement)
+      if (hits[0].enemy.type === 'dodger' && Math.random() < 0.4) {
+        if (NS.juice) NS.juice.numberPopup(hits[0].enemy.x, hits[0].enemy.y, 'DODGE', '#44ff88', 18);
+        if (NS.particles) NS.particles.emit(hits[0].enemy.x, hits[0].enemy.y, 'spark', 10);
+        return; // tir gaspillé, cooldown déjà appliqué
+      }
       var maxTargets = 1 + (s.pierce || 0);
       var killed = 0;
       for (var h = 0; h < hits.length && killed < maxTargets; h++) {
@@ -19791,6 +19974,41 @@
       s.killsSinceLastUpgrade = (s.killsSinceLastUpgrade || 0) + 1;
       if (NS.particles) NS.particles.emit(enemy.x, enemy.y, 'blood', 12);
       if (NS.audio) NS.audio.enemyDie();
+      // ÉLITES : récompenses de calm window
+      if (enemy.type === 'prowler') {
+        s.scoreMultUntil = Date.now() + 8000;
+        s.scoreMult = 2;
+        if (NS.juice) {
+          NS.juice.flashScreen('#ffd700', 0.6, 500); NS.juice.shake(8, 200);
+          NS.juice.numberPopup(400, 280, '⭐ SCORE ×2 · 8s ⭐', '#ffd700', 24);
+        }
+        if (NS.audio && NS.audio.bigChainBoom) NS.audio.bigChainBoom();
+      } else if (enemy.type === 'juggernaut') {
+        s.plant.hp = Math.min(s.plant.maxHp, s.plant.hp + 30);
+        s.plantShieldUntil = Date.now() + 3000;
+        if (NS.juice) {
+          NS.juice.flashScreen('#bb44ff', 0.6, 500); NS.juice.shake(8, 200);
+          NS.juice.numberPopup(s.plant.x, s.plant.y - 30, '🛡 +30 HP + SHIELD 3s', '#44ff88', 22);
+        }
+        if (NS.audio && NS.audio.bigChainBoom) NS.audio.bigChainBoom();
+      }
+      // SPLITTER : spawn 2 mini-splitters (max 2 générations)
+      if (enemy.type === 'splitter' && (enemy.splitGen || 0) < 2) {
+        for (var si = 0; si < 2; si++) {
+          var angle = Math.random() * Math.PI * 2;
+          var px = enemy.x + Math.cos(angle) * 15;
+          var py = enemy.y + Math.sin(angle) * 15;
+          combat.spawnEnemy('splitter', px, py);
+          var child = s.enemies[s.enemies.length - 1];
+          if (child) {
+            child.splitGen = (enemy.splitGen || 0) + 1;
+            child.hp = Math.max(1, Math.ceil(child.hp * 0.5));
+            child.maxHp = child.hp;
+            child.radius = 9;
+            child.speed = child.speed * 1.2;
+          }
+        }
+      }
       // POLISH : threshold cumulatif 5 + upgrades*5 → 5, 10, 15, 20, 25 kills entre chaque level-up
       var upThreshold = 5 + ((s.upgrades && s.upgrades.length) || 0) * 5;
       if (s.killsSinceLastUpgrade >= upThreshold && !s.levelupPending) { s.levelupPending = true; s.killsSinceLastUpgrade = 0; }
@@ -19835,6 +20053,14 @@
 .l2c-active-buffs .l2c-buff { background:rgba(10,15,25,0.75); padding:3px 9px; border-radius:4px; border:1px solid rgba(51,204,255,0.3); display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
 .l2c-active-buffs .l2c-buff-count { color:#33ccff; font-weight:700; }
 .l2c-active-buffs .l2c-buff-power { border-color:#ffee33; color:#ffee33; background:rgba(40,35,0,0.75); font-weight:700; }
+.l2c-act-banner { position:absolute; top:110px; left:50%; transform:translateX(-50%) translateY(-20px); padding:14px 32px; font-family:'Rubik Mono One',sans-serif; font-size:24px; letter-spacing:4px; background:rgba(10,20,40,0.92); border:2px solid #33ccff; border-radius:12px; color:#fff; box-shadow:0 0 30px rgba(51,204,255,0.6); opacity:0; transition:transform 500ms cubic-bezier(0.34,1.56,0.64,1), opacity 400ms; pointer-events:none; z-index:50; text-align:center; }
+.l2c-act-banner.l2c-act-show { opacity:1; transform:translateX(-50%) translateY(0); }
+.l2c-act-banner.calm { border-color:#ffd700; color:#ffd700; box-shadow:0 0 30px rgba(255,215,0,0.6); }
+.l2c-act-banner.climax { border-color:#ff6688; color:#ff99cc; box-shadow:0 0 40px rgba(255,100,150,0.7); animation:l2c-act-climax-pulse 600ms ease-in-out infinite alternate; }
+@keyframes l2c-act-climax-pulse { from { box-shadow:0 0 40px rgba(255,100,150,0.5); } to { box-shadow:0 0 60px rgba(255,100,150,0.9); } }
+.l2c-score-mult { position:absolute; top:60px; right:16px; padding:4px 10px; background:linear-gradient(90deg,#ffd700,#ff9944); color:#000; font-family:'Rubik Mono One',sans-serif; font-size:14px; border-radius:6px; letter-spacing:2px; box-shadow:0 0 14px rgba(255,200,0,0.6); animation:l2c-mult-pulse 400ms ease-in-out infinite alternate; display:none; }
+@keyframes l2c-mult-pulse { from { transform:scale(1); } to { transform:scale(1.05); } }
+.l2c-score-mult.l2c-show { display:block; }
 .l2c-modal-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.88); pointer-events:auto; animation:l2c-fade-in 0.3s ease-out; z-index:100; }
 .l2c-modal-overlay.levelup { background:rgba(5,10,20,0.72); backdrop-filter:blur(6px); }
 .l2c-modal-overlay.hiding { opacity:0; transition:opacity 0.3s; }
@@ -19867,8 +20093,12 @@
       up.appendChild(ul); up.appendChild(ub); _root.appendChild(up);
       var st = el('div', 'l2c-stats-mini'); st.innerHTML = 'RADIUS <span>150</span> · JUMPS <span>15</span> · DMG <span>10</span>'; _root.appendChild(st);
       var buffs = el('div', 'l2c-active-buffs'); _root.appendChild(buffs);
+      // Act banner (slide-in quand l'acte change)
+      var actBanner = el('div', 'l2c-act-banner'); actBanner.textContent = ''; _root.appendChild(actBanner);
+      // Score multiplier indicator (×2 quand prowler buff actif)
+      var scoreMult = el('div', 'l2c-score-mult', '×2 SCORE'); _root.appendChild(scoreMult);
       root.appendChild(_root);
-      _els = { tf:tf, sc:sc, ki:ki, bc:bc, pf:pf, pl:pl, php:php, ch:ch, ul:ul, uf:uf, st:st, buffs:buffs };
+      _els = { tf:tf, sc:sc, ki:ki, bc:bc, pf:pf, pl:pl, php:php, ch:ch, ul:ul, uf:uf, st:st, buffs:buffs, actBanner:actBanner, scoreMult:scoreMult };
       _prevChain = 0;
     };
     NS.hud.update = function(state, best) {
@@ -19892,6 +20122,12 @@
       var upCount = (s.upgrades || []).length;
       _els.ul.textContent = 'Upgrade ' + (upCount + 1) + ' in ' + Math.max(0, upT - su) + ' kills';
       _els.st.innerHTML = 'RADIUS <span>' + (s.chainRadius|0) + '</span> · JUMPS <span>' + ((s.chainMaxJumps === Infinity) ? '∞' : (s.chainMaxJumps|0)) + '</span> · DMG <span>' + (s.baseDamage|0) + '</span> · CD <span>' + (s.cooldownMs|0) + '</span>';
+      // Score multiplier indicator
+      if (_els.scoreMult) {
+        var active = s.scoreMultUntil && Date.now() < s.scoreMultUntil;
+        if (active) { _els.scoreMult.classList.add('l2c-show'); var remain = Math.ceil((s.scoreMultUntil - Date.now()) / 1000); _els.scoreMult.textContent = '×' + (s.scoreMult || 2) + ' SCORE · ' + remain + 's'; }
+        else _els.scoreMult.classList.remove('l2c-show');
+      }
       // Active buffs display (prerun power + stacks d'upgrades)
       if (_els.buffs) {
         var html = '';
@@ -19908,6 +20144,20 @@
         });
         if (_els.buffs.innerHTML !== html) _els.buffs.innerHTML = html;
       }
+    };
+    NS.hud.announceAct = function(actDef) {
+      if (!_els.actBanner || !actDef) return;
+      var banner = _els.actBanner;
+      banner.textContent = actDef.name || '';
+      banner.classList.remove('calm','climax');
+      if ((actDef.name||'').indexOf('CALM') >= 0) banner.classList.add('calm');
+      else if ((actDef.name||'').indexOf('CLIMAX') >= 0) banner.classList.add('climax');
+      banner.classList.remove('l2c-act-show');
+      void banner.offsetWidth;
+      banner.classList.add('l2c-act-show');
+      setTimeout(function(){
+        if (banner && !banner.classList.contains('climax')) banner.classList.remove('l2c-act-show');
+      }, 2500);
     };
     NS.hud.showChainCounter = function(length) {
       if (!_els.ch) return; var c = _els.ch;
@@ -20254,10 +20504,15 @@
       var s = L.state;
       ctx.setTransform(1,0,0,1,0,0);
       ctx.fillStyle = '#050810'; ctx.fillRect(0, 0, 800, 600);
+      // PULSE PROTOCOL : tint overlay selon acte en cours
+      var tSec = (s.tElapsed || 0) / 1000;
+      var actInfo = (L.tuning && L.tuning.getAct) ? L.tuning.getAct(tSec) : null;
+      if (actInfo && actInfo.def && actInfo.def.tint) {
+        ctx.fillStyle = actInfo.def.tint;
+        ctx.fillRect(0, 0, 800, 600);
+      }
       ctx.save();
-      // Apply zoom
       if (L.juice && L.juice.applyZoom) L.juice.applyZoom(ctx);
-      // Apply shake
       if (L.juice && L.juice.applyShake) L.juice.applyShake(ctx);
       // Draw plant (central)
       var plant = s.plant;
@@ -20265,21 +20520,48 @@
       ctx.shadowColor = '#33ff66'; ctx.shadowBlur = 15;
       ctx.font = '42px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('🌿', plant.x, plant.y);
-      // Plant glow ring
       var hpRatio = Math.max(0, plant.hp / plant.maxHp);
       ctx.strokeStyle = hpRatio > 0.5 ? '#33ff66' : (hpRatio > 0.2 ? '#ffaa00' : '#ff3333');
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(plant.x, plant.y, 30, -Math.PI/2, -Math.PI/2 + hpRatio * Math.PI * 2); ctx.stroke();
+      // SHIELD ring (si prowler/juggernaut kill récent)
+      if (s.plantShieldUntil && Date.now() < s.plantShieldUntil) {
+        ctx.strokeStyle = '#44ff88'; ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.5 + 0.3 * Math.sin(Date.now() / 80);
+        ctx.beginPath(); ctx.arc(plant.x, plant.y, 42, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       ctx.restore();
       // Draw enemies
       for (var i = 0; i < s.enemies.length; i++) {
         var e = s.enemies[i];
+        // Elite halo pulsant
+        if (e.isElite) {
+          ctx.save();
+          ctx.shadowColor = e.color; ctx.shadowBlur = 18;
+          ctx.strokeStyle = e.color; ctx.lineWidth = 3;
+          ctx.globalAlpha = 0.6 + 0.3 * Math.sin(Date.now() / 200);
+          ctx.beginPath(); ctx.arc(e.x, e.y, e.radius + 5, 0, Math.PI*2); ctx.stroke();
+          ctx.restore();
+        }
         ctx.fillStyle = e.color;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2); ctx.fill();
-        ctx.font = (e.isBrute ? '22px' : '16px') + ' serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = ((e.isElite ? 28 : (e.isBrute ? 22 : 16))) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(e.emoji || '🧟', e.x, e.y);
+        // RÉSONANCE dots autour de l'ennemi (indicateur primed)
+        if (e.resonance > 0) {
+          for (var ri = 0; ri < e.resonance; ri++) {
+            var ra = (ri / 3) * Math.PI * 2 - Math.PI / 2 + (Date.now() / 500);
+            var rx = e.x + Math.cos(ra) * (e.radius + 8);
+            var ry = e.y + Math.sin(ra) * (e.radius + 8);
+            ctx.fillStyle = '#ff66dd';
+            ctx.shadowColor = '#ff66dd'; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.arc(rx, ry, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        }
         if (e.hp < e.maxHp) {
-          var bw = 24, bh = 3, bx = e.x - bw/2, by = e.y - e.radius - 6;
+          var bw = e.isElite ? 40 : 24, bh = 3, bx = e.x - bw/2, by = e.y - e.radius - 6;
           ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx, by, bw, bh);
           var r = Math.max(0, e.hp / e.maxHp);
           ctx.fillStyle = r > 0.5 ? '#33ff66' : (r > 0.25 ? '#ffaa00' : '#ff4444');

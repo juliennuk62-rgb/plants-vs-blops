@@ -15464,6 +15464,74 @@
     banner.onmouseenter = () => banner.style.opacity = '1';
     banner.onmouseleave = () => banner.style.opacity = '0.3';
 
+    // ═══════════════════════════════════════════════════════════════════
+    // TEST-MODE UI ADJUSTMENTS (user request 2026-04-24)
+    //  1) FAB '🧪 Panneau Test' reste en bas-droite (bottom:18px,right:18px)
+    //  2) Bouton Admin forcé visible à GAUCHE du FAB, toujours allumé
+    //  3) #top-right HUD scrollable (trop de boutons avec Batches A-P)
+    // ═══════════════════════════════════════════════════════════════════
+    try {
+      // --- 3) HUD droit scrollable + repositionnement admin ---
+      const testStyle = document.createElement('style');
+      testStyle.id = 'pvb-test-overrides';
+      testStyle.textContent = `
+        /* HUD droit scrollable — nécessaire car Batches A-P ont ajouté 15+ boutons */
+        #top-right {
+          max-height: 90vh !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          padding-right: 6px !important;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,51,102,0.6) transparent;
+        }
+        #top-right::-webkit-scrollbar { width: 6px; }
+        #top-right::-webkit-scrollbar-track { background: transparent; }
+        #top-right::-webkit-scrollbar-thumb {
+          background: rgba(255,51,102,0.5);
+          border-radius: 3px;
+        }
+        #top-right::-webkit-scrollbar-thumb:hover { background: rgba(255,51,102,0.8); }
+
+        /* Admin toggle positionné à gauche du FAB Panneau Test */
+        #admin-toggle {
+          bottom: 18px !important;
+          right: 200px !important;
+          top: auto !important;
+          left: auto !important;
+          z-index: 9999 !important;
+          background: linear-gradient(135deg, #ffcc33, #ff9944) !important;
+          border: 2px solid rgba(255,255,255,0.4) !important;
+          box-shadow: 0 6px 24px rgba(255,153,68,0.5), 0 2px 8px rgba(0,0,0,0.5) !important;
+        }
+        /* Panel admin : quand ouvert, s'ancre aussi au-dessus du bas, pas trop large */
+        #admin-panel {
+          bottom: 70px !important;
+          right: 18px !important;
+          top: auto !important;
+          left: auto !important;
+          max-width: 380px !important;
+        }
+      `;
+      document.head.appendChild(testStyle);
+
+      // --- 2) Force l'affichage du bouton admin en mode test, toujours allumé ---
+      // buildAdminPanel() existe déjà dans le fichier mais n'est appelé que si IS_ADMIN.
+      // En mode test, on veut qu'il soit toujours présent pour que le testeur puisse ajuster.
+      if (!document.getElementById('admin-toggle')) {
+        if (typeof buildAdminPanel === 'function') {
+          try { buildAdminPanel(); } catch (e) { console.warn('[TEST] buildAdminPanel failed:', e); }
+        }
+      }
+      // Si le bouton existe maintenant, on s'assure qu'il est visible
+      const adminBtn = document.getElementById('admin-toggle');
+      if (adminBtn) {
+        adminBtn.style.display = 'block';
+        adminBtn.title = 'Panneau admin (mode test — toujours allumé)';
+      }
+    } catch (e) {
+      console.warn('[TEST] UI adjustments error:', e);
+    }
+
     console.log('[TEST_DASHBOARD] loaded —', ITEMS.length, 'items, testerId=' + testerId);
   }, 2000); // delay pour que firebase soit init
   </script>

@@ -19265,7 +19265,7 @@
     NS.PRERUN_POWERS = [
       { id:'overload', name:'Overload', emoji:'♾️', desc:'Chaîne sans limite de sauts', apply:function(st){ st.chainMaxJumps = Infinity; } },
       { id:'spark',    name:'Spark',    emoji:'⚡', desc:'Rayon de chaîne +50px',      apply:function(st){ st.chainRadius += 50; } },
-      { id:'zap',      name:'Zap',      emoji:'💥', desc:'+30% damage de base',        apply:function(st){ st.baseDamage *= 1.3; } }
+      { id:'zap',      name:'Zap',      emoji:'💥', desc:'+40% damage de base',        apply:function(st){ st.baseDamage *= 1.4; } }
     ];
     NS.INRUN_UPGRADES = [
       { id:'up_chain',    emoji:'🔗', name:'+1 saut',      desc:'Chaîne peut sauter 1 fois de plus',       apply:function(st){ if (st.chainMaxJumps !== Infinity) st.chainMaxJumps++; } },
@@ -19286,7 +19286,8 @@
       s.enemies = []; s.particles = []; s.popups = []; s.chainVisibleArcs = []; s.chainPending = [];
       s.cursor = { x: NS.PLANT_CENTER.x, y: NS.PLANT_CENTER.y, inCanvas: false };
       s.cooldown = 0; s.cooldownMs = 600;
-      s.baseDamage = 10; s.chainRadius = 150; s.chainMaxJumps = 15; s.damageFalloff = 0.85;
+      // POLISH : damageFalloff 0.85 → 0.9 pour chaîne plus longue
+      s.baseDamage = 10; s.chainRadius = 150; s.chainMaxJumps = 15; s.damageFalloff = 0.9;
       s.pierce = 0; s.finalSplash = false;
       s.kills = 0; s.score = 0; s.chainMaxThisRun = 0; s._chainRunningLength = 0;
       s.upgrades = []; s.killsSinceLastUpgrade = 0; s.levelupPending = false; s.prerunPower = null;
@@ -19330,7 +19331,8 @@
     T.BASE_DAMAGE = 10; T.CHAIN_RADIUS = 150; T.CHAIN_MAX_JUMPS = 15; T.DAMAGE_FALLOFF = 0.85;
     T.BASE_COOLDOWN_MS = 600; T.PLANT_MAX_HP = 100;
     T.enemySpawnRate = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return 1.0 + Math.pow(t / 45, 1.3) * 4.5; };
-    T.enemyHP = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return Math.max(2, 3 + (t / 45) * 9); };
+    // POLISH : enemy HP scale 3→8 (était 3→12) pour que la chaîne propage en fin de run
+    T.enemyHP = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return Math.max(2, 3 + (t / 45) * 5); };
     T.enemySpeed = function(tSec){ var t = Math.max(0, Math.min(45, tSec)); return 50 + (t / 45) * 60; };
     T.bruteSpawnRate = function(tSec){ if (tSec < 20) return 0; var t = Math.max(20, Math.min(45, tSec)); return ((t - 20) / 25) * 0.2; };
     T.scoreForChain = function(chainLength){ var n = Math.max(0, chainLength|0); return n * n * 10; };
@@ -19694,6 +19696,8 @@
       // CRITICAL : timer + tElapsed decrement (lesson from B)
       s.tElapsed = (s.tElapsed || 0) + dtMs;
       s.timer = Math.max(0, (s.timer || 0) - dtMs);
+      // POLISH : baseDamage passif time-scaled (+0.3/s) pour que la chaîne reste viable late game
+      s.baseDamage = (s.baseDamage || 10) + 0.3 * (dtMs / 1000);
       if (s.cooldown > 0) { s.cooldown -= dtMs; if (s.cooldown < 0) s.cooldown = 0; }
       combat.spawnEnemies(dtMs);
       combat.updateEnemies(dtMs);
@@ -19787,7 +19791,9 @@
       s.killsSinceLastUpgrade = (s.killsSinceLastUpgrade || 0) + 1;
       if (NS.particles) NS.particles.emit(enemy.x, enemy.y, 'blood', 12);
       if (NS.audio) NS.audio.enemyDie();
-      if (s.killsSinceLastUpgrade >= 5 && !s.levelupPending) { s.levelupPending = true; s.killsSinceLastUpgrade = 0; }
+      // POLISH : threshold cumulatif 5 + upgrades*5 → 5, 10, 15, 20, 25 kills entre chaque level-up
+      var upThreshold = 5 + ((s.upgrades && s.upgrades.length) || 0) * 5;
+      if (s.killsSinceLastUpgrade >= upThreshold && !s.levelupPending) { s.levelupPending = true; s.killsSinceLastUpgrade = 0; }
     };
     combat.killEnemy = combat.markEnemyDead; // alias pour debug
   })();
@@ -19875,8 +19881,11 @@
       _els.pl.textContent = '💚 ' + Math.max(0, pl.hp|0) + '/' + (pl.maxHp|0);
       if (pl.x != null && pl.y != null) { _els.php.style.left = pl.x + 'px'; _els.php.style.top = (pl.y - 40) + 'px'; }
       var su = s.killsSinceLastUpgrade || 0;
-      _els.uf.style.transform = 'scaleX(' + Math.max(0, Math.min(1, su/5)) + ')';
-      _els.ul.textContent = 'Next upgrade in ' + Math.max(0, 5 - su) + ' kills';
+      // POLISH : threshold cumulatif — affiche le bon nombre restant
+      var upT = 5 + ((s.upgrades || []).length * 5);
+      _els.uf.style.transform = 'scaleX(' + Math.max(0, Math.min(1, su/upT)) + ')';
+      var upCount = (s.upgrades || []).length;
+      _els.ul.textContent = 'Upgrade ' + (upCount + 1) + ' in ' + Math.max(0, upT - su) + ' kills';
       _els.st.innerHTML = 'RADIUS <span>' + (s.chainRadius|0) + '</span> · JUMPS <span>' + ((s.chainMaxJumps === Infinity) ? '∞' : (s.chainMaxJumps|0)) + '</span> · DMG <span>' + (s.baseDamage|0) + '</span>';
     };
     NS.hud.showChainCounter = function(length) {
@@ -20005,7 +20014,7 @@
           case 'g': s.godMode = !s.godMode; break;
           case 'm': if (NS.audio) NS.audio.setMuted(!NS.audio._isMuted()); break;
           case 't': tutorial.reset(); break;
-          case 'u': s.killsSinceLastUpgrade = 5; break;
+          case 'u': s.levelupPending = true; break; // force level-up modal immédiatement
           case 'c': if (s.plant) s.plant.hp = Math.min(s.plant.maxHp || 100, (s.plant.hp || 0) + 50); break;
           case 'x': s.chainRadius = (s.chainRadius || 150) * 1.5; s.chainMaxJumps = Infinity; s.baseDamage = (s.baseDamage || 10) * 2; break;
           // PATCH : NS.applyPrerunPower (pas NS.combat.applyPower qui n'existe pas)

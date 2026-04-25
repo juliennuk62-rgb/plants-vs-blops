@@ -9340,9 +9340,10 @@
   function renderInventory() {
     try { _renderInventory(); } catch (e) { console.error('renderInventory failed:', e); }
   }
-  function _renderInventory() {
-    [...inventoryEl.querySelectorAll('.seed-card')].forEach(c => c.remove());
-    inventoryEmpty.style.display = game.inventory.length === 0 ? 'block' : 'none';
+  // Helper : groupe l'inventaire et trie par dégât effectif décroissant.
+  // Le dégât effectif = damage de base × multiplicateur de mutation.
+  // Permet aux 3 features (affichage, tri, auto-select suivant) d'utiliser la même source de vérité.
+  function getSortedInventoryGroups() {
     const groupMap = new Map();
     const groups = [];
     game.inventory.forEach((seed, i) => {
@@ -9354,14 +9355,26 @@
       }
       g.count++; g.indices.push(i);
     });
+    groups.forEach(g => {
+      const p = PLANTS[g.plantId];
+      const mut = MUTATIONS[g.mutation] || MUTATIONS.none;
+      g.effectiveDamage = (p.damage || 0) * (mut.damageMult || 1);
+    });
     groups.sort((a, b) => {
+      if (b.effectiveDamage !== a.effectiveDamage) return b.effectiveDamage - a.effectiveDamage;
+      // Tiebreak : rareté décroissante puis mutation décroissante
       const ra = RARITY_KEYS.indexOf(PLANTS[a.plantId].rarity);
       const rb = RARITY_KEYS.indexOf(PLANTS[b.plantId].rarity);
       if (ra !== rb) return rb - ra;
-      const ma = MUTATION_KEYS.indexOf(a.mutation);
-      const mb = MUTATION_KEYS.indexOf(b.mutation);
-      return mb - ma;
+      return MUTATION_KEYS.indexOf(b.mutation) - MUTATION_KEYS.indexOf(a.mutation);
     });
+    return groups;
+  }
+
+  function _renderInventory() {
+    [...inventoryEl.querySelectorAll('.seed-card')].forEach(c => c.remove());
+    inventoryEmpty.style.display = game.inventory.length === 0 ? 'block' : 'none';
+    const groups = getSortedInventoryGroups();
     const selSeed = game.selectedSeedIdx !== null ? game.inventory[game.selectedSeedIdx] : null;
     groups.forEach(g => {
       const p = PLANTS[g.plantId];
@@ -9372,12 +9385,17 @@
       div.className = 'seed-card' + (isSelected ? ' selected' : '') + (mut.label ? ' mutated' : '');
       div.style.background = `linear-gradient(135deg, ${r.color}55, #222 70%)`;
       if (mut.label) div.style.color = mut.color;
+      // Affichage des dégâts (damage * mutation mult)
+      const dmgDisplay = g.effectiveDamage > 0
+        ? `<div class="seed-damage" style="font-size:10px;color:#ffaa55;font-weight:700;margin-top:2px;letter-spacing:0.3px;">⚔ ${g.effectiveDamage % 1 === 0 ? g.effectiveDamage : g.effectiveDamage.toFixed(1)}</div>`
+        : '';
       div.innerHTML = `
         <div class="seed-count">×${g.count}</div>
         <div class="seed-icon">${PLANT_ICONS[g.plantId] || '🌱'}</div>
         <div class="seed-name">${p.name}</div>
         <div class="seed-rarity" style="color:${r.color};">${r.label}</div>
         ${mut.label ? `<div class="seed-mutation" style="color:${mut.color};">${MUTATION_ICONS[g.mutation] || '✨'} ${mut.label}</div>` : ''}
+        ${dmgDisplay}
       `;
       div.onclick = () => { sfx('click'); selectSeed(g.indices[0]); };
       inventoryEl.appendChild(div);
@@ -14031,6 +14049,8 @@
       const slot = hitSlot(e);
       if (slot && !slot.plant) {
         const seed = game.inventory[game.selectedSeedIdx];
+        const placedPlantId = seed.plantId;
+        const placedMutation = seed.mutation;
         // En campagne : le cash sert pour placer (PvZ-style), les graines sont infinies
         if (game.mode === 'campaign' && game.campaignActive) {
           const plant = PLANTS[seed.plantId];
@@ -14047,7 +14067,26 @@
           game.inventory.splice(game.selectedSeedIdx, 1);
           placePlant(seed, slot);
         }
-        sfx('click'); cancelPlacement(); updateHud(); saveGame();
+        sfx('click');
+        // Auto-select pour spam-clic : priorité au même type, sinon prochain groupe trié
+        try {
+          const sameIdx = game.inventory.findIndex(s => s.plantId === placedPlantId && s.mutation === placedMutation);
+          if (sameIdx >= 0) {
+            game.selectedSeedIdx = sameIdx;
+            setSlotsVisible(true);
+            renderInventory();
+          } else {
+            const sortedGroups = getSortedInventoryGroups();
+            if (sortedGroups.length > 0) {
+              game.selectedSeedIdx = sortedGroups[0].indices[0];
+              setSlotsVisible(true);
+              renderInventory();
+            } else {
+              cancelPlacement();
+            }
+          }
+        } catch (_) { cancelPlacement(); }
+        updateHud(); saveGame();
       }
       return;
     }

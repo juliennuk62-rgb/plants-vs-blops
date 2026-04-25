@@ -2153,50 +2153,23 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // Hauteur cible en mètres (auto-fit bbox) — × 10 user feedback (était ~5m, perçu comme 0.5m visuel)
-    sunflower: 50, pea: 50, clover: 50, mint: 60, cactus: 50, ice: 40, bamboo: 60,
-    pumpkin: 50, lime: 50, strawberry: 50, pepper: 50, onion: 50, blueberry: 40,
-    fig: 50, watermelon: 50, kiwi: 50, lychee: 40, avocado: 50, mango: 50,
-    pineapple: 60, starfruit: 60, coconut: 50, dragon: 60, durian: 60, lotus: 50, phoenix: 60,
+    // Valeurs originales avant refonte (Food Kit Kenney scale absolu)
+    sunflower: 18, cactus: 14, strawberry: 13,
+    pepper: 15, watermelon: 13, pineapple: 15,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,
     ultrarare: 1.2, mythic: 1.3, goat: 1.6,
   };
-  // Mapping des plantes dispo en GLB — refonte v4 (2026-04-25)
-  // 100% Kenney Food Kit CC0 pour cohérence visuelle avec les Blops (style minimaliste-stylisé)
-  // Chaque plante = un fruit/légume du Food Kit qui correspond au mieux thématiquement
+  // Mapping des plantes dispo en GLB (les autres utilisent la primitive)
+  // RESET 2026-04-25 : retour à l'état initial après échec refonte v1-v6
+  // Seulement les 4 plantes Food Kit historiques qui marchaient avant
   const PLANT_GLB_FILE = {
-    sunflower:  'sunflower.glb',  // corn (épi de maïs jaune)
-    pea:        'pea.glb',        // broccoli (vert rond)
-    clover:     'clover.glb',     // cabbage (chou vert feuillu)
-    mint:       'mint.glb',       // leek (poireau vert long)
-    cactus:     'cactus.glb',     // eggplant (aubergine violette allongée)
-    ice:        'ice.glb',        // mushroom (champignon blanc)
-    bamboo:     'bamboo.glb',     // banana (long jaune)
-    pumpkin:    'pumpkin.glb',    // pumpkin (citrouille orange)
-    lime:       'lime.glb',       // pear (vert)
-    strawberry: 'strawberry.glb', // strawberry (existant)
-    pepper:     'pepper.glb',     // pepper (existant)
-    onion:      'onion.glb',      // onion (oignon)
-    blueberry:  'blueberry.glb',  // cherries (grappe rouge)
-    fig:        'fig.glb',        // tomato (rouge rond)
-    watermelon: 'watermelon.glb', // watermelon (existant)
-    kiwi:       'kiwi.glb',       // avocado (forme similaire vert)
-    lychee:     'lychee.glb',     // cherries (rouge rond)
-    avocado:    'avocado.glb',    // avocado (Food Kit)
-    mango:      'mango.glb',      // orange (rond orange)
-    pineapple:  'pineapple.glb',  // pineapple (existant)
-    starfruit:  'starfruit.glb',  // carrot (allongé pointu)
-    coconut:    'coconut.glb',    // coconut (Food Kit)
-    dragon:     'dragon.glb',     // cauliflower (gros hérissé)
-    durian:     'durian.glb',     // cauliflower (gros hérissé)
-    lotus:      'lotus.glb',      // broccoli (vert ronds)
-    phoenix:    'phoenix.glb',    // beet (rouge profond)
+    strawberry: 'strawberry.glb',
+    pepper:     'pepper.glb',
+    watermelon: 'watermelon.glb',
+    pineapple:  'pineapple.glb',
   };
-  // Set vide : toutes les plantes utilisent maintenant l'auto-fit hauteur cible
-  // (le bug group.scale=0.1 qui plombait l'auto-fit est fixé)
-  const PLANT_GLB_LEGACY_ABSOLUTE = new Set();
   const BLOP_GLB_FILE = {
     common: 'common.glb', rare: 'rare.glb', veryrare: 'veryrare.glb',
     ultrarare: 'ultrarare.glb', mythic: 'mythic.glb', goat: 'goat.glb',
@@ -2268,31 +2241,9 @@
             obj.receiveShadow = true;
           }
         });
-        // PVB-V6 : pré-scale les plantes UNE FOIS au load pour contourner le bug de clone()
-        // Le scale est figé dans le source — chaque clone hérite naturellement
-        if (bucket === 'plants') {
-          try {
-            const targetH = (PLANT_GLB_SCALE[id] || 5);
-            gltf.scene.updateMatrixWorld(true);
-            const box = new THREE.Box3().setFromObject(gltf.scene);
-            const size = new THREE.Vector3(); box.getSize(size);
-            const naturalH = size.y || 1;
-            const fit = targetH / naturalH;
-            gltf.scene.scale.setScalar(fit);
-            // Recentrer base au sol
-            gltf.scene.updateMatrixWorld(true);
-            const box2 = new THREE.Box3().setFromObject(gltf.scene);
-            const cx = (box2.min.x + box2.max.x) / 2;
-            const cz = (box2.min.z + box2.max.z) / 2;
-            gltf.scene.position.set(-cx, -box2.min.y, -cz);
-            console.log(`[PVB-V6 ${id}] target=${targetH}m fit=${fit.toFixed(2)} → ${(size.y * fit).toFixed(2)}m de haut`);
-          } catch (e) {
-            console.warn(`[PVB-V6 fail] ${id}:`, e.message);
-          }
-        }
         loadedModels[bucket][id] = gltf.scene;
       } catch (err) {
-        console.warn(`[GLB FAIL] ${bucket}/${id} (${filename}):`, err.message);
+        console.warn(`GLB load failed for ${bucket}/${id}:`, err.message);
       }
     };
     const ps = [];
@@ -8124,9 +8075,11 @@
     const group = new THREE.Group();
     let headRef;
     if (loadedModels.plants[seed.plantId]) {
-      // PVB-V6 : le modèle source est déjà pré-scalé dans preloadModels().
-      // Le clone hérite du scale figé. Aucune manipulation supplémentaire.
+      // GLB : modèle complet sans stem
       const model = loadedModels.plants[seed.plantId].clone(true);
+      const glbScale = PLANT_GLB_SCALE[seed.plantId] || 2.5;
+      model.scale.setScalar(glbScale);
+      // Force le modèle à être visible (cast shadow sur tous les meshes)
       model.traverse(obj => { if (obj.isMesh) obj.castShadow = true; });
       group.add(model);
       headRef = model;
@@ -8201,7 +8154,7 @@
       group.userData.auraColor = auraColor;
     }
     group.position.set(slot.x, 0.2, slot.z);
-    group.scale.set(1, 1, 1); // était 0.1 → animation pop-in (cassée), force 1.0 pour scale prévisible
+    group.scale.set(0.1, 0.1, 0.1);
     scene.add(group);
     slot.plant = group;
     game.plants.push(group);
@@ -15708,19 +15661,7 @@
     banner.onmouseenter = () => banner.style.opacity = '1';
     banner.onmouseleave = () => banner.style.opacity = '0.3';
 
-    // POC refonte plantes (2026-04-25) : crédits CC-BY discrets
-    // Compliance attribution Sketchfab CC-BY pour les modèles 3D utilisés.
-    // Affiché en HAUT-DROITE sous le banner, à gauche des boutons HUD pour éviter conflit.
-    try {
-      const credits = document.createElement('div');
-      credits.id = 'plant-credits';
-      credits.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#cce6ff;font:500 9px ui-monospace,Menlo,Consolas,monospace;padding:3px 9px;border-radius:0 0 6px 6px;border:1px solid rgba(120,180,220,0.2);border-top:none;z-index:9998;pointer-events:auto;cursor:help;letter-spacing:0.4px;opacity:0.55;transition:opacity 0.2s;user-select:none;white-space:nowrap;';
-      credits.title = '3D Plant Models : Kenney Nature Kit + Food Kit (CC0 — kenney.nl)';
-      credits.textContent = '🌱 3D models : Kenney (CC0)';
-      credits.onmouseenter = () => credits.style.opacity = '1';
-      credits.onmouseleave = () => credits.style.opacity = '0.55';
-      document.body.appendChild(credits);
-    } catch (_) {}
+    // (Crédit retiré : pas de modèles externes attribués actuellement)
 
     // ═══════════════════════════════════════════════════════════════════
     // TEST-MODE UI ADJUSTMENTS (user request 2026-04-24)

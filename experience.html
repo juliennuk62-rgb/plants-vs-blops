@@ -13686,14 +13686,14 @@
   function _ensureLaneHoverMesh() {
     if (_laneHoverMesh) return _laneHoverMesh;
     _laneHoverMat = new THREE.MeshBasicMaterial({
-      color: 0x6effa3, transparent: true, opacity: 0.22,
-      depthWrite: false, side: THREE.DoubleSide,
+      color: 0x6effa3, transparent: true, opacity: 0.42,
+      depthWrite: false, depthTest: false, side: THREE.DoubleSide,
     });
-    const geo = new THREE.PlaneGeometry(LANE_WIDTH * 0.92, LANE_LENGTH);
+    const geo = new THREE.PlaneGeometry(LANE_WIDTH * 0.95, LANE_LENGTH);
     _laneHoverMesh = new THREE.Mesh(geo, _laneHoverMat);
     _laneHoverMesh.rotation.x = -Math.PI / 2;
-    _laneHoverMesh.position.y = 0.07;
-    _laneHoverMesh.renderOrder = 2;
+    _laneHoverMesh.position.y = 0.32; // au-dessus des slots (0.17) pour rester visible
+    _laneHoverMesh.renderOrder = 999;
     _laneHoverMesh.visible = false;
     try { scene.add(_laneHoverMesh); } catch (_) {}
     return _laneHoverMesh;
@@ -13706,7 +13706,7 @@
     _laneHoverMesh.position.x = slot.x;
     _laneHoverMesh.position.z = 0;
     _laneHoverMat.color.setHex(hex || 0x6effa3);
-    _laneHoverMat.opacity = (kind === 'place') ? 0.28 : 0.20;
+    _laneHoverMat.opacity = (kind === 'place') ? 0.55 : 0.40;
     _laneHoverMesh.visible = true;
     _laneHoverState = { kind, key };
   }

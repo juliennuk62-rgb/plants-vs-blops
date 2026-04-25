@@ -6857,112 +6857,100 @@
     dmgPoolIdx = (dmgPoolIdx + 1) % DMG_POOL_SIZE;
     return el;
   }
-  // Système cumulatif : 1 damage number par enemy qui s'incrémente
-  // Durée 2s, anti-superposition (un seul label par Blop à la fois)
+  // Damage numbers persistants : 1 label par Blop, suit le monstre tant qu'il vit.
+  // À chaque hit : cumul du total + pop visuel (scale 1.3 puis retour 1.0).
+  // Position update à chaque frame via updateDamageLabel (appelé dans la boucle Blops).
+  // Cleanup automatique à la mort via clearDamageLabel (appelé dans killBrainrot).
   const enemyDmgMap = new WeakMap();
-  const DMG_LIFETIME_MS = 2000;
-  window._dbg = window._dbg || { calls: 0, noEnemy: 0, tabHouse: 0, cumul: 0, rateLimit: 0, outOfView: 0, spawned: 0, lastXY: '', lastEl: null };
   function spawnDamageNumber(enemy, damage, opts) {
     opts = opts || {};
-    window._dbg.calls++;
-    if (!enemy || !enemy.position) { window._dbg.noEnemy++; return; }
-    if (activeTab === 'house') { window._dbg.tabHouse++; return; }
+    if (!enemy || !enemy.position) return;
+    if (activeTab === 'house') return;
     const val = Math.max(1, Math.round(damage));
-    const now = performance.now();
 
-    // Cas 1 : cumul sur un damage number actif du même enemy
     const existing = enemyDmgMap.get(enemy);
-    if (existing && existing.el && (now - existing.firstHit) < DMG_LIFETIME_MS) {
+    if (existing && existing.el) {
+      // Cumul : ajoute au total + pop visual
       existing.total += val;
       if (opts.crit) existing.crit = true;
       if (opts.armored) existing.armored = true;
       const color = existing.crit ? '#ffdd33' : (existing.armored ? '#88aaff' : '#ffffff');
-      const sizePx = existing.crit ? 26 : Math.min(28, 18 + Math.log10(existing.total) * 2);
+      const sizePx = Math.min(32, 18 + Math.log10(existing.total + 1) * 3);
       existing.el.textContent = '-' + existing.total + (existing.crit ? '!' : '');
       existing.el.style.color = color;
       existing.el.style.fontSize = sizePx + 'px';
-      // Reposition (suit l'enemy si bouge)
-      try {
-        const pos = enemy.position.clone();
-        pos.y += (enemy.userData.size || 1) * 1.6;
-        pos.project(camera);
-        if (pos.z >= -1 && pos.z <= 1) {
-          existing.el.style.left = ((pos.x + 1) / 2 * innerWidth) + 'px';
-          existing.el.style.top = ((-pos.y + 1) / 2 * innerHeight) + 'px';
+      // Pop scale 1.3 → 1.0 en 200ms (signal visuel "ça tape")
+      existing.el.style.transition = 'transform 0.08s ease-out';
+      existing.el.style.transform = 'translate(-50%,-50%) scale(1.35)';
+      if (existing.popTimer) clearTimeout(existing.popTimer);
+      existing.popTimer = setTimeout(() => {
+        if (existing.el) {
+          existing.el.style.transition = 'transform 0.18s ease-out';
+          existing.el.style.transform = 'translate(-50%,-50%) scale(1.0)';
         }
-      } catch (_) {}
-      // Reset complet de l'animation : transition off, état initial visible
-      existing.el.style.display = 'block';
-      existing.el.style.transition = 'none';
-      existing.el.style.transform = 'translate(-50%,-12px) scale(1.25)';
-      existing.el.style.opacity = '1'; // CRITIQUE : reset à pleine visibilité avant de relancer le fade
-      // Double rAF pour garantir que le browser applique l'état initial avant la transition
-      const elRef = existing.el;
-      const isCrit = existing.crit;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!elRef) return;
-          elRef.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
-          elRef.style.transform = 'translate(-50%,-80px) scale(' + (isCrit ? 1.5 : 1.1) + ')';
-          elRef.style.opacity = '0';
-        });
-      });
-      // Reset timer cleanup
-      if (existing.cleanupTimer) clearTimeout(existing.cleanupTimer);
-      existing.cleanupTimer = setTimeout(() => {
-        if (existing.el) existing.el.style.display = 'none';
-        enemyDmgMap.delete(enemy);
-        dmgActiveCount = Math.max(0, dmgActiveCount - 1);
-      }, DMG_LIFETIME_MS);
-      // Note : on ne touche pas à firstHit pour éviter de prolonger indéfiniment
-      window._dbg.cumul++;
+      }, 90);
       return;
     }
 
-    // Cas 2 : nouveau spawn
-    if (dmgActiveCount >= DMG_MAX_ACTIVE) { window._dbg.rateLimit++; return; }
-    const pos = enemy.position.clone();
-    pos.y += (enemy.userData.size || 1) * 1.6;
-    pos.project(camera);
-    if (pos.z > 1 || pos.z < -1) { window._dbg.outOfView++; return; }
-    const x = (pos.x + 1) / 2 * innerWidth;
-    const y = (-pos.y + 1) / 2 * innerHeight;
-    window._dbg.spawned++;
-    window._dbg.lastXY = `${x.toFixed(0)},${y.toFixed(0)}`;
+    // Nouveau label persistant
+    if (dmgActiveCount >= DMG_MAX_ACTIVE) return;
     const el = _getDmgEl();
     const color = opts.crit ? '#ffdd33' : (opts.armored ? '#88aaff' : '#ffffff');
-    const sizePx = opts.crit ? 26 : 18;
+    const sizePx = opts.crit ? 22 : 18;
     el.textContent = '-' + val + (opts.crit ? '!' : '');
     el.style.display = 'block';
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
     el.style.color = color;
     el.style.fontSize = sizePx + 'px';
     el.style.fontWeight = '800';
     el.style.textShadow = '0 0 6px #000, 1px 1px 0 #000, -1px -1px 0 #000';
-    el.style.transition = 'none';
-    el.style.transform = 'translate(-50%,0) scale(1.15)';
     el.style.opacity = '1';
+    el.style.transition = 'transform 0.08s ease-out';
+    el.style.transform = 'translate(-50%,-50%) scale(1.35)';
+    // Position initiale
+    try {
+      const pos = enemy.position.clone();
+      pos.y += (enemy.userData.size || 1) * 1.6;
+      pos.project(camera);
+      if (pos.z >= -1 && pos.z <= 1) {
+        el.style.left = ((pos.x + 1) / 2 * innerWidth) + 'px';
+        el.style.top = ((-pos.y + 1) / 2 * innerHeight) + 'px';
+      }
+    } catch (_) {}
     dmgActiveCount++;
-    // Double rAF pour garantir que l'état initial est appliqué avant la transition
-    const elRef = el;
-    const critRef = !!opts.crit;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!elRef) return;
-        elRef.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
-        elRef.style.transform = 'translate(-50%,-80px) scale(' + (critRef ? 1.5 : 1.1) + ')';
-        elRef.style.opacity = '0';
-      });
-    });
-    const data = { el, total: val, firstHit: now, crit: !!opts.crit, armored: !!opts.armored };
-    data.cleanupTimer = setTimeout(() => {
-      el.style.display = 'none';
-      enemyDmgMap.delete(enemy);
-      dmgActiveCount = Math.max(0, dmgActiveCount - 1);
-    }, DMG_LIFETIME_MS);
+    const data = { el, total: val, crit: !!opts.crit, armored: !!opts.armored };
+    data.popTimer = setTimeout(() => {
+      if (data.el) {
+        data.el.style.transition = 'transform 0.18s ease-out';
+        data.el.style.transform = 'translate(-50%,-50%) scale(1.0)';
+      }
+    }, 90);
     enemyDmgMap.set(enemy, data);
-    window._dbg.lastEl = el; // ref pour inspecter l'élément depuis la console
+  }
+
+  // Repositionne le label sur le Blop. Appelé chaque frame dans la boucle Blops.
+  function updateDamageLabel(enemy) {
+    const data = enemyDmgMap.get(enemy);
+    if (!data || !data.el) return;
+    if (!enemy.position) return;
+    try {
+      const pos = enemy.position.clone();
+      pos.y += (enemy.userData.size || 1) * 1.6;
+      pos.project(camera);
+      if (pos.z < -1 || pos.z > 1) { data.el.style.display = 'none'; return; }
+      data.el.style.display = 'block';
+      data.el.style.left = ((pos.x + 1) / 2 * innerWidth) + 'px';
+      data.el.style.top = ((-pos.y + 1) / 2 * innerHeight) + 'px';
+    } catch (_) {}
+  }
+
+  // Retire le label quand le Blop meurt. Appelé dans killBrainrot.
+  function clearDamageLabel(enemy) {
+    const data = enemyDmgMap.get(enemy);
+    if (!data) return;
+    if (data.popTimer) clearTimeout(data.popTimer);
+    if (data.el) data.el.style.display = 'none';
+    enemyDmgMap.delete(enemy);
+    dmgActiveCount = Math.max(0, dmgActiveCount - 1);
   }
 
   function flashEnemyHit(enemy) {
@@ -7705,6 +7693,7 @@
       }
     }
     removeHpBar(enemy);
+    if (typeof clearDamageLabel === 'function') clearDamageLabel(enemy);
     scene.remove(enemy);
     const idx = game.brainrots.indexOf(enemy);
     if (idx !== -1) game.brainrots.splice(idx, 1);
@@ -7810,15 +7799,12 @@
       ud._lastDamagedBy = sourcePlant.userData.plantId;
     }
     // Tier 1 UI : damage numbers flottants + red flash emissive
-    window._dbg = window._dbg || {}; window._dbg.applyDamageHits = (window._dbg.applyDamageHits || 0) + 1;
     if (typeof spawnDamageNumber === 'function') {
       const baseDmg = sourcePlant && sourcePlant.userData && sourcePlant.userData.plantId
         ? (PLANTS[sourcePlant.userData.plantId] && PLANTS[sourcePlant.userData.plantId].damage) || damage
         : damage;
       const isCrit = damage > baseDmg * 1.8;
       spawnDamageNumber(enemy, damage, { crit: isCrit, armored });
-    } else {
-      window._dbg.spawnFnMissing = (window._dbg.spawnFnMissing || 0) + 1;
     }
     if (typeof flashEnemyHit === 'function') flashEnemyHit(enemy);
     if (ud.hp <= 0) {
@@ -14960,8 +14946,10 @@
         e.userData.variantHalo.position.y = 2.4 * e.userData.size + Math.sin(now * 3) * 0.1;
       }
       updateHpBar(e);
+      if (typeof updateDamageLabel === 'function') updateDamageLabel(e);
       if (e.position.z > LANE_LENGTH / 2 + 1.5) {
         removeHpBar(e);
+        if (typeof clearDamageLabel === 'function') clearDamageLabel(e);
         scene.remove(e);
         game.brainrots.splice(i, 1);
         // En campagne : le Blop atteint la base = perd 1 HP

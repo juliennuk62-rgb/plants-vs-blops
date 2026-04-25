@@ -42,6 +42,22 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Animation : pop-in scale 0.6→1.15 → vol cubic-bezier 750ms vers HUD → arrivée scale 0.5 + flashCash
   - Sprite progressif selon montant : ✨ < 25, 🪙 < 100, 💰 ≥ 100
 - **Lignes** : 20,903 → 20,967 (+64)
+- **Commit** : `14240ec`
+
+---
+
+## Itération #2 — 2026-04-25 (cleanup)
+
+- **Persona** : N/A (cleanup demandé par l'utilisateur, pas une itération de polish)
+- **Action** : Réduction du scope visuel à **6 boutons HUD** + admin/panneau test
+- **Niveau** : 🔴 Bold (suppression massive)
+- **Diff** :
+  - HTML : retrait de 22 boutons HUD non listés (Mixer, Autel, Labo, Défi du jour, Spore Bank, Méta-quêtes, Carte profil, Badges, Notifs, Skins, Timeline, Help, Profil, Missions, Classement, Mode caméra, Mémorial, Compte, Clip, Editor, Audio button, Reset)
+  - HTML : retrait du `#hero-panel` (Gardien)
+  - JS : retrait des 5108 lignes des modules LABO2_A, LABO2_B, LABO2_C, LABO2_META (lignes 15601-20708)
+  - JS : retrait du setTimeout d'install Labo 2 (HUD button + retrofit + meta hooks)
+- **Conservés** : 🛒 Boutique, 📚 Collection, 🎖 Carrière, ⭐ Maîtrise, ✨ Prestige, ⚙ Paramètres + ⚡ ADMIN + 🧪 Panneau Test + Polish iter #1 coin fly + PVB_EVENTS + Polish iter #1 coin fly-to-HUD
+- **Lignes** : 20,967 → 15,791 (−5,176 / −24.7%)
 - **Commit** : à venir au push
 
 ---

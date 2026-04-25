@@ -7657,6 +7657,70 @@
     updateHud();
     checkAchievements();
   }
+  // Iter #10 polish (persona "Damien dev grognon") : mini panel run stats live (DPS / KPM / CPM)
+  // Mesures depuis le 1er dégât du run. Snapshot kills/earned pour calcul delta. Clic = collapse.
+  let _runStats = { startTime: 0, totalDamage: 0, kills0: 0, earned0: 0 };
+  let _runStatsEl = null, _runStatsTimer = null, _runStatsCollapsed = false;
+  function _ensureRunStatsPanel() {
+    if (_runStatsEl) return _runStatsEl;
+    const el = document.createElement('div');
+    el.id = 'run-stats-panel';
+    el.style.cssText = [
+      'position:fixed', 'left:8px', 'bottom:80px',
+      'min-width:128px', 'padding:6px 10px',
+      'background:rgba(0,0,0,0.55)',
+      'border:1px solid rgba(120,200,255,0.35)',
+      'border-radius:8px', 'color:#cce6ff',
+      'font:600 11px ui-monospace,Menlo,Consolas,monospace',
+      'line-height:1.45', 'pointer-events:auto',
+      'z-index:50', 'user-select:none', 'cursor:pointer',
+      'box-shadow:0 4px 12px rgba(0,0,0,0.45)',
+      'transition:opacity 0.2s ease, min-width 0.2s ease',
+    ].join(';');
+    el.innerHTML = '<div data-rs="title" style="font-size:9px;letter-spacing:1.4px;color:#8db4d4;margin-bottom:2px;">📊 RUN STATS</div>'
+      + '<div data-rs="dps" style="color:#ffd34d;">⚡ DPS : —</div>'
+      + '<div data-rs="kpm" style="color:#ff8888;">💀 KPM : —</div>'
+      + '<div data-rs="cpm" style="color:#7eff90;">💰 CPM : —</div>';
+    el.title = 'Stats du run en cours · clic pour réduire';
+    el.addEventListener('click', () => {
+      _runStatsCollapsed = !_runStatsCollapsed;
+      el.style.opacity = _runStatsCollapsed ? '0.4' : '1';
+      el.style.minWidth = _runStatsCollapsed ? '32px' : '128px';
+      const title = el.querySelector('[data-rs="title"]');
+      if (title) title.textContent = _runStatsCollapsed ? '📊' : '📊 RUN STATS';
+      ['dps', 'kpm', 'cpm'].forEach(k => {
+        const r = el.querySelector('[data-rs="' + k + '"]');
+        if (r) r.style.display = _runStatsCollapsed ? 'none' : '';
+      });
+    });
+    document.body.appendChild(el);
+    _runStatsEl = el;
+    return el;
+  }
+  function _initRunStats() {
+    if (_runStats.startTime) return;
+    _runStats.startTime = performance.now();
+    _runStats.totalDamage = 0;
+    _runStats.kills0 = (typeof game !== 'undefined' && typeof game.kills === 'number') ? game.kills : 0;
+    _runStats.earned0 = (typeof game !== 'undefined' && game.stats && typeof game.stats.totalEarned === 'number') ? game.stats.totalEarned : 0;
+    _ensureRunStatsPanel();
+    if (!_runStatsTimer) _runStatsTimer = setInterval(_updateRunStatsPanel, 1500);
+  }
+  function _updateRunStatsPanel() {
+    if (!_runStatsEl || !_runStats.startTime) return;
+    const elapsed = (performance.now() - _runStats.startTime) / 1000;
+    if (elapsed < 1) return;
+    const dps = _runStats.totalDamage / elapsed;
+    const kills = ((game && game.kills) || 0) - _runStats.kills0;
+    const earned = ((game && game.stats && game.stats.totalEarned) || 0) - _runStats.earned0;
+    const kpm = (kills / elapsed) * 60;
+    const cpm = (earned / elapsed) * 60;
+    const set = (k, v) => { const r = _runStatsEl.querySelector('[data-rs="' + k + '"]'); if (r) r.textContent = v; };
+    set('dps', '⚡ DPS : ' + (dps >= 100 ? Math.round(dps) : dps.toFixed(1)));
+    set('kpm', '💀 KPM : ' + (kpm >= 100 ? Math.round(kpm) : kpm.toFixed(1)));
+    set('cpm', '💰 CPM : ' + Math.round(cpm));
+  }
+
   function applyDamage(enemy, damage, sourcePlant) {
     if (!enemy || !enemy.parent) return;
     const ud = enemy.userData;
@@ -7670,6 +7734,8 @@
     const armored = ud.mechanic === 'armored';
     if (armored) damage *= 0.5;
     ud.hp -= damage;
+    // Iter #10 : track damage pour le panel Run Stats live
+    try { _initRunStats(); _runStats.totalDamage += damage; } catch (_) {}
     // Batch O : track dernière plante qui a infligé des dégâts (pour mastery kill credit)
     if (sourcePlant && sourcePlant.userData && sourcePlant.userData.plantId) {
       ud._lastDamagedBy = sourcePlant.userData.plantId;

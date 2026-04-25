@@ -205,6 +205,30 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
 
 ---
 
+## Itération #10 — 2026-04-25 (Mini Run Stats HUD)
+
+- **Persona** : Damien, 31 ans, dev front-end grognon. Joue 20 min en pause déj. Refuse les jeux qui cachent leurs maths. Veut des chiffres lisibles, des indicateurs clairs, et la possibilité de comparer ses runs entre eux. "Si je vois pas les stats je suis aveugle."
+- **Critiques** :
+  1. "Je vois mon kills / cash / level mais aucune décomposition — quel rythme je tiens vraiment ?"
+  2. "Pas de stats temps réel : DPS moyen, cash/min, kills/min — je joue à l'aveugle"
+  3. "Quand je hover une plante, le tooltip donne les stats théoriques mais pas la perf réelle in-run"
+  4. "Aucun feedback sur si je suis 'efficient' ou pas"
+  5. "Zéro graph, zéro courbe, je découvre les bons builds par hasard"
+- **Choix** : **Mini Run Stats HUD** — petit panneau bottom-left semi-transparent qui affiche en temps réel ⚡ DPS, 💀 KPM (kills/min), 💰 CPM (cash earned/min) du run en cours. Snapshot des compteurs game.kills + game.stats.totalEarned au 1er dégât pour calcul delta. Update toutes les 1.5s. Clic sur le panel = collapse en pastille 📊. Adresse les critiques 1, 2 et 4 simultanément.
+- **Niveau** : 🟢 Safe (DOM panel + tracking lazy depuis applyDamage, zéro modif gameplay/balance/audio)
+- **Diff** :
+  - Variables `_runStats { startTime, totalDamage, kills0, earned0 }` + refs DOM `_runStatsEl/Timer/Collapsed`
+  - Helpers `_ensureRunStatsPanel / _initRunStats / _updateRunStatsPanel` ajoutés juste avant `applyDamage`
+  - DOM panel inline-styled (position fixed bottom-left, monospace 11px, 4 lignes : titre + 3 metrics colorées)
+  - Hook 1 ligne dans `applyDamage` après `ud.hp -= damage` : `_initRunStats()` (lazy, idempotent) + `_runStats.totalDamage += damage`
+  - Init lazy au 1er dégât → setInterval 1500ms qui update les valeurs
+  - Format adaptatif : .toFixed(1) pour <100, Math.round pour >=100
+  - Clic toggle collapse : opacity 0.4 + min-width 32px + masque les lignes de metrics
+- **Lignes** : 21,033 → 21,099 (+66)
+- **Commit** : à venir (auto-deploy)
+
+---
+
 ## ⚠️ Note pour les futures itérations
 
 Pour retirer un bouton du HUD :

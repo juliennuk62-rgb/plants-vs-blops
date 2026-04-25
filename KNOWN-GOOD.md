@@ -132,6 +132,16 @@ Le code de test.html a beaucoup de `document.getElementById('xxx-btn').appendChi
 - Slide-in cubic-bezier 350ms, hold 1500ms, slide-out 600ms
 - Couleurs : Mythic=magenta `#ff66dd`, GOAT=or `#ffd34d`
 
+## Iter #10 — Mini Run Stats HUD (depuis 2026-04-25)
+
+- Panel `#run-stats-panel` créé lazy au 1er dégât du run (init via `_initRunStats()` dans `applyDamage`)
+- Position fixed bottom:80px left:8px (au-dessus du dock à bottom:12px), z-index 50
+- Affiche live : ⚡ DPS, 💀 KPM (kills/min), 💰 CPM (cash earned/min)
+- Snapshot des compteurs au start du tracking (`kills0`, `earned0`) pour calcul delta
+- Update via setInterval 1500ms
+- Clic sur le panel = collapse/expand (toggle `_runStatsCollapsed`)
+- Le panel n'apparaît que si une plante touche un ennemi au moins une fois → cohérent avec "le run a commencé"
+
 ## Tests cross-cutting
 
 - Pas d'erreur console au load

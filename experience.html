@@ -2153,12 +2153,11 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // 100% Food Kit Kenney : scale absolu — group.scale 1.0 fix appliqué
-    // Les modèles ont bbox native 0.1-0.85m, donc scale 8 = 1-7m de haut visible
-    sunflower: 8, pea: 8, clover: 8, mint: 5, cactus: 8, ice: 12, bamboo: 5,
-    pumpkin: 8, lime: 8, strawberry: 10, pepper: 10, onion: 8, blueberry: 12,
-    fig: 12, watermelon: 6, kiwi: 10, lychee: 14, avocado: 10, mango: 14,
-    pineapple: 7, starfruit: 5, coconut: 10, dragon: 8, durian: 8, lotus: 8, phoenix: 10,
+    // Hauteur cible en mètres (auto-fit bbox) — uniforme pour matcher la taille des Blops (~5-6m)
+    sunflower: 5, pea: 5, clover: 5, mint: 6, cactus: 5, ice: 4, bamboo: 6,
+    pumpkin: 5, lime: 5, strawberry: 5, pepper: 5, onion: 5, blueberry: 4,
+    fig: 5, watermelon: 5, kiwi: 5, lychee: 4, avocado: 5, mango: 5,
+    pineapple: 6, starfruit: 6, coconut: 5, dragon: 6, durian: 6, lotus: 5, phoenix: 6,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,
@@ -2195,12 +2194,9 @@
     lotus:      'lotus.glb',      // broccoli (vert ronds)
     phoenix:    'phoenix.glb',    // beet (rouge profond)
   };
-  // 100% legacy absolute scale (Food Kit Kenney à échelle native ~0.1m)
-  const PLANT_GLB_LEGACY_ABSOLUTE = new Set([
-    'sunflower','pea','clover','mint','cactus','ice','bamboo','pumpkin','lime',
-    'strawberry','pepper','onion','blueberry','fig','watermelon','kiwi','lychee',
-    'avocado','mango','pineapple','starfruit','coconut','dragon','durian','lotus','phoenix',
-  ]);
+  // Set vide : toutes les plantes utilisent maintenant l'auto-fit hauteur cible
+  // (le bug group.scale=0.1 qui plombait l'auto-fit est fixé)
+  const PLANT_GLB_LEGACY_ABSOLUTE = new Set();
   const BLOP_GLB_FILE = {
     common: 'common.glb', rare: 'rare.glb', veryrare: 'veryrare.glb',
     ultrarare: 'ultrarare.glb', mythic: 'mythic.glb', goat: 'goat.glb',
@@ -2266,20 +2262,12 @@
     const loadOne = async (bucket, id, filename) => {
       try {
         const gltf = await loader.loadAsync(`${MODELS_BASE}/${bucket}/${filename}`);
-        let meshCount = 0;
         gltf.scene.traverse(obj => {
           if (obj.isMesh) {
-            meshCount++;
             obj.castShadow = true;
             obj.receiveShadow = true;
           }
         });
-        // DEBUG : log natural bbox + mesh count pour calibration
-        try {
-          const _box = new THREE.Box3().setFromObject(gltf.scene);
-          const _size = new THREE.Vector3(); _box.getSize(_size);
-          console.log(`[GLB OK] ${bucket}/${id} : ${meshCount} meshes, natural bbox = ${_size.x.toFixed(2)}×${_size.y.toFixed(2)}×${_size.z.toFixed(2)}`);
-        } catch (_) {}
         loadedModels[bucket][id] = gltf.scene;
       } catch (err) {
         console.warn(`[GLB FAIL] ${bucket}/${id} (${filename}):`, err.message);
@@ -8124,12 +8112,6 @@
       if (isLegacyAbsolute) {
         // Legacy : scale absolu (Food Kit Kenney models à échelle native ~0.1)
         model.scale.setScalar(glbScale);
-        // DEBUG : log scale effectif pour calibration
-        try {
-          const _b = new THREE.Box3().setFromObject(model);
-          const _s = new THREE.Vector3(); _b.getSize(_s);
-          console.log(`[PLANT PLACE] ${seed.plantId} scale=${glbScale} → effective bbox: ${_s.x.toFixed(2)}×${_s.y.toFixed(2)}×${_s.z.toFixed(2)}`);
-        } catch(_) {}
       } else {
         try {
           const tmpBox = new THREE.Box3().setFromObject(model);
@@ -8226,12 +8208,6 @@
     scene.add(group);
     slot.plant = group;
     game.plants.push(group);
-    // DEBUG : log bbox finale du GROUP entier après ajout à la scène
-    try {
-      const _gb = new THREE.Box3().setFromObject(group);
-      const _gs = new THREE.Vector3(); _gb.getSize(_gs);
-      console.log(`[GROUP FINAL] ${seed.plantId} group.scale=${group.scale.x} pos=(${slot.x},${slot.z}) → bbox: ${_gs.x.toFixed(2)}×${_gs.y.toFixed(2)}×${_gs.z.toFixed(2)}`);
-    } catch(_) {}
     if (game.mode === 'campaign' && game.campaignActive) {
       game.campaignActive.stats.plantsPlaced++;
     } else {

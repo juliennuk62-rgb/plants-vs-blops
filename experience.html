@@ -6906,10 +6906,10 @@
     el.style.opacity = '1';
     el.style.transition = 'transform 0.08s ease-out';
     el.style.transform = 'translate(-50%,-50%) scale(1.35)';
-    // Position initiale
+    // Position initiale (au-dessus de la HP bar : HP bar = size*1.3+0.4, label = size*1.3+1.0)
     try {
       const pos = enemy.position.clone();
-      pos.y += (enemy.userData.size || 1) * 1.6;
+      pos.y += (enemy.userData.size || 1) * 1.3 + 1.0;
       pos.project(camera);
       if (pos.z >= -1 && pos.z <= 1) {
         el.style.left = ((pos.x + 1) / 2 * innerWidth) + 'px';
@@ -6928,13 +6928,14 @@
   }
 
   // Repositionne le label sur le Blop. Appelé chaque frame dans la boucle Blops.
+  // Placé au-dessus de la HP bar (HP bar = size*1.3+0.4, label = size*1.3+1.0)
   function updateDamageLabel(enemy) {
     const data = enemyDmgMap.get(enemy);
     if (!data || !data.el) return;
     if (!enemy.position) return;
     try {
       const pos = enemy.position.clone();
-      pos.y += (enemy.userData.size || 1) * 1.6;
+      pos.y += (enemy.userData.size || 1) * 1.3 + 1.0;
       pos.project(camera);
       if (pos.z < -1 || pos.z > 1) { data.el.style.display = 'none'; return; }
       data.el.style.display = 'block';

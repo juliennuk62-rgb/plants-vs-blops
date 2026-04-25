@@ -7698,13 +7698,9 @@
     return el;
   }
   function _initRunStats() {
-    if (_runStats.startTime) return;
-    _runStats.startTime = performance.now();
-    _runStats.totalDamage = 0;
-    _runStats.kills0 = (typeof game !== 'undefined' && typeof game.kills === 'number') ? game.kills : 0;
-    _runStats.earned0 = (typeof game !== 'undefined' && game.stats && typeof game.stats.totalEarned === 'number') ? game.stats.totalEarned : 0;
-    _ensureRunStatsPanel();
-    if (!_runStatsTimer) _runStatsTimer = setInterval(_updateRunStatsPanel, 1500);
+    // 2026-04-25 : panneau RUN STATS désactivé (demande user). Conservé en code mort
+    // pour compatibilité avec les hooks dans applyDamage. Aucun panel DOM n'est créé.
+    return;
   }
   function _updateRunStatsPanel() {
     if (!_runStatsEl || !_runStats.startTime) return;
@@ -9395,32 +9391,32 @@
     }
   }
 
-  // Injecte les 2 boutons juste au-dessus de l'inventaire
+  // Injecte les 2 boutons en bas-gauche, à droite de la colonne inventaire
+  // (zone encadrée par l'utilisateur 2026-04-25, à la place du panneau RUN STATS retiré)
   function _injectGardenControls() {
     if (document.getElementById('garden-controls')) return;
-    if (!inventoryEl || !inventoryEl.parentNode) return;
     const wrap = document.createElement('div');
     wrap.id = 'garden-controls';
-    wrap.style.cssText = 'display:flex;gap:6px;padding:6px 8px;margin-bottom:4px;';
+    wrap.style.cssText = 'position:fixed;bottom:12px;left:118px;display:flex;gap:5px;z-index:50;';
     const btnFill = document.createElement('button');
     btnFill.id = 'btn-fill-garden';
     btnFill.textContent = '🌱 Remplir';
     btnFill.title = 'Place automatiquement les meilleures plantes de ton inventaire dans tous les slots libres';
-    btnFill.style.cssText = 'flex:1;font-size:11px;font-weight:700;padding:7px 4px;background:linear-gradient(180deg,#3a7a3a,#256025);color:#d8ffd8;border:1px solid #5fcc5f;border-radius:6px;cursor:pointer;letter-spacing:0.3px;box-shadow:0 2px 4px rgba(0,0,0,0.3);transition:filter 0.15s ease;';
-    btnFill.onmouseenter = () => btnFill.style.filter = 'brightness(1.2)';
+    btnFill.style.cssText = 'font-size:9px;font-weight:700;padding:4px 8px;background:linear-gradient(180deg,#3a7a3a,#256025);color:#d8ffd8;border:1px solid #5fcc5f;border-radius:5px;cursor:pointer;letter-spacing:0.2px;box-shadow:0 2px 4px rgba(0,0,0,0.4);transition:filter 0.15s ease;line-height:1.2;white-space:nowrap;';
+    btnFill.onmouseenter = () => btnFill.style.filter = 'brightness(1.25)';
     btnFill.onmouseleave = () => btnFill.style.filter = '';
     btnFill.onclick = () => fillGardenWithBest();
     const btnClear = document.createElement('button');
     btnClear.id = 'btn-clear-garden';
     btnClear.textContent = '🗑 Vider';
     btnClear.title = 'Retire toutes les plantes du jardin (avec confirmation)';
-    btnClear.style.cssText = 'flex:1;font-size:11px;font-weight:700;padding:7px 4px;background:linear-gradient(180deg,#7a3a3a,#602525);color:#ffd8d8;border:1px solid #cc5f5f;border-radius:6px;cursor:pointer;letter-spacing:0.3px;box-shadow:0 2px 4px rgba(0,0,0,0.3);transition:filter 0.15s ease;';
-    btnClear.onmouseenter = () => btnClear.style.filter = 'brightness(1.2)';
+    btnClear.style.cssText = 'font-size:9px;font-weight:700;padding:4px 8px;background:linear-gradient(180deg,#7a3a3a,#602525);color:#ffd8d8;border:1px solid #cc5f5f;border-radius:5px;cursor:pointer;letter-spacing:0.2px;box-shadow:0 2px 4px rgba(0,0,0,0.4);transition:filter 0.15s ease;line-height:1.2;white-space:nowrap;';
+    btnClear.onmouseenter = () => btnClear.style.filter = 'brightness(1.25)';
     btnClear.onmouseleave = () => btnClear.style.filter = '';
     btnClear.onclick = () => clearAllPlants();
     wrap.appendChild(btnFill);
     wrap.appendChild(btnClear);
-    inventoryEl.parentNode.insertBefore(wrap, inventoryEl);
+    document.body.appendChild(wrap);
   }
 
   // Helper : groupe l'inventaire et trie par dégât effectif décroissant.

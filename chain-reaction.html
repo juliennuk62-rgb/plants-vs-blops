@@ -1582,8 +1582,9 @@
         ];
         if (skinIdx < 0 || skinIdx >= skins.length) skinIdx = 0;
         var skinBtn = document.createElement('button');
-        skinBtn.className = 'l2c-top-btn';
-        skinBtn.style.cssText = 'position:absolute;top:-42px;right:130px;background:rgba(120,80,180,0.5);color:#fff;border:1px solid rgba(180,100,220,0.8);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:JetBrains Mono,monospace;font-weight:700;font-size:14px;pointer-events:auto;transition:background 120ms;';
+        skinBtn.className = 'l2c-top-btn cr-skin-btn';
+        // Positionné DANS le stage (top:8px) pour rester visible avec scale fullscreen
+        skinBtn.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(120,80,180,0.55);color:#fff;border:1px solid rgba(180,100,220,0.85);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:JetBrains Mono,monospace;font-weight:700;font-size:13px;pointer-events:auto;transition:background 120ms;z-index:100;letter-spacing:0.4px;box-shadow:0 4px 12px rgba(120,80,180,0.4);';
         skinBtn.onmouseenter = function(){ skinBtn.style.background = 'rgba(150,100,220,0.85)'; };
         skinBtn.onmouseleave = function(){ skinBtn.style.background = 'rgba(120,80,180,0.5)'; };
         function refreshSkinBtn() { skinBtn.textContent = '🎨 ' + skins[skinIdx].name; }

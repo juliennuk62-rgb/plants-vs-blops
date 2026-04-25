@@ -2153,9 +2153,9 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // POC Sketchfab refonte : valeurs initiales conservatrices, à recalibrer après 1er rendu live
-    sunflower: 2.5, // turtlemode (Sketchfab CC-BY) — était 18 (Kenney), Sketchfab models = échelle 1m
-    cactus: 2.5,    // rubenve (Sketchfab CC-BY)   — était 14 (Kenney)
+    // POC Sketchfab refonte : calibration ×3 après 1er rendu user feedback
+    sunflower: 7.5, // turtlemode (Sketchfab CC-BY) — calibré ×3 après "trop petit"
+    cactus: 7.5,    // rubenve (Sketchfab CC-BY)   — calibré ×3 après "trop petit"
     strawberry: 13, // Kenney inchangé
     pepper: 15, watermelon: 13, pineapple: 15,
   };

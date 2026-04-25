@@ -129,7 +129,32 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Le JS trouve les éléments via `getElementById`, no throw, init Three.js OK
 - **Visuel** : identique à iter #5 (les 9 boutons restent invisibles)
 - **Lignes** : 20,891 → 20,903 (+12)
+- **Commit** : `d7671cb`
+
+---
+
+## Itération #7 — 2026-04-25 (FULL RESET fix : test.html intact + CSS hide pure)
+
+- **Persona** : N/A (hotfix critique)
+- **Action** : Le hotfix iter #6 n'a pas suffi (jeu toujours cassé). Approche radicale : reset complet à test.html SANS toucher au HTML, juste un bloc CSS qui hide les 11 boutons indésirables. Aucun `display:none` inline (qui pourrait masquer des CSS classes utilisées par le JS).
+- **Niveau** : 🟢 Safe (modifs minimales : 2 lignes title + 1 bloc style + 1 ligne banner)
+- **Diff** :
+  - `cp test.html → experience.html` (full reset, 20,903 lignes intactes)
+  - Title + commentaire updated
+  - Préfixe localStorage `dev_` → `exp_`
+  - **+1 bloc `<style id="exp-hud-hide">`** dans le `<head>` qui cache les 11 boutons via CSS pur :
+    - `#labo-btn, #daily-btn, #spore-btn, #meta-btn, #profile-card-btn, #achievements-v2-btn, #notifs-btn, #skins-btn, #timeline-btn` (les 9 du screenshot)
+    - `#memorial-btn, #rec-btn` (Mémorial + Clip)
+    - `#top-right .hud-group:first-child #help-btn` (le help-btn dupliqué du group 1, celui du group 4 reste visible)
+  - Banner "MODE TEST DEV" → "MODE EXPÉRIENCE"
+- **Avantage cette approche** :
+  - HTML 100% identique à test.html → JS trouve TOUS les éléments
+  - Aucun risque de breakage init
+  - Si on veut restaurer un bouton plus tard : juste retirer une ligne du CSS
+- **Lignes** : 20,903 → 20,915 (+12)
 - **Commit** : à venir au push
+
+---
 - **Leçon** : éviter les retraits HTML purs sur test.html — préférer `display:none` quand le code JS référence l'élément.
 
 ---

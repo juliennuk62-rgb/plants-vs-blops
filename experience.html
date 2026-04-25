@@ -7,7 +7,8 @@
   <title>Plants vs Blops — EXPÉRIENCE (polish itératif)</title>
   <!-- ════════════════════════════════════════════════════════════════
        MODE EXPÉRIENCE : isolation localStorage avec préfixe exp_
-       Polish itératif sur le jardin endless (depuis test.html, base full features)
+       Polish itératif sur le jardin endless.
+       Tous les boutons HUD préservés en HTML — ceux non-souhaités sont juste display:none.
        ════════════════════════════════════════════════════════════════ -->
   <script>
     (function() {
@@ -24,6 +25,16 @@
       console.log('[EXP_MODE] localStorage isolated with exp_ prefix.');
     })();
   </script>
+  <!-- CSS hide pour les boutons HUD non-souhaités (HTML intact, JS les trouve toujours via getElementById) -->
+  <style id="exp-hud-hide">
+    /* Iter #5 (utilisateur) : retirés visuellement */
+    #labo-btn, #daily-btn, #spore-btn, #meta-btn, #profile-card-btn,
+    #achievements-v2-btn, #notifs-btn, #skins-btn, #timeline-btn { display: none !important; }
+    /* Iter #4 (utilisateur) : Mémorial + Clip retirés visuellement */
+    #memorial-btn, #rec-btn { display: none !important; }
+    /* Help : il y a deux #help-btn (group 1 et group 4). On hide celui du group 1. */
+    #top-right .hud-group:first-child #help-btn { display: none !important; }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Rubik+Mono+One&display=swap" rel="stylesheet">
@@ -904,19 +915,18 @@
       <div class="btn" id="ascension-btn" style="background:linear-gradient(90deg,#5533aa,#aa55cc);color:#fff;border-color:#aa88ee;">🥚 Autel <span id="ascension-count" style="opacity:0.85;font-size:11px;margin-left:4px;">0/3</span></div>
       <div class="btn" id="career-btn" style="background:linear-gradient(90deg,#aa6633,#ddaa44);color:#fff;border-color:#ffcc77;">🎖 Carrière</div>
       <div class="btn icon" id="settings-btn" title="Paramètres & Accessibilité" aria-label="Paramètres">⚙</div>
-      <!-- Boutons hidden via display:none (iter #6 fix) — leurs éléments DOM restent pour que le JS du jeu les trouve sans throw -->
-      <div class="btn" id="labo-btn" style="display:none;background:linear-gradient(90deg,#33aa88,#66ccaa);color:#fff;border-color:#88ddbb;">🧪 Labo</div>
-      <div class="btn" id="daily-btn" style="display:none;background:linear-gradient(90deg,#cc6633,#ff9944);color:#fff;border-color:#ffaa66;">🎯 Défi du jour</div>
-      <div class="btn" id="spore-btn" style="display:none;background:linear-gradient(90deg,#228844,#44bb66);color:#fff;border-color:#66dd99;" title="Méta-progression débloquée à Prestige 10+">🌰 Spore Bank</div>
-      <div class="btn" id="meta-btn" style="display:none;background:linear-gradient(90deg,#5588cc,#88bbee);color:#fff;border-color:#aaccff;">📅 Méta-quêtes</div>
-      <div class="btn" id="profile-card-btn" style="display:none;background:linear-gradient(90deg,#996611,#dd9922);color:#fff;border-color:#ffbb44;">🆔 Carte profil</div>
-      <div class="btn" id="achievements-v2-btn" style="display:none;background:linear-gradient(90deg,#c97b27,#ebbf5c);color:#1a0d00;border-color:#ffd988;font-weight:700;">🏅 Badges</div>
-      <div class="btn icon" id="notifs-btn" style="display:none;background:rgba(30,40,60,0.9);border-color:#88aaff;position:relative;" title="Notifications">
+      <div class="btn" id="labo-btn" style="background:linear-gradient(90deg,#33aa88,#66ccaa);color:#fff;border-color:#88ddbb;">🧪 Labo</div>
+      <div class="btn" id="daily-btn" style="background:linear-gradient(90deg,#cc6633,#ff9944);color:#fff;border-color:#ffaa66;">🎯 Défi du jour</div>
+      <div class="btn" id="spore-btn" style="background:linear-gradient(90deg,#228844,#44bb66);color:#fff;border-color:#66dd99;display:none;" title="Méta-progression débloquée à Prestige 10+">🌰 Spore Bank</div>
+      <div class="btn" id="meta-btn" style="background:linear-gradient(90deg,#5588cc,#88bbee);color:#fff;border-color:#aaccff;">📅 Méta-quêtes</div>
+      <div class="btn" id="profile-card-btn" style="background:linear-gradient(90deg,#996611,#dd9922);color:#fff;border-color:#ffbb44;">🆔 Carte profil</div>
+      <div class="btn" id="achievements-v2-btn" style="background:linear-gradient(90deg,#c97b27,#ebbf5c);color:#1a0d00;border-color:#ffd988;font-weight:700;">🏅 Badges</div>
+      <div class="btn icon" id="notifs-btn" style="background:rgba(30,40,60,0.9);border-color:#88aaff;position:relative;" title="Notifications">
         🔔 <span id="notifs-badge" style="position:absolute;top:-4px;right:-4px;background:#ff3333;color:#fff;border-radius:50%;font-size:10px;font-weight:900;min-width:16px;height:16px;line-height:16px;padding:0 4px;display:none;">0</span>
       </div>
-      <div class="btn icon" id="skins-btn" style="display:none;background:rgba(80,30,100,0.9);border-color:#cc88ff;" title="Skins plantes">🎨</div>
-      <div class="btn icon" id="timeline-btn" style="display:none;background:rgba(30,80,80,0.9);border-color:#66ccaa;" title="Timeline de la session">📽</div>
-      <div class="btn icon" id="help-btn" style="display:none;background:rgba(40,40,60,0.9);border-color:#aaaadd;" title="Aide & raccourcis (H)">?</div>
+      <div class="btn icon" id="skins-btn" style="background:rgba(80,30,100,0.9);border-color:#cc88ff;" title="Skins plantes">🎨</div>
+      <div class="btn icon" id="timeline-btn" style="background:rgba(30,80,80,0.9);border-color:#66ccaa;" title="Timeline de la session">📽</div>
+      <div class="btn icon" id="help-btn" style="background:rgba(40,40,60,0.9);border-color:#aaaadd;" title="Aide & raccourcis (H)">?</div>
       <div class="btn" id="mastery-btn" style="background:linear-gradient(90deg,#558833,#99cc55);color:#fff;border-color:#aaee77;" title="Maîtrise des plantes">⭐ Maîtrise</div>
     </div>
     <!-- Groupe 2 : Progression -->
@@ -929,7 +939,9 @@
     </div>
     <!-- Groupe 3 : Social -->
     <div class="hud-group">
+      <div class="btn" id="memorial-btn" role="button" tabindex="0" aria-label="Mémorial des plantes retraitées">🕊 Mémorial</div>
       <div class="btn" id="account-btn" role="button" tabindex="0" aria-label="Compte et sauvegarde cloud">☁ Compte <span id="account-status" style="margin-left:2px;">📱</span></div>
+      <div class="btn alert" id="rec-btn" role="button" tabindex="0" aria-label="Partager clip 20 secondes">🎬 Clip</div>
     </div>
     <!-- Groupe 4 : Dev / Système / Danger -->
     <div class="hud-group">

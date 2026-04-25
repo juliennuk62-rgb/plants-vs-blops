@@ -7544,6 +7544,8 @@
       else if (ud.rarity === 'mythic') showMemeFace('fire');
     }
     addCash(ud.value);
+    // Polish iter #1 : coin fly-to-HUD pour connexion spatiale kill→cash
+    try { if (typeof spawnCoinFly === 'function' && enemy && enemy.position && (ud.value || 0) > 0) spawnCoinFly(enemy.position, ud.value || 1); } catch(e){}
     if (game.mode === 'campaign' && game.campaignActive) {
       // CAMPAGNE : ne touche PAS au state endless (kills/xp/collection/missions/inventaire blops)
       game.campaignActive.stats.blopsKilled++;
@@ -9122,6 +9124,66 @@
     cashEl.classList.remove('cash-pulse');
     void cashEl.offsetWidth;
     cashEl.classList.add('cash-pulse');
+  }
+  // === COIN FLY-TO-HUD (Polish iter #1) ====================================
+  // Quand un Blop meurt et drop du cash, lance un coin animé qui vole depuis
+  // la position 3D de la mort jusqu'au compteur cash dans le HUD.
+  // Connexion spatiale kill→reward pour feedback dopaminergique.
+  // Cap à 14 coins simultanés pour préserver les FPS pendant les vagues massives.
+  const _coinFlyerActive = { count: 0 };
+  function _projectToScreen(worldPos) {
+    const v = worldPos.clone();
+    v.project(camera);
+    return {
+      x: (v.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-v.y * 0.5 + 0.5) * window.innerHeight
+    };
+  }
+  function spawnCoinFly(worldPos, amount) {
+    if (!cashEl || !worldPos || !camera) return;
+    if (_coinFlyerActive.count > 14) return; // cap perf
+    const screen = _projectToScreen(worldPos);
+    if (screen.x < -50 || screen.x > window.innerWidth + 50) return; // hors-écran
+    const target = cashEl.getBoundingClientRect();
+    const targetX = target.left + target.width / 2;
+    const targetY = target.top + target.height / 2;
+    const coin = document.createElement('div');
+    coin.className = 'coin-flyer';
+    // Sprite progressif selon montant : étincelle → pièce → sac de pognon
+    coin.textContent = amount >= 100 ? '💰' : (amount >= 25 ? '🪙' : '✨');
+    const size = Math.min(34, 16 + amount * 0.15);
+    coin.style.cssText = 'position:fixed;left:' + screen.x + 'px;top:' + screen.y + 'px;'
+      + 'font-size:' + size + 'px;pointer-events:none;z-index:99998;'
+      + 'text-shadow:0 0 10px rgba(255,210,80,0.9),0 0 18px rgba(255,170,40,0.5);'
+      + 'transform:translate(-50%,-50%) scale(0.6);opacity:0;'
+      + 'transition:transform 700ms cubic-bezier(0.34,1.56,0.64,1),'
+      + 'left 750ms cubic-bezier(0.5,0.05,0.6,1.1),'
+      + 'top 750ms cubic-bezier(0.4,-0.3,0.6,0.5),'
+      + 'opacity 200ms ease-out;'
+      + 'will-change:left,top,transform,opacity;';
+    document.body.appendChild(coin);
+    _coinFlyerActive.count++;
+    // 1ère frame : apparition (pop-in scale + fade-in)
+    requestAnimationFrame(() => {
+      coin.style.opacity = '1';
+      coin.style.transform = 'translate(-50%,-50%) scale(1.15)';
+      // 2ème frame : déclenche le vol vers la HUD
+      requestAnimationFrame(() => {
+        coin.style.left = targetX + 'px';
+        coin.style.top = targetY + 'px';
+      });
+    });
+    // Arrivée : scale-down + fade-out + pulse compteur cash
+    setTimeout(() => {
+      coin.style.transform = 'translate(-50%,-50%) scale(0.5)';
+      coin.style.opacity = '0';
+      try { flashCash(); } catch(e){}
+    }, 700);
+    // Cleanup
+    setTimeout(() => {
+      if (coin.parentNode) coin.parentNode.removeChild(coin);
+      _coinFlyerActive.count = Math.max(0, _coinFlyerActive.count - 1);
+    }, 1000);
   }
   function updatePrestigeButtonVisibility() {
     const unlockLvl = levelRequiredForPrestige(1);

@@ -8226,6 +8226,12 @@
     scene.add(group);
     slot.plant = group;
     game.plants.push(group);
+    // DEBUG : log bbox finale du GROUP entier après ajout à la scène
+    try {
+      const _gb = new THREE.Box3().setFromObject(group);
+      const _gs = new THREE.Vector3(); _gb.getSize(_gs);
+      console.log(`[GROUP FINAL] ${seed.plantId} group.scale=${group.scale.x} pos=(${slot.x},${slot.z}) → bbox: ${_gs.x.toFixed(2)}×${_gs.y.toFixed(2)}×${_gs.z.toFixed(2)}`);
+    } catch(_) {}
     if (game.mode === 'campaign' && game.campaignActive) {
       game.campaignActive.stats.plantsPlaced++;
     } else {

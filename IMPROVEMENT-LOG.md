@@ -74,6 +74,27 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Title : "Plants vs Blops - v6 DUAL GARDEN (local test)" → "Plants vs Blops — EXPÉRIENCE (polish itératif)"
 - **Itérations précédentes (#1, #2) ABANDONNÉES** car appliquées sur la mauvaise base. Le polish reprendra fresh à partir de cette base prod.
 - **Lignes** : 8,782 → 8,817 (+35)
+- **Commit** : `9ed3a69`
+
+---
+
+## Itération #4 — 2026-04-25 (rebuild depuis test.html + features Autel/Maîtrise/Carrière)
+
+- **Persona** : N/A (demande utilisateur : ajouter 3 features + retirer 2 boutons)
+- **Action** : Rebuild de `experience.html` depuis `test.html` (1.17 MB, full features) au lieu de `index.html`. Test.html contient déjà Autel, Maîtrise, Carrière fonctionnels — extraction surgicale aurait demandé ~2000 lignes de copy-paste. Approche pragmatique : prendre le superset et retirer les 2 boutons indésirables.
+- **Niveau** : 🔴 Bold (rebuild complet from scratch)
+- **Diff** :
+  - `cp test.html → experience.html` (20,903 lignes)
+  - **Préfixe localStorage** : `dev_` → `exp_` (au top du `<head>`)
+  - **Flag** : `__PVB_EXP_MODE__ = true` ajouté
+  - **Title** : "TEST DEV (feedback dashboard)" → "EXPÉRIENCE (polish itératif)"
+  - **Banner** : "🧪 MODE TEST DEV" → "🧬 MODE EXPÉRIENCE"
+  - **Retiré** : `#memorial-btn` (🕊 Mémorial) + `#rec-btn` (🎬 Clip)
+- **Features incluses** : Boutique, Mixer, Collection, **Autel/Ascension** (🥚), Carrière, Settings, Labo, Défi du jour, Spore Bank, Méta-quêtes, Carte profil, Badges, Notifs, Skins, Timeline, Help, **Maîtrise** (⭐), Profil, Missions, Classement, Camera, Prestige, Compte, Editor, Settings, Audio, Help, Reset, Hero panel (Gardien), Labo 2 (Features A/B/C), Events system (Spring), Panneau test, Admin
+- **Lignes** : 8,817 → 20,902 (+12,085 / 137% increase)
 - **Commit** : à venir au push
+- **Note** : si l'utilisateur veut retirer d'autres features, on le fera incrémentalement par demande explicite (et avec test post-removal).
+
+---
 
 ---

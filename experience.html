@@ -2153,11 +2153,12 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // 100% Food Kit Kenney : scale absolu × 30 user feedback (était ~14)
-    sunflower: 420, pea: 420, clover: 390, mint: 420, cactus: 420, ice: 420, bamboo: 420,
-    pumpkin: 390, lime: 420, strawberry: 390, pepper: 450, onion: 420, blueberry: 420,
-    fig: 420, watermelon: 390, kiwi: 420, lychee: 420, avocado: 420, mango: 420,
-    pineapple: 450, starfruit: 420, coconut: 420, dragon: 420, durian: 420, lotus: 390, phoenix: 420,
+    // 100% Food Kit Kenney : scale absolu — group.scale 1.0 fix appliqué
+    // Les modèles ont bbox native 0.1-0.85m, donc scale 8 = 1-7m de haut visible
+    sunflower: 8, pea: 8, clover: 8, mint: 5, cactus: 8, ice: 12, bamboo: 5,
+    pumpkin: 8, lime: 8, strawberry: 10, pepper: 10, onion: 8, blueberry: 12,
+    fig: 12, watermelon: 6, kiwi: 10, lychee: 14, avocado: 10, mango: 14,
+    pineapple: 7, starfruit: 5, coconut: 10, dragon: 8, durian: 8, lotus: 8, phoenix: 10,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,
@@ -8123,6 +8124,12 @@
       if (isLegacyAbsolute) {
         // Legacy : scale absolu (Food Kit Kenney models à échelle native ~0.1)
         model.scale.setScalar(glbScale);
+        // DEBUG : log scale effectif pour calibration
+        try {
+          const _b = new THREE.Box3().setFromObject(model);
+          const _s = new THREE.Vector3(); _b.getSize(_s);
+          console.log(`[PLANT PLACE] ${seed.plantId} scale=${glbScale} → effective bbox: ${_s.x.toFixed(2)}×${_s.y.toFixed(2)}×${_s.z.toFixed(2)}`);
+        } catch(_) {}
       } else {
         try {
           const tmpBox = new THREE.Box3().setFromObject(model);
@@ -8215,7 +8222,7 @@
       group.userData.auraColor = auraColor;
     }
     group.position.set(slot.x, 0.2, slot.z);
-    group.scale.set(0.1, 0.1, 0.1);
+    group.scale.set(1, 1, 1); // était 0.1 → animation pop-in (cassée), force 1.0 pour scale prévisible
     scene.add(group);
     slot.plant = group;
     game.plants.push(group);

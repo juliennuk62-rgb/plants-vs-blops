@@ -124,6 +124,14 @@ Le code de test.html a beaucoup de `document.getElementById('xxx-btn').appendChi
 - Mesh unique réutilisé : `_laneHoverMesh` (PlaneGeometry, MeshBasicMaterial transparent, renderOrder 2)
 - Tous les hooks sont try/catch : aucun risque de bloquer le boot
 
+## Iter #9 — Spawn Alert Mythic/GOAT (depuis 2026-04-25)
+
+- Au spawn d'un Blop `mythic` ou `goat` (non-variant, non sub-spawn), un banner cinématique "⚡ MYTHIC BLOP ⚡" / "⭐ GOAT BLOP ⭐" apparaît top-center
+- Throttle 4s entre 2 alerts (`_lastRareSpawnAlertAt`)
+- Skippé pour les variantes déjà annoncées (Selenis lunaire, Mirror joueur, Nocturis vampire)
+- Slide-in cubic-bezier 350ms, hold 1500ms, slide-out 600ms
+- Couleurs : Mythic=magenta `#ff66dd`, GOAT=or `#ffd34d`
+
 ## Tests cross-cutting
 
 - Pas d'erreur console au load

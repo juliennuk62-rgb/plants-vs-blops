@@ -183,6 +183,28 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
 
 ---
 
+## Itération #9 — 2026-04-25 (Spawn Alert Mythic/GOAT)
+
+- **Persona** : Inès, 29 ans, vétéran gacha (Genshin/HSR depuis 4 ans). Joue 10-15 min en pause café. Adore les drops rares, les spawns dramatiques, le sentiment "OH SHIT c'est arrivé". Cherche des moments forts pour briser le flow plat.
+- **Critiques** :
+  1. "Quand un Mythic Blop apparaît, il arrive comme un commun — zéro signal, zéro event"
+  2. "Le flow est plat de la wave 1 à la wave 50, aucun pic d'attention forcé par le jeu"
+  3. "Le drop d'essence est trop subtil — invisible vs damage numbers"
+  4. "Pas de moment cinématique au spawn d'un boss — juste 'oh il est là'"
+  5. "Les kills rares vs communs ont un feedback trop similaire"
+- **Choix** : **Spawn Alert Banner pour Mythic/GOAT** — banner cinématique slide-in/out qui annonce "⚡ MYTHIC BLOP ⚡" ou "⭐ GOAT BLOP ⭐" + nom du Blop quand un ennemi rare apparaît dans le jardin endless. Couleur teintée par rareté (Mythic = magenta, GOAT = or). Throttle 4s pour éviter le spam multi-spawns. Skip pour les variantes spéciales déjà annoncées (Selenis, Mirror, Nocturis qui ont leurs propres toasts) et pour les sub-spawns (split/summon avec hpMult < 1).
+- **Niveau** : 🟢 Safe (purement DOM div animé, zéro toucher gameplay/balance/audio)
+- **Diff** :
+  - Fonction `showRareSpawnAlert(rarity, name)` ajoutée juste avant `spawnBrainrot` (~ligne 7313)
+  - Variable globale `_lastRareSpawnAlertAt` pour throttle 4s
+  - Style inline : position fixed top:14% center, font 22px gras, glow + border colorés rareté, slide-in cubic-bezier 350ms, hold 1.5s, slide-out 600ms
+  - Hook dans `spawnBrainrot` juste avant `return group` : trigger pour rareté `mythic`|`goat`, skip si `overrides.noVariant` ou `overrides.hpMult<1` ou `isLunar/isMirror`
+  - Tout sous try/catch défensif
+- **Lignes** : 20,982 → 21,033 (+51)
+- **Commit** : à venir (auto-deploy)
+
+---
+
 ## ⚠️ Note pour les futures itérations
 
 Pour retirer un bouton du HUD :

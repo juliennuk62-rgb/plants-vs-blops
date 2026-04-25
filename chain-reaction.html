@@ -1462,13 +1462,13 @@
       }
       // Upscale 4K : on rend le canvas en haute résolution physique tout en gardant
       // les coords logiques 800×600 inchangées (le code LABO2_C continue à raisonner
-      // en 800×600). On override les getters canvas.width/height pour que les checks
-      // internes (dont coords() qui fait canvas.width/rect.width) soient préservés.
+      // en 800×600). On monkey-patch ctx.setTransform pour qu'il multiplie par SCALE,
+      // car le module fait setTransform(1,0,0,1,0,0) chaque frame (reset du transform).
       function upscaleCanvas() {
         var canvas = document.querySelector('.l2c-canvas');
         if (!canvas) return setTimeout(upscaleCanvas, 80);
         if (canvas._upscaled) return;
-        // Détermine le scale factor : DPR × 2 capé à 5 (Full HD sur 1080p, 4K sur 4K, ultra sur Retina)
+        // Détermine le scale factor : DPR × 2.5 capé à 5
         var dpr = window.devicePixelRatio || 1;
         var SCALE = Math.min(5, Math.max(2, Math.ceil(dpr * 2.5)));
         var lw = canvas.width || 800;
@@ -1479,23 +1479,36 @@
         // CSS conserve la taille logique (le stage transform CSS scale ça visuellement)
         canvas.style.width = lw + 'px';
         canvas.style.height = lh + 'px';
-        // Override des getters pour que le module LABO2_C voie toujours 800/600
-        // (sinon le code coords() multiplie les coords souris par SCALE et tout casse)
+        // Override des getters : le module voit toujours 800/600 logiques
         Object.defineProperty(canvas, 'width', {
           configurable: true,
           get: function() { return lw; },
-          set: function(v) { /* swallow further sets to preserve backing store */ }
+          set: function() {}
         });
         Object.defineProperty(canvas, 'height', {
           configurable: true,
           get: function() { return lh; },
-          set: function(v) { /* swallow */ }
+          set: function() {}
         });
-        // Apply scale au context : tous les draws en coords 800×600 logiques sont
-        // rendus sur les pixels haute résolution
         var ctx = canvas.getContext('2d');
-        ctx.scale(SCALE, SCALE);
         if (ctx.imageSmoothingQuality !== undefined) ctx.imageSmoothingQuality = 'high';
+        // Monkey-patch setTransform : tout setTransform numérique multiplie par SCALE
+        // pour préserver notre scale factor à travers les resets internes du module
+        var origSetTransform = ctx.setTransform.bind(ctx);
+        ctx.setTransform = function(a, b, c, d, e, f) {
+          if (arguments.length === 6) {
+            origSetTransform(a * SCALE, b * SCALE, c * SCALE, d * SCALE, e * SCALE, f * SCALE);
+          } else {
+            return origSetTransform.apply(ctx, arguments);
+          }
+        };
+        // Patch resetTransform aussi (au cas où)
+        if (typeof ctx.resetTransform === 'function') {
+          ctx.resetTransform = function() { origSetTransform(SCALE, 0, 0, SCALE, 0, 0); };
+        }
+        // Set initial transform avec notre scale (le module appellera setTransform plus tard
+        // au render, qui passera par notre patch)
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // → applique SCALE via le patch
         canvas._upscaled = true;
         console.log('[Chain Reaction] Upscaled ' + SCALE + '× : backing ' + (lw*SCALE) + '×' + (lh*SCALE) + ' / display ' + lw + '×' + lh + ' (DPR=' + dpr + ')');
       }

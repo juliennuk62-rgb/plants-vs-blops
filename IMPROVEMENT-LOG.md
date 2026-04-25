@@ -201,7 +201,7 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Hook dans `spawnBrainrot` juste avant `return group` : trigger pour rareté `mythic`|`goat`, skip si `overrides.noVariant` ou `overrides.hpMult<1` ou `isLunar/isMirror`
   - Tout sous try/catch défensif
 - **Lignes** : 20,982 → 21,033 (+51)
-- **Commit** : à venir (auto-deploy)
+- **Commit** : `a339a6e`
 
 ---
 

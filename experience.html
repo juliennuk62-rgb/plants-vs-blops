@@ -6891,14 +6891,22 @@
           existing.el.style.top = ((-pos.y + 1) / 2 * innerHeight) + 'px';
         }
       } catch (_) {}
-      // Pop scale au cumul (visuel "+X")
+      // Reset complet de l'animation : transition off, état initial visible
+      existing.el.style.display = 'block';
       existing.el.style.transition = 'none';
       existing.el.style.transform = 'translate(-50%,-12px) scale(1.25)';
-      void existing.el.offsetWidth;
-      // Reprend l'animation depuis maintenant pour 2s pleines
-      existing.el.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
-      existing.el.style.transform = 'translate(-50%,-80px) scale(' + (existing.crit ? 1.5 : 1.1) + ')';
-      existing.el.style.opacity = '0';
+      existing.el.style.opacity = '1'; // CRITIQUE : reset à pleine visibilité avant de relancer le fade
+      // Double rAF pour garantir que le browser applique l'état initial avant la transition
+      const elRef = existing.el;
+      const isCrit = existing.crit;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!elRef) return;
+          elRef.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
+          elRef.style.transform = 'translate(-50%,-80px) scale(' + (isCrit ? 1.5 : 1.1) + ')';
+          elRef.style.opacity = '0';
+        });
+      });
       // Reset timer cleanup
       if (existing.cleanupTimer) clearTimeout(existing.cleanupTimer);
       existing.cleanupTimer = setTimeout(() => {
@@ -6936,10 +6944,17 @@
     el.style.transform = 'translate(-50%,0) scale(1.15)';
     el.style.opacity = '1';
     dmgActiveCount++;
-    void el.offsetWidth;
-    el.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
-    el.style.transform = 'translate(-50%,-80px) scale(' + (opts.crit ? 1.5 : 1.1) + ')';
-    el.style.opacity = '0';
+    // Double rAF pour garantir que l'état initial est appliqué avant la transition
+    const elRef = el;
+    const critRef = !!opts.crit;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!elRef) return;
+        elRef.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
+        elRef.style.transform = 'translate(-50%,-80px) scale(' + (critRef ? 1.5 : 1.1) + ')';
+        elRef.style.opacity = '0';
+      });
+    });
     const data = { el, total: val, firstHit: now, crit: !!opts.crit, armored: !!opts.armored };
     data.cleanupTimer = setTimeout(() => {
       el.style.display = 'none';

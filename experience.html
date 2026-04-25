@@ -2153,39 +2153,54 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // Hauteur cible en mètres (auto-fit bbox) — calibration ×5 user feedback
-    sunflower: 9.0,  // Kenney Nature Kit (×5)
-    cactus:    9.0,  // Kenney Nature Kit (×5)
-    clover:    7.5,  // Kenney Nature Kit (×5)
-    mint:      8.0,  // Kenney Nature Kit (×5)
-    bamboo:   12.0,  // Kenney Nature Kit (×5)
-    pumpkin:   7.0,  // Kenney Nature Kit (×5)
-    blueberry: 7.5,  // Kenney Nature Kit (×5)
-    // Scale absolu legacy Food Kit (modèles à échelle native ~0.1m)
-    strawberry: 13, pepper: 15, watermelon: 13, pineapple: 15,
+    // 100% Food Kit Kenney : scale absolu uniforme (modèles à échelle native ~0.1m)
+    // Valeurs basées sur la tradition fonctionnelle des 4 plantes Food Kit historiques
+    sunflower: 14, pea: 14, clover: 13, mint: 14, cactus: 14, ice: 14, bamboo: 14,
+    pumpkin: 13, lime: 14, strawberry: 13, pepper: 15, onion: 14, blueberry: 14,
+    fig: 14, watermelon: 13, kiwi: 14, lychee: 14, avocado: 14, mango: 14,
+    pineapple: 15, starfruit: 14, coconut: 14, dragon: 14, durian: 14, lotus: 13, phoenix: 14,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,
     ultrarare: 1.2, mythic: 1.3, goat: 1.6,
   };
-  // Mapping des plantes dispo en GLB (les autres utilisent la primitive)
-  // 2026-04-25 : refonte v3 — uniforme Kenney CC0 (Nature Kit + Food Kit legacy)
+  // Mapping des plantes dispo en GLB — refonte v4 (2026-04-25)
+  // 100% Kenney Food Kit CC0 pour cohérence visuelle avec les Blops (style minimaliste-stylisé)
+  // Chaque plante = un fruit/légume du Food Kit qui correspond au mieux thématiquement
   const PLANT_GLB_FILE = {
-    sunflower: 'sunflower.glb',   // Kenney Nature Kit CC0 (flower_yellowC)
-    cactus:    'cactus.glb',      // Kenney Nature Kit CC0 (cactus_tall)
-    clover:    'clover.glb',      // Kenney Nature Kit CC0 (crops_leafsStageB)
-    mint:      'mint.glb',        // Kenney Nature Kit CC0 (plant_bushDetailed)
-    bamboo:    'bamboo.glb',      // Kenney Nature Kit CC0 (crops_bambooStageB)
-    pumpkin:   'pumpkin.glb',     // Kenney Nature Kit CC0 (crop_pumpkin)
-    blueberry: 'blueberry.glb',   // Kenney Nature Kit CC0 (flower_purpleA)
-    strawberry: 'strawberry.glb', // Kenney Food Kit CC0 (legacy scale absolu)
-    pepper: 'pepper.glb',         // Kenney Food Kit CC0 (legacy scale absolu)
-    watermelon: 'watermelon.glb', // Kenney Food Kit CC0 (legacy scale absolu)
-    pineapple: 'pineapple.glb',   // Kenney Food Kit CC0 (legacy scale absolu)
+    sunflower:  'sunflower.glb',  // corn (épi de maïs jaune)
+    pea:        'pea.glb',        // broccoli (vert rond)
+    clover:     'clover.glb',     // cabbage (chou vert feuillu)
+    mint:       'mint.glb',       // leek (poireau vert long)
+    cactus:     'cactus.glb',     // eggplant (aubergine violette allongée)
+    ice:        'ice.glb',        // mushroom (champignon blanc)
+    bamboo:     'bamboo.glb',     // banana (long jaune)
+    pumpkin:    'pumpkin.glb',    // pumpkin (citrouille orange)
+    lime:       'lime.glb',       // pear (vert)
+    strawberry: 'strawberry.glb', // strawberry (existant)
+    pepper:     'pepper.glb',     // pepper (existant)
+    onion:      'onion.glb',      // onion (oignon)
+    blueberry:  'blueberry.glb',  // cherries (grappe rouge)
+    fig:        'fig.glb',        // tomato (rouge rond)
+    watermelon: 'watermelon.glb', // watermelon (existant)
+    kiwi:       'kiwi.glb',       // avocado (forme similaire vert)
+    lychee:     'lychee.glb',     // cherries (rouge rond)
+    avocado:    'avocado.glb',    // avocado (Food Kit)
+    mango:      'mango.glb',      // orange (rond orange)
+    pineapple:  'pineapple.glb',  // pineapple (existant)
+    starfruit:  'starfruit.glb',  // carrot (allongé pointu)
+    coconut:    'coconut.glb',    // coconut (Food Kit)
+    dragon:     'dragon.glb',     // cauliflower (gros hérissé)
+    durian:     'durian.glb',     // cauliflower (gros hérissé)
+    lotus:      'lotus.glb',      // broccoli (vert ronds)
+    phoenix:    'phoenix.glb',    // beet (rouge profond)
   };
-  // Plantes dont le scale est en mode "absolu" historique (multiplicateur direct)
-  // Le reste utilise le mode "hauteur cible en mètres" via auto-fit bbox
-  const PLANT_GLB_LEGACY_ABSOLUTE = new Set(['strawberry', 'pepper', 'watermelon', 'pineapple']);
+  // 100% legacy absolute scale (Food Kit Kenney à échelle native ~0.1m)
+  const PLANT_GLB_LEGACY_ABSOLUTE = new Set([
+    'sunflower','pea','clover','mint','cactus','ice','bamboo','pumpkin','lime',
+    'strawberry','pepper','onion','blueberry','fig','watermelon','kiwi','lychee',
+    'avocado','mango','pineapple','starfruit','coconut','dragon','durian','lotus','phoenix',
+  ]);
   const BLOP_GLB_FILE = {
     common: 'common.glb', rare: 'rare.glb', veryrare: 'veryrare.glb',
     ultrarare: 'ultrarare.glb', mythic: 'mythic.glb', goat: 'goat.glb',

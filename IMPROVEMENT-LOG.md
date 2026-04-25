@@ -114,7 +114,33 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Retiré : `#help-btn` (group 1) — le second `#help-btn` du group 4 reste (duplicate ID dans test.html)
 - **Conservés group 1** : Boutique, Mixer, Collection, Autel, Carrière, Settings (⚙), Maîtrise
 - **Lignes** : 20,902 → 20,891 (−11)
+- **Commit** : `3748a4c`
+
+---
+
+## Itération #6 — 2026-04-25 (HOTFIX iter #5 : jeu cassé, restaure boutons en display:none)
+
+- **Persona** : N/A (hotfix)
+- **Action** : Le retrait HTML des 9 boutons en iter #5 a cassé le rendu Three.js (canvas noir). Le JS référencait certains boutons (`#notifs-btn`, `#daily-btn`, etc.) sans guard `if (el)`, ce qui throw au boot et empêche l'init du game loop.
+- **Niveau** : 🟢 Safe (restaure structure DOM tout en gardant le visual cleanup)
+- **Diff** :
+  - Restaure les 9 boutons HTML
+  - Chaque bouton reçoit `style="display:none;..."` (visuellement invisible mais présent en DOM)
+  - Le JS trouve les éléments via `getElementById`, no throw, init Three.js OK
+- **Visuel** : identique à iter #5 (les 9 boutons restent invisibles)
+- **Lignes** : 20,891 → 20,903 (+12)
 - **Commit** : à venir au push
+- **Leçon** : éviter les retraits HTML purs sur test.html — préférer `display:none` quand le code JS référence l'élément.
+
+---
+
+## ⚠️ Note pour les futures itérations
+
+Pour retirer un bouton du HUD :
+- ✅ Préférer `style="display:none"` (DOM préservé, JS happy)
+- ❌ Éviter le retrait HTML pur (risque de breakage init si le JS référence l'élément)
+
+---
 - **Note** : le code JS qui hooke ces boutons reste en place (btnClick check si élément existe, donc no-op silencieux). Les modals associés restent dans le HTML mais ne sont plus accessibles via l'UI (toujours accessibles programmatiquement via `openModal()`).
 
 ---

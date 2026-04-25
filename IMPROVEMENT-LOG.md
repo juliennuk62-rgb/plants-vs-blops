@@ -179,7 +179,7 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Cache via `_laneHoverState.key` pour éviter le reposition à chaque mousemove sur la même lane
   - Tous les hooks try/catch pour zéro risque de breakage init
 - **Lignes** : 20,915 → 20,982 (+67)
-- **Commit** : à venir (auto-deploy)
+- **Commit** : `265eaa0`
 
 ---
 

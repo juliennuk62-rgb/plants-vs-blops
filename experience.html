@@ -6837,12 +6837,14 @@
   const hpOverlay = document.getElementById('hp-overlay');
 
   // === TIER 1 UI : Damage numbers flottants (POOLED) + red flash hit ===
-  const DMG_POOL_SIZE = 30;
+  const DMG_POOL_SIZE = 60;
   const dmgPool = [];
   let dmgPoolIdx = 0;
-  // Rate-limit : max 30 damage numbers simultanés (sinon on skip)
+  // Rate-limit : max 60 damage numbers simultanés (élargi suite au cap plantes ↑)
+  // + auto-reset toutes les 3s pour éviter blocage si désynchro setTimeout/counter
   let dmgActiveCount = 0;
-  const DMG_MAX_ACTIVE = 30;
+  const DMG_MAX_ACTIVE = 60;
+  setInterval(() => { dmgActiveCount = 0; }, 3000);
   function _getDmgEl() {
     if (dmgPool.length < DMG_POOL_SIZE) {
       const el = document.createElement('div');

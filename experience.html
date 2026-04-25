@@ -2153,10 +2153,11 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // POC Sketchfab refonte : calibration ×5 (base 2.5) après 2e feedback "encore trop petit"
-    sunflower: 12.5, // turtlemode (Sketchfab CC-BY)
-    cactus: 12.5,    // rubenve (Sketchfab CC-BY)
-    strawberry: 13, // Kenney inchangé
+    // Système hybride : valeurs < 5 = hauteur cible en mètres (auto-fit bbox)
+    //                  valeurs >= 5 = scale absolu legacy Kenney
+    sunflower: 1.8, // turtlemode (Sketchfab CC-BY) — hauteur cible 1.8m
+    cactus: 1.8,    // rubenve   (Sketchfab CC-BY) — hauteur cible 1.8m
+    strawberry: 13, // Kenney legacy (scale absolu)
     pepper: 15, watermelon: 13, pineapple: 15,
   };
   const BLOP_GLB_SCALE = {
@@ -8081,7 +8082,29 @@
       // GLB : modèle complet sans stem
       const model = loadedModels.plants[seed.plantId].clone(true);
       const glbScale = PLANT_GLB_SCALE[seed.plantId] || 2.5;
-      model.scale.setScalar(glbScale);
+      // Mode "scale absolu" si >= 5 (legacy Kenney : valeurs 13-18)
+      // Mode "hauteur cible" si < 5 : auto-fit indépendant de l'échelle native du GLB
+      // (résout les bugs de scale silencieux des modèles Sketchfab à échelle 1m réel)
+      if (glbScale < 5) {
+        try {
+          const tmpBox = new THREE.Box3().setFromObject(model);
+          const tmpSize = new THREE.Vector3();
+          tmpBox.getSize(tmpSize);
+          const naturalH = tmpSize.y || 1;
+          const fit = glbScale / naturalH;
+          model.scale.setScalar(fit);
+          // Recentrer XZ + base au sol
+          const newBox = new THREE.Box3().setFromObject(model);
+          model.position.x -= (newBox.min.x + newBox.max.x) / 2;
+          model.position.z -= (newBox.min.z + newBox.max.z) / 2;
+          model.position.y -= newBox.min.y;
+        } catch (e) {
+          model.scale.setScalar(glbScale);
+        }
+      } else {
+        // Legacy : scale absolu (Kenney models à échelle native ~0.1)
+        model.scale.setScalar(glbScale);
+      }
       // Force le modèle à être visible (cast shadow sur tous les meshes)
       model.traverse(obj => { if (obj.isMesh) obj.castShadow = true; });
       group.add(model);

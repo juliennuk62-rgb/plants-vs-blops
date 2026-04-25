@@ -160,6 +160,29 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
 
 ---
 
+## Itération #8 — 2026-04-24 (Lane Highlight au hover)
+
+- **Persona** : Marc, 35 ans, vétéran TD (Bloons + PvZ depuis 15 ans). Joue 15 min en pause déj. Cherche la satisfaction tactile d'un bon TD : signal visuel clair, placement intentionnel, sentiment de dominer la rangée.
+- **Critiques** :
+  1. "Quand je sélectionne une seed, je sais pas quelle lane je vais affecter — la cellule highlight est trop subtile, pas de signal sur la rangée entière"
+  2. "Au hover d'une plante existante, je vois pas la lane qu'elle couvre — surtout avec plusieurs plantes proches, je perds le fil de qui défend quoi"
+  3. "Pas de feedback de placement intentionnel : je clique à l'aveugle et je découvre après coup quelle ligne ma plante surveille"
+  4. "Dans un TD sérieux, je m'attends à voir la zone d'action de chaque tour — ici tout est implicite"
+  5. "Manque de 'sens du terrain' : où sont mes lignes de défense vs les trous ?"
+- **Choix** : **Lane Highlight au hover** — un rectangle translucide au sol surligne TOUTE la rangée (a) en mode placement quand on survole une cellule libre (couleur teintée par la rareté de la seed sélectionnée), et (b) au hover d'une plante existante (couleur teintée par sa rareté). Le plus impactant pour Marc car c'est exactement le placement-aid d'un vétéran TD.
+- **Niveau** : 🟢 Safe (purement visuel : 1 seul mesh `THREE.PlaneGeometry` réutilisé, ajouté à la scene, pas de modif gameplay/balance/audio)
+- **Diff** :
+  - Helpers `_ensureLaneHoverMesh / showLaneHover / hideLaneHover` ajoutés après `hitSlot` (mesh unique 0.92×LANE_LENGTH, MeshBasicMaterial alpha 0.20-0.28, depthWrite false, renderOrder 2, position y=0.07)
+  - Listener mousemove dédié au mode placement (pas de debounce, réactivité immédiate, couleur via `RARITIES[pData.rarity].hex`)
+  - Hook dans le mousemove tooltip-v2 existant : `showLaneHover` au hover plante (couleur via rareté), `hideLaneHover` quand !plant
+  - Hook `hideLaneHover()` dans le `mouseleave` existant + dans `cancelPlacement()`
+  - Cache via `_laneHoverState.key` pour éviter le reposition à chaque mousemove sur la même lane
+  - Tous les hooks try/catch pour zéro risque de breakage init
+- **Lignes** : 20,915 → 20,982 (+67)
+- **Commit** : à venir (auto-deploy)
+
+---
+
 ## ⚠️ Note pour les futures itérations
 
 Pour retirer un bouton du HUD :

@@ -13564,6 +13564,7 @@
     hideHint();
     setSlotsVisible(false);
     renderInventory();
+    try { hideLaneHover(); } catch (_) {}
   }
 
   function enterMoveMode(plant) {
@@ -13677,6 +13678,61 @@
     return slots.find(s => s.mesh === hits[0].object) || null;
   }
 
+  // --- Lane Highlight (iter #8 polish, persona "Marc vétéran TD") ---
+  // Surligne toute la rangée sous le curseur quand on place une seed
+  // ou quand on hover une plante existante. Mesh unique réutilisé.
+  let _laneHoverMat = null, _laneHoverMesh = null;
+  let _laneHoverState = { kind: null, key: null };
+  function _ensureLaneHoverMesh() {
+    if (_laneHoverMesh) return _laneHoverMesh;
+    _laneHoverMat = new THREE.MeshBasicMaterial({
+      color: 0x6effa3, transparent: true, opacity: 0.22,
+      depthWrite: false, side: THREE.DoubleSide,
+    });
+    const geo = new THREE.PlaneGeometry(LANE_WIDTH * 0.92, LANE_LENGTH);
+    _laneHoverMesh = new THREE.Mesh(geo, _laneHoverMat);
+    _laneHoverMesh.rotation.x = -Math.PI / 2;
+    _laneHoverMesh.position.y = 0.07;
+    _laneHoverMesh.renderOrder = 2;
+    _laneHoverMesh.visible = false;
+    try { scene.add(_laneHoverMesh); } catch (_) {}
+    return _laneHoverMesh;
+  }
+  function showLaneHover(slot, kind, hex) {
+    if (!slot) { hideLaneHover(); return; }
+    const key = (kind || 'p') + ':' + slot.laneIdx + ':' + (slot.gardenIdx || 0);
+    if (_laneHoverState.key === key && _laneHoverMesh && _laneHoverMesh.visible) return;
+    _ensureLaneHoverMesh();
+    _laneHoverMesh.position.x = slot.x;
+    _laneHoverMesh.position.z = 0;
+    _laneHoverMat.color.setHex(hex || 0x6effa3);
+    _laneHoverMat.opacity = (kind === 'place') ? 0.28 : 0.20;
+    _laneHoverMesh.visible = true;
+    _laneHoverState = { kind, key };
+  }
+  function hideLaneHover() {
+    if (_laneHoverMesh) _laneHoverMesh.visible = false;
+    _laneHoverState = { kind: null, key: null };
+  }
+  // Listener dédié mode placement (priorité immédiate, pas de debounce)
+  renderer.domElement.addEventListener('mousemove', (e) => {
+    if (game.ceremonyActive) return;
+    if (game.selectedSeedIdx === null) return;
+    try {
+      const slot = (typeof hitSlot === 'function') ? hitSlot(e) : null;
+      if (slot && !slot.plant) {
+        const seed = game.inventory[game.selectedSeedIdx];
+        const pData = (seed && PLANTS[seed.plantId]) ? PLANTS[seed.plantId] : null;
+        const rDef = (pData && RARITIES[pData.rarity]) ? RARITIES[pData.rarity] : null;
+        const hex = rDef ? rDef.hex : 0x6effa3;
+        showLaneHover(slot, 'place', hex);
+      } else {
+        hideLaneHover();
+      }
+    } catch (_) {}
+  });
+  renderer.domElement.addEventListener('mouseleave', () => { hideLaneHover(); });
+
   // --- LONG PRESS + TOOLTIP ---
   const LONG_PRESS_MS = 400;
   let longPressTimer = null;
@@ -13762,6 +13818,17 @@
       const plant = (typeof hitPlant === 'function') ? hitPlant(e) : null;
       if (plant === _lastHoveredPlant) return;
       _lastHoveredPlant = plant;
+      // Iter #8 : lane highlight au hover plante (en plus du tooltip)
+      try {
+        if (plant && plant.userData && plant.userData.slot) {
+          const _pd2 = plant.userData;
+          const _pDef2 = PLANTS[_pd2.plantId];
+          const _hex2 = (_pDef2 && RARITIES[_pDef2.rarity]) ? RARITIES[_pDef2.rarity].hex : 0x6effa3;
+          showLaneHover(_pd2.slot, 'plant', _hex2);
+        } else if (!plant) {
+          hideLaneHover();
+        }
+      } catch (_) {}
       if (plant && typeof window.showTooltipV2 === 'function') {
         const pd = plant.userData;
         const pData = PLANTS[pd.plantId];
@@ -13799,6 +13866,7 @@
     if (_plantHoverTimer) clearTimeout(_plantHoverTimer);
     _lastHoveredPlant = null;
     if (typeof window.hideTooltipV2 === 'function') window.hideTooltipV2();
+    try { hideLaneHover(); } catch (_) {}
   });
 
   function onCanvasMouseDown(e) {

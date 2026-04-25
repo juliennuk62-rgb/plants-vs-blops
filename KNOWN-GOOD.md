@@ -117,6 +117,13 @@ Le code de test.html a beaucoup de `document.getElementById('xxx-btn').appendChi
 - Le code audio existant est immuable
 - Aucune nouvelle fonction audio ne sera ajoutée par les itérations
 
+## Iter #8 — Lane Highlight (depuis 2026-04-24)
+
+- Au hover d'une plante existante : un rectangle translucide au sol surligne sa lane (couleur = rareté de la plante)
+- En mode placement (seed sélectionnée) : le hover sur une cellule libre surligne la lane cible (couleur = rareté de la seed)
+- Mesh unique réutilisé : `_laneHoverMesh` (PlaneGeometry, MeshBasicMaterial transparent, renderOrder 2)
+- Tous les hooks sont try/catch : aucun risque de bloquer le boot
+
 ## Tests cross-cutting
 
 - Pas d'erreur console au load

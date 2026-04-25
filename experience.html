@@ -2251,15 +2251,23 @@
     const loadOne = async (bucket, id, filename) => {
       try {
         const gltf = await loader.loadAsync(`${MODELS_BASE}/${bucket}/${filename}`);
+        let meshCount = 0;
         gltf.scene.traverse(obj => {
           if (obj.isMesh) {
+            meshCount++;
             obj.castShadow = true;
             obj.receiveShadow = true;
           }
         });
+        // DEBUG : log natural bbox + mesh count pour calibration
+        try {
+          const _box = new THREE.Box3().setFromObject(gltf.scene);
+          const _size = new THREE.Vector3(); _box.getSize(_size);
+          console.log(`[GLB OK] ${bucket}/${id} : ${meshCount} meshes, natural bbox = ${_size.x.toFixed(2)}×${_size.y.toFixed(2)}×${_size.z.toFixed(2)}`);
+        } catch (_) {}
         loadedModels[bucket][id] = gltf.scene;
       } catch (err) {
-        console.warn(`GLB load failed for ${bucket}/${id}:`, err.message);
+        console.warn(`[GLB FAIL] ${bucket}/${id} (${filename}):`, err.message);
       }
     };
     const ps = [];

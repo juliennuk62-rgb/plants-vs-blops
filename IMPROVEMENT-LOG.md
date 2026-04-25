@@ -92,7 +92,32 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - **Retiré** : `#memorial-btn` (🕊 Mémorial) + `#rec-btn` (🎬 Clip)
 - **Features incluses** : Boutique, Mixer, Collection, **Autel/Ascension** (🥚), Carrière, Settings, Labo, Défi du jour, Spore Bank, Méta-quêtes, Carte profil, Badges, Notifs, Skins, Timeline, Help, **Maîtrise** (⭐), Profil, Missions, Classement, Camera, Prestige, Compte, Editor, Settings, Audio, Help, Reset, Hero panel (Gardien), Labo 2 (Features A/B/C), Events system (Spring), Panneau test, Admin
 - **Lignes** : 8,817 → 20,902 (+12,085 / 137% increase)
+- **Commit** : `b32d47c`
+
+---
+
+## Itération #5 — 2026-04-25 (cleanup HUD : 9 boutons retirés)
+
+- **Persona** : N/A (demande utilisateur via screenshot annoté avec X)
+- **Action** : Retrait surgical de 9 boutons du HUD top-right (group 1) marqués X dans le screenshot
+- **Niveau** : 🟢 Safe (HTML uniquement, JS code intact, modals dead mais inert)
+- **Diff** :
+  - Retiré : `#labo-btn` (🧪 Labo)
+  - Retiré : `#daily-btn` (🎯 Défi du jour)
+  - Retiré : `#spore-btn` (🌰 Spore Bank — était caché, retiré pour cohérence)
+  - Retiré : `#meta-btn` (📅 Méta-quêtes)
+  - Retiré : `#profile-card-btn` (🆔 Carte profil)
+  - Retiré : `#achievements-v2-btn` (🏅 Badges)
+  - Retiré : `#notifs-btn` (🔔 Notifs)
+  - Retiré : `#skins-btn` (🎨 Skins)
+  - Retiré : `#timeline-btn` (📽 Timeline)
+  - Retiré : `#help-btn` (group 1) — le second `#help-btn` du group 4 reste (duplicate ID dans test.html)
+- **Conservés group 1** : Boutique, Mixer, Collection, Autel, Carrière, Settings (⚙), Maîtrise
+- **Lignes** : 20,902 → 20,891 (−11)
 - **Commit** : à venir au push
+- **Note** : le code JS qui hooke ces boutons reste en place (btnClick check si élément existe, donc no-op silencieux). Les modals associés restent dans le HTML mais ne sont plus accessibles via l'UI (toujours accessibles programmatiquement via `openModal()`).
+
+---
 - **Note** : si l'utilisateur veut retirer d'autres features, on le fera incrémentalement par demande explicite (et avec test post-removal).
 
 ---

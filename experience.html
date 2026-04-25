@@ -2268,6 +2268,28 @@
             obj.receiveShadow = true;
           }
         });
+        // PVB-V6 : pré-scale les plantes UNE FOIS au load pour contourner le bug de clone()
+        // Le scale est figé dans le source — chaque clone hérite naturellement
+        if (bucket === 'plants') {
+          try {
+            const targetH = (PLANT_GLB_SCALE[id] || 5);
+            gltf.scene.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(gltf.scene);
+            const size = new THREE.Vector3(); box.getSize(size);
+            const naturalH = size.y || 1;
+            const fit = targetH / naturalH;
+            gltf.scene.scale.setScalar(fit);
+            // Recentrer base au sol
+            gltf.scene.updateMatrixWorld(true);
+            const box2 = new THREE.Box3().setFromObject(gltf.scene);
+            const cx = (box2.min.x + box2.max.x) / 2;
+            const cz = (box2.min.z + box2.max.z) / 2;
+            gltf.scene.position.set(-cx, -box2.min.y, -cz);
+            console.log(`[PVB-V6 ${id}] target=${targetH}m fit=${fit.toFixed(2)} → ${(size.y * fit).toFixed(2)}m de haut`);
+          } catch (e) {
+            console.warn(`[PVB-V6 fail] ${id}:`, e.message);
+          }
+        }
         loadedModels[bucket][id] = gltf.scene;
       } catch (err) {
         console.warn(`[GLB FAIL] ${bucket}/${id} (${filename}):`, err.message);
@@ -8102,30 +8124,9 @@
     const group = new THREE.Group();
     let headRef;
     if (loadedModels.plants[seed.plantId]) {
-      // GLB : modèle complet sans stem
+      // PVB-V6 : le modèle source est déjà pré-scalé dans preloadModels().
+      // Le clone hérite du scale figé. Aucune manipulation supplémentaire.
       const model = loadedModels.plants[seed.plantId].clone(true);
-      const glbScale = PLANT_GLB_SCALE[seed.plantId] || 5;
-      // PVB-PLANTS-V5 : auto-fit hauteur cible 5-6m (uniforme pour matcher Blops)
-      try {
-        model.updateMatrixWorld(true);
-        const tmpBox = new THREE.Box3().setFromObject(model);
-        const tmpSize = new THREE.Vector3();
-        tmpBox.getSize(tmpSize);
-        const naturalH = tmpSize.y || 1;
-        const fit = glbScale / naturalH;
-        model.scale.setScalar(fit);
-        // Recentrer XZ + base au sol
-        model.updateMatrixWorld(true);
-        const newBox = new THREE.Box3().setFromObject(model);
-        model.position.x -= (newBox.min.x + newBox.max.x) / 2;
-        model.position.z -= (newBox.min.z + newBox.max.z) / 2;
-        model.position.y -= newBox.min.y;
-        console.log(`[PVB-V5 ${seed.plantId}] target=${glbScale}m natural=${naturalH.toFixed(2)} fit=${fit.toFixed(2)}`);
-      } catch (e) {
-        model.scale.setScalar(glbScale);
-        console.warn('[PVB-V5 fallback]', seed.plantId, e.message);
-      }
-      // Force le modèle à être visible (cast shadow sur tous les meshes)
       model.traverse(obj => { if (obj.isMesh) obj.castShadow = true; });
       group.add(model);
       headRef = model;

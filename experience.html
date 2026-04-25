@@ -2153,12 +2153,11 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // 100% Food Kit Kenney : scale absolu uniforme (modèles à échelle native ~0.1m)
-    // Valeurs basées sur la tradition fonctionnelle des 4 plantes Food Kit historiques
-    sunflower: 14, pea: 14, clover: 13, mint: 14, cactus: 14, ice: 14, bamboo: 14,
-    pumpkin: 13, lime: 14, strawberry: 13, pepper: 15, onion: 14, blueberry: 14,
-    fig: 14, watermelon: 13, kiwi: 14, lychee: 14, avocado: 14, mango: 14,
-    pineapple: 15, starfruit: 14, coconut: 14, dragon: 14, durian: 14, lotus: 13, phoenix: 14,
+    // 100% Food Kit Kenney : scale absolu × 30 user feedback (était ~14)
+    sunflower: 420, pea: 420, clover: 390, mint: 420, cactus: 420, ice: 420, bamboo: 420,
+    pumpkin: 390, lime: 420, strawberry: 390, pepper: 450, onion: 420, blueberry: 420,
+    fig: 420, watermelon: 390, kiwi: 420, lychee: 420, avocado: 420, mango: 420,
+    pineapple: 450, starfruit: 420, coconut: 420, dragon: 420, durian: 420, lotus: 390, phoenix: 420,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,

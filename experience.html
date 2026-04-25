@@ -2153,11 +2153,11 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // Hauteur cible en mètres (auto-fit bbox) — uniforme pour matcher la taille des Blops (~5-6m)
-    sunflower: 5, pea: 5, clover: 5, mint: 6, cactus: 5, ice: 4, bamboo: 6,
-    pumpkin: 5, lime: 5, strawberry: 5, pepper: 5, onion: 5, blueberry: 4,
-    fig: 5, watermelon: 5, kiwi: 5, lychee: 4, avocado: 5, mango: 5,
-    pineapple: 6, starfruit: 6, coconut: 5, dragon: 6, durian: 6, lotus: 5, phoenix: 6,
+    // Hauteur cible en mètres (auto-fit bbox) — × 10 user feedback (était ~5m, perçu comme 0.5m visuel)
+    sunflower: 50, pea: 50, clover: 50, mint: 60, cactus: 50, ice: 40, bamboo: 60,
+    pumpkin: 50, lime: 50, strawberry: 50, pepper: 50, onion: 50, blueberry: 40,
+    fig: 50, watermelon: 50, kiwi: 50, lychee: 40, avocado: 50, mango: 50,
+    pineapple: 60, starfruit: 60, coconut: 50, dragon: 60, durian: 60, lotus: 50, phoenix: 60,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,

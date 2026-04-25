@@ -9360,31 +9360,52 @@
     }
     let placed = 0;
     const cap = (typeof getMaxPlants === 'function') ? getMaxPlants() : 999;
-    while (true) {
-      if (game.plants.length >= cap) break;
-      const freeSlot = slots.find(s => !s.plant);
-      if (!freeSlot) break;
-      const groups = getSortedInventoryGroups();
-      if (!groups.length) break;
-      const bestSeedIdx = groups[0].indices[0];
-      const seed = game.inventory[bestSeedIdx];
-      if (!seed) break;
-      // En campagne : vérifier le coût cash
-      if (game.mode === 'campaign' && game.campaignActive) {
-        const plant = PLANTS[seed.plantId];
-        if (game.cash < plant.price) break;
-        game.cash -= plant.price;
-        game.campaignActive.stats.cashSpent += plant.price;
-        placePlant(seed, freeSlot);
-      } else {
-        game.inventory.splice(bestSeedIdx, 1);
-        placePlant(seed, freeSlot);
+    // Distribution équilibrée par "couches" :
+    // Layer 0 → 1 plante par lane, Layer 1 → 1 de plus par lane, etc.
+    // Pour 5 lanes + 10 plantes → 2 plantes par lane.
+    const freeByLane = new Map();
+    for (const slot of slots) {
+      if (slot.plant) continue;
+      if (!freeByLane.has(slot.laneIdx)) freeByLane.set(slot.laneIdx, []);
+      freeByLane.get(slot.laneIdx).push(slot);
+    }
+    if (freeByLane.size === 0) {
+      showHint('Aucun slot libre dans le jardin', 1800);
+      return;
+    }
+    // Trier chaque lane par slotIdx croissant (= côté HQ vers côté spawn)
+    for (const list of freeByLane.values()) list.sort((a, b) => a.slotIdx - b.slotIdx);
+    const lanes = [...freeByLane.keys()].sort((a, b) => a - b);
+    const maxLayers = Math.max(...[...freeByLane.values()].map(l => l.length));
+    outer:
+    for (let layer = 0; layer < maxLayers; layer++) {
+      for (const laneIdx of lanes) {
+        if (game.plants.length >= cap) break outer;
+        if (game.inventory.length === 0) break outer;
+        const laneSlots = freeByLane.get(laneIdx);
+        if (!laneSlots || layer >= laneSlots.length) continue;
+        const slot = laneSlots[layer];
+        const groups = getSortedInventoryGroups();
+        if (!groups.length) break outer;
+        const bestSeedIdx = groups[0].indices[0];
+        const seed = game.inventory[bestSeedIdx];
+        if (!seed) break outer;
+        if (game.mode === 'campaign' && game.campaignActive) {
+          const plant = PLANTS[seed.plantId];
+          if (game.cash < plant.price) break outer;
+          game.cash -= plant.price;
+          game.campaignActive.stats.cashSpent += plant.price;
+          placePlant(seed, slot);
+        } else {
+          game.inventory.splice(bestSeedIdx, 1);
+          placePlant(seed, slot);
+        }
+        placed++;
       }
-      placed++;
     }
     if (placed > 0) {
       sfx && sfx('click');
-      showHint(`🌱 ${placed} plante(s) placée(s) (les plus puissantes en premier)`, 2500);
+      showHint(`🌱 ${placed} plante(s) placée(s) — distribution équilibrée par lane`, 2500);
       renderInventory(); updateHud(); saveGame();
     } else {
       showHint('Aucun slot libre dans le jardin', 1800);
@@ -9397,12 +9418,12 @@
     if (document.getElementById('garden-controls')) return;
     const wrap = document.createElement('div');
     wrap.id = 'garden-controls';
-    wrap.style.cssText = 'position:fixed;bottom:12px;left:118px;display:flex;gap:5px;z-index:50;';
+    wrap.style.cssText = 'position:fixed;bottom:12px;left:118px;display:flex;gap:12px;z-index:50;';
     const btnFill = document.createElement('button');
     btnFill.id = 'btn-fill-garden';
     btnFill.textContent = '🌱 Remplir';
     btnFill.title = 'Place automatiquement les meilleures plantes de ton inventaire dans tous les slots libres';
-    btnFill.style.cssText = 'font-size:9px;font-weight:700;padding:4px 8px;background:linear-gradient(180deg,#3a7a3a,#256025);color:#d8ffd8;border:1px solid #5fcc5f;border-radius:5px;cursor:pointer;letter-spacing:0.2px;box-shadow:0 2px 4px rgba(0,0,0,0.4);transition:filter 0.15s ease;line-height:1.2;white-space:nowrap;';
+    btnFill.style.cssText = 'font-size:27px;font-weight:700;padding:12px 24px;background:linear-gradient(180deg,#3a7a3a,#256025);color:#d8ffd8;border:2px solid #5fcc5f;border-radius:10px;cursor:pointer;letter-spacing:0.6px;box-shadow:0 4px 10px rgba(0,0,0,0.5);transition:filter 0.15s ease;line-height:1.2;white-space:nowrap;';
     btnFill.onmouseenter = () => btnFill.style.filter = 'brightness(1.25)';
     btnFill.onmouseleave = () => btnFill.style.filter = '';
     btnFill.onclick = () => fillGardenWithBest();
@@ -9410,7 +9431,7 @@
     btnClear.id = 'btn-clear-garden';
     btnClear.textContent = '🗑 Vider';
     btnClear.title = 'Retire toutes les plantes du jardin (avec confirmation)';
-    btnClear.style.cssText = 'font-size:9px;font-weight:700;padding:4px 8px;background:linear-gradient(180deg,#7a3a3a,#602525);color:#ffd8d8;border:1px solid #cc5f5f;border-radius:5px;cursor:pointer;letter-spacing:0.2px;box-shadow:0 2px 4px rgba(0,0,0,0.4);transition:filter 0.15s ease;line-height:1.2;white-space:nowrap;';
+    btnClear.style.cssText = 'font-size:27px;font-weight:700;padding:12px 24px;background:linear-gradient(180deg,#7a3a3a,#602525);color:#ffd8d8;border:2px solid #cc5f5f;border-radius:10px;cursor:pointer;letter-spacing:0.6px;box-shadow:0 4px 10px rgba(0,0,0,0.5);transition:filter 0.15s ease;line-height:1.2;white-space:nowrap;';
     btnClear.onmouseenter = () => btnClear.style.filter = 'brightness(1.25)';
     btnClear.onmouseleave = () => btnClear.style.filter = '';
     btnClear.onclick = () => clearAllPlants();

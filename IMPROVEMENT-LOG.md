@@ -58,6 +58,22 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - JS : retrait du setTimeout d'install Labo 2 (HUD button + retrofit + meta hooks)
 - **Conservés** : 🛒 Boutique, 📚 Collection, 🎖 Carrière, ⭐ Maîtrise, ✨ Prestige, ⚙ Paramètres + ⚡ ADMIN + 🧪 Panneau Test + Polish iter #1 coin fly + PVB_EVENTS + Polish iter #1 coin fly-to-HUD
 - **Lignes** : 20,967 → 15,791 (−5,176 / −24.7%)
+- **Commit** : `f7de3bc`
+
+---
+
+## Itération #3 — 2026-04-25 (RESET depuis prod)
+
+- **Persona** : N/A (reset demandé par l'utilisateur, jeu non-fonctionnel après iter #2)
+- **Action** : Recréation de `experience.html` à partir de la **prod** (`index.html`, 8,782 lignes au lieu du test.html dérivé qui était à 15,791 et cassé).
+- **Niveau** : 🔴 Bold (rebuild complet from scratch)
+- **Diff** :
+  - `cp index.html → experience.html`
+  - **+18 lignes** : monkey-patch localStorage prefix `exp_` au top du `<head>`
+  - **+13 lignes** : banner "🧬 MODE EXPÉRIENCE" auto-injecté au boot du body, fade à 25% après 8s, hover pour réafficher
+  - Title : "Plants vs Blops - v6 DUAL GARDEN (local test)" → "Plants vs Blops — EXPÉRIENCE (polish itératif)"
+- **Itérations précédentes (#1, #2) ABANDONNÉES** car appliquées sur la mauvaise base. Le polish reprendra fresh à partir de cette base prod.
+- **Lignes** : 8,782 → 8,817 (+35)
 - **Commit** : à venir au push
 
 ---

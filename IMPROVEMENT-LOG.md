@@ -225,7 +225,7 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Format adaptatif : .toFixed(1) pour <100, Math.round pour >=100
   - Clic toggle collapse : opacity 0.4 + min-width 32px + masque les lignes de metrics
 - **Lignes** : 21,033 → 21,099 (+66)
-- **Commit** : à venir (auto-deploy)
+- **Commit** : `fab4ef6`
 
 ---
 

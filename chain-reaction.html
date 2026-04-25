@@ -1544,5 +1544,267 @@
       }
     })();
   </script>
+
+  <!-- ═══ POLISH OVERLAY : damage numbers + skins + acts + killcam + confetti ═══ -->
+  <script>
+    (function gameOverlay() {
+      function setup() {
+        var stage = document.querySelector('.l2c-stage');
+        if (!stage) return setTimeout(setup, 100);
+        if (stage._polishSetup) return;
+        stage._polishSetup = true;
+
+        // ─── Canvas overlay haute résolution (pour damage numbers + skin + confetti) ───
+        var dpr = window.devicePixelRatio || 1;
+        var SCALE = Math.min(5, Math.max(2, Math.ceil(dpr * 2.5)));
+        var overlay = document.createElement('canvas');
+        overlay.width = 800 * SCALE;
+        overlay.height = 600 * SCALE;
+        overlay.style.cssText = 'position:absolute;left:0;top:0;width:800px;height:600px;pointer-events:none;z-index:55;';
+        stage.appendChild(overlay);
+        var oCtx = overlay.getContext('2d');
+        oCtx.scale(SCALE, SCALE);
+        if (oCtx.imageSmoothingQuality !== undefined) oCtx.imageSmoothingQuality = 'high';
+
+        // ─── BG overlay pour les acts (calm → tension → climax) ───
+        var actBg = document.createElement('div');
+        actBg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;background:transparent;transition:background 1.8s ease-out;';
+        stage.insertBefore(actBg, stage.firstChild);
+
+        // ─── Bouton skin (cycle entre 5 couleurs) ───
+        var skinIdx = parseInt(localStorage.getItem('cr_skin_idx') || '0', 10);
+        var skins = [
+          { name: 'Vert',   color: '#66ff99' },
+          { name: 'Rouge',  color: '#ff5566' },
+          { name: 'Violet', color: '#cc66ff' },
+          { name: 'Cyan',   color: '#33ddff' },
+          { name: 'Or',     color: '#ffcc33' },
+        ];
+        if (skinIdx < 0 || skinIdx >= skins.length) skinIdx = 0;
+        var skinBtn = document.createElement('button');
+        skinBtn.className = 'l2c-top-btn';
+        skinBtn.style.cssText = 'position:absolute;top:-42px;right:130px;background:rgba(120,80,180,0.5);color:#fff;border:1px solid rgba(180,100,220,0.8);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:JetBrains Mono,monospace;font-weight:700;font-size:14px;pointer-events:auto;transition:background 120ms;';
+        skinBtn.onmouseenter = function(){ skinBtn.style.background = 'rgba(150,100,220,0.85)'; };
+        skinBtn.onmouseleave = function(){ skinBtn.style.background = 'rgba(120,80,180,0.5)'; };
+        function refreshSkinBtn() { skinBtn.textContent = '🎨 ' + skins[skinIdx].name; }
+        refreshSkinBtn();
+        skinBtn.onclick = function() {
+          skinIdx = (skinIdx + 1) % skins.length;
+          try { localStorage.setItem('cr_skin_idx', skinIdx); } catch (e) {}
+          refreshSkinBtn();
+        };
+        stage.appendChild(skinBtn);
+
+        // ─── State ───
+        var hpTracker = new Map();      // enemy.id -> lastHp
+        var dmgLabels = [];             // {enemyId, total, x, y, popUntil}
+        var confetti = [];              // {x,y,vx,vy,color,rot,rotSpeed,life,size}
+        var milestonesPassed = new Set();
+        var killcam100 = false;
+        var currentAct = -1;
+        var ACTS = [
+          { name: 'CALM',    bg: 'transparent',           label: '',           color: '#fff'    },
+          { name: 'TENSION', bg: 'rgba(255,140,40,0.10)', label: '⚠ TENSION', color: '#ffaa55' },
+          { name: 'CLIMAX',  bg: 'rgba(255,30,60,0.18)',  label: '🔥 CLIMAX',  color: '#ff5577' },
+        ];
+
+        function spawnConfetti(count) {
+          var colors = ['#ff6699', '#ffcc33', '#33ddff', '#66ff99', '#cc66ff', '#ffffff'];
+          for (var i = 0; i < count; i++) {
+            confetti.push({
+              x: 250 + Math.random() * 300,
+              y: -10,
+              vx: (Math.random() - 0.5) * 6,
+              vy: Math.random() * 2 - 1,
+              color: colors[(Math.random() * colors.length) | 0],
+              rot: Math.random() * Math.PI * 2,
+              rotSpeed: (Math.random() - 0.5) * 0.3,
+              life: 110 + Math.random() * 60,
+              size: 4 + Math.random() * 4,
+            });
+          }
+        }
+
+        function tickActs(s) {
+          var tSec = (s.tElapsed || 0) / 1000;
+          var act = tSec < 30 ? 0 : (tSec < 60 ? 1 : 2);
+          if (act === currentAct) return;
+          currentAct = act;
+          actBg.style.background = ACTS[act].bg;
+          if (act > 0) {
+            try {
+              if (window.LABO2_C.juice && window.LABO2_C.juice.numberPopup) {
+                window.LABO2_C.juice.numberPopup(400, 70, ACTS[act].label, ACTS[act].color, 38);
+              }
+            } catch (e) {}
+          }
+        }
+
+        function tickMilestones(s) {
+          var k = s.kills || 0;
+          // Killcam 100 (slowmo + flash dramatique)
+          if (k >= 100 && !killcam100) {
+            killcam100 = true;
+            try {
+              var j = window.LABO2_C.juice;
+              if (j) {
+                if (j.slowmo) j.slowmo(1500);
+                if (j.flashScreen) j.flashScreen('#ffffff', 0.75, 700);
+                if (j.shake) j.shake(8, 400);
+                if (j.numberPopup) j.numberPopup(400, 280, '💯 KILLCAM!', '#ffff66', 56);
+                if (j.hitstop) j.hitstop(150);
+              }
+              spawnConfetti(80);
+            } catch (e) {}
+          }
+          // Confetti aux paliers de kills
+          var milestones = [25, 50, 100, 200, 300, 500, 750, 1000];
+          for (var i = 0; i < milestones.length; i++) {
+            var ms = milestones[i];
+            if (k >= ms && !milestonesPassed.has(ms)) {
+              milestonesPassed.add(ms);
+              if (ms !== 100) { // 100 a déjà son confetti via killcam
+                spawnConfetti(35 + Math.floor(ms / 10));
+                try {
+                  if (window.LABO2_C.juice && window.LABO2_C.juice.numberPopup) {
+                    window.LABO2_C.juice.numberPopup(400, 110, '🎉 ' + ms + ' KILLS!', '#ff66cc', 30);
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        }
+
+        function loop() {
+          requestAnimationFrame(loop);
+          var s = window.LABO2_C && window.LABO2_C.state;
+          if (!s) return;
+
+          var now = performance.now();
+          var enemies = s.enemies || [];
+          var aliveIds = new Set();
+
+          // ═══ Tracking damage par enemy.id ═══
+          for (var i = 0; i < enemies.length; i++) {
+            var e = enemies[i];
+            if (!e || e.dead || e.id == null) continue;
+            aliveIds.add(e.id);
+            var prevHp = hpTracker.get(e.id);
+            if (prevHp !== undefined && e.hp < prevHp) {
+              var dmg = Math.round(prevHp - e.hp);
+              if (dmg > 0) {
+                var label = null;
+                for (var j = 0; j < dmgLabels.length; j++) {
+                  if (dmgLabels[j].enemyId === e.id) { label = dmgLabels[j]; break; }
+                }
+                if (label) {
+                  label.total += dmg;
+                  label.popUntil = now + 180;
+                } else {
+                  dmgLabels.push({ enemyId: e.id, total: dmg, x: e.x, y: e.y - 28, popUntil: now + 180 });
+                }
+              }
+            }
+            hpTracker.set(e.id, e.hp);
+          }
+          // Update positions + drop labels for dead/gone enemies
+          var keep = [];
+          for (var di = 0; di < dmgLabels.length; di++) {
+            var lbl = dmgLabels[di];
+            if (!aliveIds.has(lbl.enemyId)) continue;
+            for (var ei = 0; ei < enemies.length; ei++) {
+              if (enemies[ei] && enemies[ei].id === lbl.enemyId) {
+                lbl.x = enemies[ei].x;
+                lbl.y = enemies[ei].y - 28;
+                break;
+              }
+            }
+            keep.push(lbl);
+          }
+          dmgLabels = keep;
+          // Cleanup hpTracker
+          var toDelete = [];
+          hpTracker.forEach(function (_, id) { if (!aliveIds.has(id)) toDelete.push(id); });
+          for (var ti = 0; ti < toDelete.length; ti++) hpTracker.delete(toDelete[ti]);
+
+          // ═══ Acts visuels ═══
+          tickActs(s);
+
+          // ═══ Milestones ═══
+          tickMilestones(s);
+
+          // ═══ Render ═══
+          oCtx.clearRect(0, 0, 800, 600);
+
+          // Skin de la plante (cercle teinté + glow)
+          if (s.plant && skinIdx > 0) {
+            var sc = skins[skinIdx].color;
+            oCtx.save();
+            oCtx.strokeStyle = sc;
+            oCtx.lineWidth = 3.5;
+            oCtx.shadowColor = sc;
+            oCtx.shadowBlur = 14;
+            oCtx.beginPath();
+            oCtx.arc(s.plant.x, s.plant.y, (s.plant.radius || 25) + 4, 0, Math.PI * 2);
+            oCtx.stroke();
+            // Halo intérieur
+            oCtx.globalAlpha = 0.3;
+            oCtx.fillStyle = sc;
+            oCtx.beginPath();
+            oCtx.arc(s.plant.x, s.plant.y, (s.plant.radius || 25), 0, Math.PI * 2);
+            oCtx.fill();
+            oCtx.restore();
+          }
+
+          // Damage numbers
+          for (var li = 0; li < dmgLabels.length; li++) {
+            var L = dmgLabels[li];
+            var pop = now < L.popUntil ? 1.3 : 1.0;
+            var fs = Math.min(26, 13 + Math.log10(L.total + 1) * 3);
+            oCtx.save();
+            oCtx.translate(L.x, L.y);
+            oCtx.scale(pop, pop);
+            oCtx.font = 'bold ' + fs + 'px "JetBrains Mono", monospace';
+            oCtx.textAlign = 'center';
+            oCtx.textBaseline = 'middle';
+            oCtx.lineWidth = 4;
+            oCtx.strokeStyle = '#000';
+            oCtx.strokeText('-' + L.total, 0, 0);
+            oCtx.fillStyle = L.total >= 50 ? '#ffdd33' : '#ffffff';
+            oCtx.fillText('-' + L.total, 0, 0);
+            oCtx.restore();
+          }
+
+          // Confetti
+          var newConf = [];
+          for (var ci = 0; ci < confetti.length; ci++) {
+            var p = confetti[ci];
+            p.x += p.vx; p.y += p.vy;
+            p.vy += 0.18;
+            p.rot += p.rotSpeed;
+            p.life--;
+            if (p.life > 0 && p.y < 700) {
+              var alpha = Math.min(1, p.life / 40);
+              oCtx.save();
+              oCtx.translate(p.x, p.y);
+              oCtx.rotate(p.rot);
+              oCtx.fillStyle = p.color;
+              oCtx.globalAlpha = alpha;
+              oCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+              oCtx.restore();
+              newConf.push(p);
+            }
+          }
+          confetti = newConf;
+        }
+
+        loop();
+        console.log('[Chain Reaction] Polish overlay OK — skin=' + skins[skinIdx].name + ' / SCALE=' + SCALE);
+      }
+      // Setup attendant que le stage soit créé par le module
+      setTimeout(setup, 400);
+      setTimeout(setup, 1000);
+    })();
+  </script>
 </body>
 </html>

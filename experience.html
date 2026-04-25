@@ -6857,43 +6857,91 @@
     dmgPoolIdx = (dmgPoolIdx + 1) % DMG_POOL_SIZE;
     return el;
   }
+  // Système cumulatif : 1 damage number par enemy qui s'incrémente
+  // Durée 2s, anti-superposition (un seul label par Blop à la fois)
+  const enemyDmgMap = new WeakMap();
+  const DMG_LIFETIME_MS = 2000;
   function spawnDamageNumber(enemy, damage, opts) {
     opts = opts || {};
-    if (!enemy || !enemy.position) { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.noEnemy = (window._dmgDbg.noEnemy||0)+1; return; }
-    if (activeTab === 'house') { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.tabHouse = (window._dmgDbg.tabHouse||0)+1; return; }
-    if (dmgActiveCount >= DMG_MAX_ACTIVE) { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.rateLimit = (window._dmgDbg.rateLimit||0)+1; return; }
+    if (!enemy || !enemy.position) return;
+    if (activeTab === 'house') return;
+    const val = Math.max(1, Math.round(damage));
+    const now = performance.now();
+
+    // Cas 1 : cumul sur un damage number actif du même enemy
+    const existing = enemyDmgMap.get(enemy);
+    if (existing && existing.el && (now - existing.firstHit) < DMG_LIFETIME_MS) {
+      existing.total += val;
+      if (opts.crit) existing.crit = true;
+      if (opts.armored) existing.armored = true;
+      const color = existing.crit ? '#ffdd33' : (existing.armored ? '#88aaff' : '#ffffff');
+      const sizePx = existing.crit ? 26 : Math.min(28, 18 + Math.log10(existing.total) * 2);
+      existing.el.textContent = '-' + existing.total + (existing.crit ? '!' : '');
+      existing.el.style.color = color;
+      existing.el.style.fontSize = sizePx + 'px';
+      // Reposition (suit l'enemy si bouge)
+      try {
+        const pos = enemy.position.clone();
+        pos.y += (enemy.userData.size || 1) * 1.6;
+        pos.project(camera);
+        if (pos.z >= -1 && pos.z <= 1) {
+          existing.el.style.left = ((pos.x + 1) / 2 * innerWidth) + 'px';
+          existing.el.style.top = ((-pos.y + 1) / 2 * innerHeight) + 'px';
+        }
+      } catch (_) {}
+      // Pop scale au cumul (visuel "+X")
+      existing.el.style.transition = 'none';
+      existing.el.style.transform = 'translate(-50%,-12px) scale(1.25)';
+      void existing.el.offsetWidth;
+      // Reprend l'animation depuis maintenant pour 2s pleines
+      existing.el.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
+      existing.el.style.transform = 'translate(-50%,-80px) scale(' + (existing.crit ? 1.5 : 1.1) + ')';
+      existing.el.style.opacity = '0';
+      // Reset timer cleanup
+      if (existing.cleanupTimer) clearTimeout(existing.cleanupTimer);
+      existing.cleanupTimer = setTimeout(() => {
+        if (existing.el) existing.el.style.display = 'none';
+        enemyDmgMap.delete(enemy);
+        dmgActiveCount = Math.max(0, dmgActiveCount - 1);
+      }, DMG_LIFETIME_MS);
+      // Note : on ne touche pas à firstHit pour éviter de prolonger indéfiniment
+      return;
+    }
+
+    // Cas 2 : nouveau spawn
+    if (dmgActiveCount >= DMG_MAX_ACTIVE) return;
     const pos = enemy.position.clone();
     pos.y += (enemy.userData.size || 1) * 1.6;
     pos.project(camera);
-    if (pos.z > 1 || pos.z < -1) { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.outOfView = (window._dmgDbg.outOfView||0)+1; return; }
+    if (pos.z > 1 || pos.z < -1) return;
     const x = (pos.x + 1) / 2 * innerWidth;
     const y = (-pos.y + 1) / 2 * innerHeight;
-    window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.spawned = (window._dmgDbg.spawned||0)+1;
-    window._dmgDbg.lastXY = `${x.toFixed(0)},${y.toFixed(0)}`;
     const el = _getDmgEl();
-    const val = Math.max(1, Math.round(damage));
     const color = opts.crit ? '#ffdd33' : (opts.armored ? '#88aaff' : '#ffffff');
-    const size = opts.crit ? '22px' : '16px';
-    const weight = opts.crit ? '900' : '700';
-    const prefix = opts.crit ? '' : '-';
-    el.textContent = prefix + val + (opts.crit ? '!' : '');
+    const sizePx = opts.crit ? 26 : 18;
+    el.textContent = '-' + val + (opts.crit ? '!' : '');
     el.style.display = 'block';
-    el.style.left = (x + (Math.random() - 0.5) * 20) + 'px';
+    el.style.left = x + 'px';
     el.style.top = y + 'px';
     el.style.color = color;
-    el.style.fontSize = size;
-    el.style.fontWeight = weight;
-    el.style.textShadow = '0 0 4px #000,1px 1px 0 #000';
+    el.style.fontSize = sizePx + 'px';
+    el.style.fontWeight = '800';
+    el.style.textShadow = '0 0 6px #000, 1px 1px 0 #000, -1px -1px 0 #000';
     el.style.transition = 'none';
-    el.style.transform = 'translate(-50%,0)';
+    el.style.transform = 'translate(-50%,0) scale(1.15)';
     el.style.opacity = '1';
     dmgActiveCount++;
-    // Force reflow for transition restart
     void el.offsetWidth;
-    el.style.transition = 'transform 0.7s cubic-bezier(.2,.8,.3,1),opacity 0.7s ease-out';
-    el.style.transform = 'translate(-50%,-60px) scale(' + (opts.crit ? 1.3 : 1) + ')';
+    el.style.transition = `transform ${DMG_LIFETIME_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${DMG_LIFETIME_MS}ms ease-out, font-size 0.15s ease-out`;
+    el.style.transform = 'translate(-50%,-80px) scale(' + (opts.crit ? 1.5 : 1.1) + ')';
     el.style.opacity = '0';
-    setTimeout(() => { el.style.display = 'none'; dmgActiveCount = Math.max(0, dmgActiveCount - 1); }, 720);
+    const data = { el, total: val, firstHit: now, crit: !!opts.crit, armored: !!opts.armored };
+    data.cleanupTimer = setTimeout(() => {
+      el.style.display = 'none';
+      enemyDmgMap.delete(enemy);
+      dmgActiveCount = Math.max(0, dmgActiveCount - 1);
+    }, DMG_LIFETIME_MS);
+    enemyDmgMap.set(enemy, data);
   }
 
   function flashEnemyHit(enemy) {

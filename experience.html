@@ -6859,15 +6859,17 @@
   }
   function spawnDamageNumber(enemy, damage, opts) {
     opts = opts || {};
-    if (!enemy || !enemy.position) return;
-    if (activeTab === 'house') return; // Pas d'overlay game en mode maison
-    if (dmgActiveCount >= DMG_MAX_ACTIVE) return; // rate limit
+    if (!enemy || !enemy.position) { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.noEnemy = (window._dmgDbg.noEnemy||0)+1; return; }
+    if (activeTab === 'house') { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.tabHouse = (window._dmgDbg.tabHouse||0)+1; return; }
+    if (dmgActiveCount >= DMG_MAX_ACTIVE) { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.rateLimit = (window._dmgDbg.rateLimit||0)+1; return; }
     const pos = enemy.position.clone();
-    pos.y += enemy.userData.size * 1.6;
+    pos.y += (enemy.userData.size || 1) * 1.6;
     pos.project(camera);
-    if (pos.z > 1 || pos.z < -1) return;
+    if (pos.z > 1 || pos.z < -1) { window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.outOfView = (window._dmgDbg.outOfView||0)+1; return; }
     const x = (pos.x + 1) / 2 * innerWidth;
     const y = (-pos.y + 1) / 2 * innerHeight;
+    window._dmgDbg = (window._dmgDbg||{}); window._dmgDbg.spawned = (window._dmgDbg.spawned||0)+1;
+    window._dmgDbg.lastXY = `${x.toFixed(0)},${y.toFixed(0)}`;
     const el = _getDmgEl();
     const val = Math.max(1, Math.round(damage));
     const color = opts.crit ? '#ffdd33' : (opts.armored ? '#88aaff' : '#ffffff');

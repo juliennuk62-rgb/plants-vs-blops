@@ -9343,7 +9343,6 @@
       return;
     }
     const count = game.plants.length;
-    if (!confirm(`Vider tout le jardin ? (${count} plante(s) seront retirées)`)) return;
     const plants = [...game.plants];
     plants.forEach(p => {
       try { removePlant(p); } catch (_) {}
@@ -9373,8 +9372,8 @@
       showHint('Aucun slot libre dans le jardin', 1800);
       return;
     }
-    // Trier chaque lane par slotIdx croissant (= côté HQ vers côté spawn)
-    for (const list of freeByLane.values()) list.sort((a, b) => a.slotIdx - b.slotIdx);
+    // Trier chaque lane par slotIdx décroissant (= côté HQ d'abord, opposé au spawn des monstres)
+    for (const list of freeByLane.values()) list.sort((a, b) => b.slotIdx - a.slotIdx);
     const lanes = [...freeByLane.keys()].sort((a, b) => a - b);
     const maxLayers = Math.max(...[...freeByLane.values()].map(l => l.length));
     outer:

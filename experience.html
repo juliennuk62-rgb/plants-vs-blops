@@ -2153,37 +2153,39 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    // Système hybride : valeurs < 5 = hauteur cible en mètres (auto-fit bbox)
-    //                  valeurs >= 5 = scale absolu legacy Food Kit Kenney
-    sunflower: 1.8, // Sketchfab CC-BY auto-fit
-    cactus:    1.8, // Sketchfab CC-BY auto-fit
-    clover:    1.5, // Kenney Nature Kit CC0 auto-fit (petite plante)
-    mint:      1.6, // Kenney Nature Kit CC0 auto-fit
-    bamboo:    2.4, // Kenney Nature Kit CC0 auto-fit (plus haut)
-    pumpkin:   1.4, // Kenney Nature Kit CC0 auto-fit (rond bas)
-    blueberry: 1.5, // Kenney Nature Kit CC0 auto-fit
-    strawberry: 13, // Food Kit legacy (scale absolu inchangé)
-    pepper: 15, watermelon: 13, pineapple: 15,
+    // Hauteur cible en mètres (auto-fit bbox) — calibration ×5 user feedback
+    sunflower: 9.0,  // Kenney Nature Kit (×5)
+    cactus:    9.0,  // Kenney Nature Kit (×5)
+    clover:    7.5,  // Kenney Nature Kit (×5)
+    mint:      8.0,  // Kenney Nature Kit (×5)
+    bamboo:   12.0,  // Kenney Nature Kit (×5)
+    pumpkin:   7.0,  // Kenney Nature Kit (×5)
+    blueberry: 7.5,  // Kenney Nature Kit (×5)
+    // Scale absolu legacy Food Kit (modèles à échelle native ~0.1m)
+    strawberry: 13, pepper: 15, watermelon: 13, pineapple: 15,
   };
   const BLOP_GLB_SCALE = {
     common: 0.9, rare: 1.0, veryrare: 1.0,
     ultrarare: 1.2, mythic: 1.3, goat: 1.6,
   };
   // Mapping des plantes dispo en GLB (les autres utilisent la primitive)
-  // 2026-04-25 : refonte v2 — mix Sketchfab (CC-BY, 2 plantes) + Kenney Nature Kit (CC0, 5 plantes)
+  // 2026-04-25 : refonte v3 — uniforme Kenney CC0 (Nature Kit + Food Kit legacy)
   const PLANT_GLB_FILE = {
-    sunflower: 'sunflower.glb',   // Sketchfab turtlemode CC-BY (11 KB low poly)
-    cactus:    'cactus.glb',      // Sketchfab rubenve    CC-BY (Substance Painter)
+    sunflower: 'sunflower.glb',   // Kenney Nature Kit CC0 (flower_yellowC)
+    cactus:    'cactus.glb',      // Kenney Nature Kit CC0 (cactus_tall)
     clover:    'clover.glb',      // Kenney Nature Kit CC0 (crops_leafsStageB)
     mint:      'mint.glb',        // Kenney Nature Kit CC0 (plant_bushDetailed)
     bamboo:    'bamboo.glb',      // Kenney Nature Kit CC0 (crops_bambooStageB)
     pumpkin:   'pumpkin.glb',     // Kenney Nature Kit CC0 (crop_pumpkin)
     blueberry: 'blueberry.glb',   // Kenney Nature Kit CC0 (flower_purpleA)
-    strawberry: 'strawberry.glb',
-    pepper: 'pepper.glb',
-    watermelon: 'watermelon.glb',
-    pineapple: 'pineapple.glb',
+    strawberry: 'strawberry.glb', // Kenney Food Kit CC0 (legacy scale absolu)
+    pepper: 'pepper.glb',         // Kenney Food Kit CC0 (legacy scale absolu)
+    watermelon: 'watermelon.glb', // Kenney Food Kit CC0 (legacy scale absolu)
+    pineapple: 'pineapple.glb',   // Kenney Food Kit CC0 (legacy scale absolu)
   };
+  // Plantes dont le scale est en mode "absolu" historique (multiplicateur direct)
+  // Le reste utilise le mode "hauteur cible en mètres" via auto-fit bbox
+  const PLANT_GLB_LEGACY_ABSOLUTE = new Set(['strawberry', 'pepper', 'watermelon', 'pineapple']);
   const BLOP_GLB_FILE = {
     common: 'common.glb', rare: 'rare.glb', veryrare: 'veryrare.glb',
     ultrarare: 'ultrarare.glb', mythic: 'mythic.glb', goat: 'goat.glb',
@@ -8092,10 +8094,14 @@
       // GLB : modèle complet sans stem
       const model = loadedModels.plants[seed.plantId].clone(true);
       const glbScale = PLANT_GLB_SCALE[seed.plantId] || 2.5;
-      // Mode "scale absolu" si >= 5 (legacy Kenney : valeurs 13-18)
-      // Mode "hauteur cible" si < 5 : auto-fit indépendant de l'échelle native du GLB
-      // (résout les bugs de scale silencieux des modèles Sketchfab à échelle 1m réel)
-      if (glbScale < 5) {
+      // Mode "scale absolu" si dans PLANT_GLB_LEGACY_ABSOLUTE (Food Kit historique)
+      // Mode "hauteur cible" sinon : auto-fit bbox indépendant de l'échelle native du GLB
+      const isLegacyAbsolute = (typeof PLANT_GLB_LEGACY_ABSOLUTE !== 'undefined')
+        && PLANT_GLB_LEGACY_ABSOLUTE.has(seed.plantId);
+      if (isLegacyAbsolute) {
+        // Legacy : scale absolu (Food Kit Kenney models à échelle native ~0.1)
+        model.scale.setScalar(glbScale);
+      } else {
         try {
           const tmpBox = new THREE.Box3().setFromObject(model);
           const tmpSize = new THREE.Vector3();
@@ -8111,9 +8117,6 @@
         } catch (e) {
           model.scale.setScalar(glbScale);
         }
-      } else {
-        // Legacy : scale absolu (Kenney models à échelle native ~0.1)
-        model.scale.setScalar(glbScale);
       }
       // Force le modèle à être visible (cast shadow sur tous les meshes)
       model.traverse(obj => { if (obj.isMesh) obj.castShadow = true; });
@@ -15704,8 +15707,8 @@
       const credits = document.createElement('div');
       credits.id = 'plant-credits';
       credits.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#cce6ff;font:500 9px ui-monospace,Menlo,Consolas,monospace;padding:3px 9px;border-radius:0 0 6px 6px;border:1px solid rgba(120,180,220,0.2);border-top:none;z-index:9998;pointer-events:auto;cursor:help;letter-spacing:0.4px;opacity:0.55;transition:opacity 0.2s;user-select:none;white-space:nowrap;';
-      credits.title = '3D Plant Models — Sketchfab CC-BY: Stylized Cactus by rubenve, Sunflower Low Poly by turtlemode · Kenney Nature Kit CC0: clover/mint/bamboo/pumpkin/blueberry';
-      credits.textContent = '🌱 3D : Sketchfab (CC-BY) + Kenney Nature Kit (CC0)';
+      credits.title = '3D Plant Models : Kenney Nature Kit + Food Kit (CC0 — kenney.nl)';
+      credits.textContent = '🌱 3D models : Kenney (CC0)';
       credits.onmouseenter = () => credits.style.opacity = '1';
       credits.onmouseleave = () => credits.style.opacity = '0.55';
       document.body.appendChild(credits);

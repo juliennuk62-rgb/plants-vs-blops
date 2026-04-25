@@ -6,10 +6,19 @@ Si une amélioration risque de casser un de ces invariants, elle est **refusée*
 L'agent peut **ajouter** des invariants ici quand il introduit un nouveau comportement critique.
 L'agent ne peut **jamais retirer** un invariant existant sans validation explicite de l'utilisateur.
 
-**Note** : `experience.html` reconstruite depuis `test.html` (iter #4, 2026-04-25) pour
-récupérer Autel/Maîtrise/Carrière fonctionnels. Lignes : 20,902.
+**État baseline confirmé fonctionnel** : iter #7 (commit `b55d2e2`, 20,915 lignes).
 
 ---
+
+## 🚨 RÈGLE D'OR (apprise des iter #2/#5/#6)
+
+**JAMAIS retirer du HTML un élément référencé par le JS via `getElementById`.**
+
+Le code de test.html a beaucoup de `document.getElementById('xxx-btn').appendChild/style/...` SANS guard `if (el)`. Si l'élément manque, ça throw, et l'init Three.js peut casser silencieusement (canvas noir).
+
+**Pattern correct pour cacher un bouton** :
+- ✅ Ajouter `#xxx-btn { display: none !important; }` dans `<style id="exp-hud-hide">`
+- ❌ Retirer le `<div id="xxx-btn">` du HTML
 
 ## Boot & init
 
@@ -21,7 +30,43 @@ récupérer Autel/Maîtrise/Carrière fonctionnels. Lignes : 20,902.
 ## Persistance
 
 - `localStorage` préfixé automatiquement par `exp_` (monkey-patch tout en haut du `<head>`)
+- Saves isolés de la version prod ET de test.html (jamais de fuite)
 - `window.__PVB_TEST_MODE__` et `window.__PVB_EXP_MODE__` tous deux à `true`
+
+## HUD top-right — état confirmé fonctionnel
+
+**Visibles** :
+- 🛒 Boutique
+- ⚗ Mixer
+- 📚 Collection
+- 🥚 Autel d'Ascension
+- 🎖 Carrière
+- ⚙ Settings (group 1)
+- ⭐ Maîtrise
+- 👤 Profil
+- 🎯 Missions
+- 🏆 Classement
+- ✨ Prestige (visible quand débloqué)
+- ☁ Compte
+- 🛠 Editor
+- ⚙ Settings (group 4)
+- 🔊 Audio
+- ? Help (group 4)
+- ↺ Reset
+
+**Cachés via CSS `display:none !important`** (HTML présent, JS happy) :
+- 🧪 `#labo-btn`
+- 🎯 `#daily-btn`
+- 🌰 `#spore-btn`
+- 📅 `#meta-btn`
+- 🆔 `#profile-card-btn`
+- 🏅 `#achievements-v2-btn`
+- 🔔 `#notifs-btn`
+- 🎨 `#skins-btn`
+- 📽 `#timeline-btn`
+- 🕊 `#memorial-btn`
+- 🎬 `#rec-btn`
+- ? `#top-right .hud-group:first-child #help-btn` (le help du group 4 reste visible)
 
 ## HUD principal du jardin endless
 
@@ -33,40 +78,6 @@ récupérer Autel/Maîtrise/Carrière fonctionnels. Lignes : 20,902.
 - `#essence-hud` affiche l'essence d'âme (🔮)
 - Hero panel (Gardien 🧙) visible en haut-gauche
 
-## Boutons HUD top-right (état confirmé par utilisateur — itération #4)
-
-**Conservés** :
-- 🛒 `#shop-btn` (Boutique)
-- ⚗ `#mixer-btn` (Mixer)
-- 📚 `#collection-btn` (Collection)
-- 🥚 `#ascension-btn` (Autel)
-- 🎖 `#career-btn` (Carrière)
-- ⚙ `#settings-btn` (Paramètres)
-- 🧪 `#labo-btn` (Labo)
-- 🎯 `#daily-btn` (Défi du jour)
-- 🌰 `#spore-btn` (Spore Bank)
-- 📅 `#meta-btn` (Méta-quêtes)
-- 🆔 `#profile-card-btn` (Carte profil)
-- 🏅 `#achievements-v2-btn` (Badges)
-- 🔔 `#notifs-btn` (Notifications)
-- 🎨 `#skins-btn` (Skins)
-- 📽 `#timeline-btn` (Timeline)
-- ? `#help-btn` (Aide)
-- ⭐ `#mastery-btn` (Maîtrise)
-- 👤 `#profile-btn` (Profil)
-- 🎯 `#missions-btn` (Missions)
-- 🏆 `#leaderboard-btn` (Classement)
-- 📷 `#camera-mode-btn` (Mode caméra)
-- ✨ `#prestige-btn` (Prestige)
-- ☁ `#account-btn` (Compte)
-- 🛠 `#editor-btn` (Editor)
-- 🔊 `#audio-btn` (Audio)
-- ↺ `#reset-btn` (Reset)
-
-**Supprimés (ne pas restaurer)** :
-- 🕊 `#memorial-btn` (Mémorial) — retiré iter #4
-- 🎬 `#rec-btn` (Clip) — retiré iter #4
-
 ## Gameplay core (jardin endless)
 
 - Le joueur peut placer une plante (clic sur cellule libre + plante sélectionnée)
@@ -77,23 +88,23 @@ récupérer Autel/Maîtrise/Carrière fonctionnels. Lignes : 20,902.
 - Mode endless jouable
 - Drop d'essence d'âme (🔮) sur kills VR+ (12% chance, scale par rareté)
 
-## Features ajoutées
+## Features actives
 
-- **Autel/Ascension** : `#ascension-btn` ouvre `#ascension-modal`, achat de cocons via essence d'âme, ouvert/pressé pour révéler une rareté supérieure. Codex via `#asc-codex-modal`.
-- **Maîtrise** : `#mastery-btn` ouvre `#mastery-modal`, niveaux par plante, perks débloqués via kills, hook `_masteryKillHook(plantId, blopValue)` dans la kill chain.
-- **Carrière** : `#career-btn` ouvre `#career-modal`, dashboard de stats agrégées et historique.
+- **Autel/Ascension** (🥚 #ascension-btn) : cocons + essence d'âme + codex
+- **Maîtrise** (⭐ #mastery-btn) : niveaux par plante
+- **Carrière** (🎖 #career-btn) : dashboard stats agrégées
 
 ## Système d'événements (PVB_EVENTS)
 
-- Bouton admin avec dropdown event fonctionnel
+- Dropdown event dans panel admin
 - Apply event → décor visible (Spring = pétales)
 - localStorage `exp_pvb_active_event` persiste
 
-## Labo 2 (préservé tel quel pour l'instant)
+## Labo 2 (préservé)
 
-- LABO2_A (Boucherie 60s), LABO2_B (Roulette), LABO2_C (Chain Reaction)
-- META layer (graines, atelier, achievements, daily seed, prestige, hub)
-- Bouton 🧬 Labo 2 dans HUD (auto-injecté en mode test)
+- LABO2_A, B, C openModal fonctionnels
+- META layer (graines, atelier, achievements, daily, prestige, hub)
+- Bouton 🧬 Labo 2 auto-injecté en mode test (en bas-droite avec ⚡ Admin et 🧪 Panneau Test)
 
 ## Panneau test + Admin (dev tools, à conserver)
 
@@ -111,4 +122,4 @@ récupérer Autel/Maîtrise/Carrière fonctionnels. Lignes : 20,902.
 - Pas d'erreur console au load
 - Cible 60 FPS sur PC modeste
 - Aucun nom IP-protégé ajouté
-- Aucun import de fichier externe (sauf CDN existants)
+- Aucun import de fichier externe (sauf CDN existants déjà présents en prod)

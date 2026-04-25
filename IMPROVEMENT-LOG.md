@@ -152,7 +152,8 @@ L'agent doit **lire ce fichier au début** de chaque cycle pour :
   - Aucun risque de breakage init
   - Si on veut restaurer un bouton plus tard : juste retirer une ligne du CSS
 - **Lignes** : 20,903 → 20,915 (+12)
-- **Commit** : à venir au push
+- **Commit** : `b55d2e2`
+- **Statut** : ✅ Confirmé fonctionnel par l'utilisateur. Baseline verrouillée comme état de référence pour les itérations suivantes.
 
 ---
 - **Leçon** : éviter les retraits HTML purs sur test.html — préférer `display:none` quand le code JS référence l'élément.

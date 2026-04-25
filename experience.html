@@ -6861,10 +6861,12 @@
   // Durée 2s, anti-superposition (un seul label par Blop à la fois)
   const enemyDmgMap = new WeakMap();
   const DMG_LIFETIME_MS = 2000;
+  window._dbg = window._dbg || { calls: 0, noEnemy: 0, tabHouse: 0, cumul: 0, rateLimit: 0, outOfView: 0, spawned: 0, lastXY: '', lastEl: null };
   function spawnDamageNumber(enemy, damage, opts) {
     opts = opts || {};
-    if (!enemy || !enemy.position) return;
-    if (activeTab === 'house') return;
+    window._dbg.calls++;
+    if (!enemy || !enemy.position) { window._dbg.noEnemy++; return; }
+    if (activeTab === 'house') { window._dbg.tabHouse++; return; }
     const val = Math.max(1, Math.round(damage));
     const now = performance.now();
 
@@ -6905,17 +6907,20 @@
         dmgActiveCount = Math.max(0, dmgActiveCount - 1);
       }, DMG_LIFETIME_MS);
       // Note : on ne touche pas à firstHit pour éviter de prolonger indéfiniment
+      window._dbg.cumul++;
       return;
     }
 
     // Cas 2 : nouveau spawn
-    if (dmgActiveCount >= DMG_MAX_ACTIVE) return;
+    if (dmgActiveCount >= DMG_MAX_ACTIVE) { window._dbg.rateLimit++; return; }
     const pos = enemy.position.clone();
     pos.y += (enemy.userData.size || 1) * 1.6;
     pos.project(camera);
-    if (pos.z > 1 || pos.z < -1) return;
+    if (pos.z > 1 || pos.z < -1) { window._dbg.outOfView++; return; }
     const x = (pos.x + 1) / 2 * innerWidth;
     const y = (-pos.y + 1) / 2 * innerHeight;
+    window._dbg.spawned++;
+    window._dbg.lastXY = `${x.toFixed(0)},${y.toFixed(0)}`;
     const el = _getDmgEl();
     const color = opts.crit ? '#ffdd33' : (opts.armored ? '#88aaff' : '#ffffff');
     const sizePx = opts.crit ? 26 : 18;
@@ -6942,6 +6947,7 @@
       dmgActiveCount = Math.max(0, dmgActiveCount - 1);
     }, DMG_LIFETIME_MS);
     enemyDmgMap.set(enemy, data);
+    window._dbg.lastEl = el; // ref pour inspecter l'élément depuis la console
   }
 
   function flashEnemyHit(enemy) {
@@ -7789,12 +7795,15 @@
       ud._lastDamagedBy = sourcePlant.userData.plantId;
     }
     // Tier 1 UI : damage numbers flottants + red flash emissive
+    window._dbg = window._dbg || {}; window._dbg.applyDamageHits = (window._dbg.applyDamageHits || 0) + 1;
     if (typeof spawnDamageNumber === 'function') {
       const baseDmg = sourcePlant && sourcePlant.userData && sourcePlant.userData.plantId
         ? (PLANTS[sourcePlant.userData.plantId] && PLANTS[sourcePlant.userData.plantId].damage) || damage
         : damage;
       const isCrit = damage > baseDmg * 1.8;
       spawnDamageNumber(enemy, damage, { crit: isCrit, armored });
+    } else {
+      window._dbg.spawnFnMissing = (window._dbg.spawnFnMissing || 0) + 1;
     }
     if (typeof flashEnemyHit === 'function') flashEnemyHit(enemy);
     if (ud.hp <= 0) {

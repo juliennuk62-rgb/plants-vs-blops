@@ -2153,7 +2153,10 @@
   const loadedModels = { plants: {}, blops: {} };
   // Tailles à appliquer aux modèles GLB (les primitives ont leur propre scale)
   const PLANT_GLB_SCALE = {
-    sunflower: 18, cactus: 14, strawberry: 13,
+    // POC Sketchfab refonte : valeurs initiales conservatrices, à recalibrer après 1er rendu live
+    sunflower: 2.5, // turtlemode (Sketchfab CC-BY) — était 18 (Kenney), Sketchfab models = échelle 1m
+    cactus: 2.5,    // rubenve (Sketchfab CC-BY)   — était 14 (Kenney)
+    strawberry: 13, // Kenney inchangé
     pepper: 15, watermelon: 13, pineapple: 15,
   };
   const BLOP_GLB_SCALE = {
@@ -2161,9 +2164,10 @@
     ultrarare: 1.2, mythic: 1.3, goat: 1.6,
   };
   // Mapping des plantes dispo en GLB (les autres utilisent la primitive)
+  // POC refonte (2026-04-25) : sunflower (turtlemode CC-BY) + cactus (rubenve CC-BY) Sketchfab
   const PLANT_GLB_FILE = {
-    // sunflower + cactus retirés : les GLB Food Kit Kenney étaient trop simples
-    // (cylindre/disque) -> les primitives custom sont plus stylées
+    sunflower: 'sunflower.glb',  // POC : Sketchfab turtlemode CC-BY (11 KB low poly)
+    cactus:    'cactus.glb',     // POC : Sketchfab rubenve   CC-BY (Substance Painter)
     strawberry: 'strawberry.glb',
     pepper: 'pepper.glb',
     watermelon: 'watermelon.glb',
@@ -15659,6 +15663,20 @@
     setTimeout(() => { banner.style.transition = 'opacity 800ms'; banner.style.opacity = '0.3'; }, 10000);
     banner.onmouseenter = () => banner.style.opacity = '1';
     banner.onmouseleave = () => banner.style.opacity = '0.3';
+
+    // POC refonte plantes (2026-04-25) : crédits CC-BY discrets
+    // Compliance attribution Sketchfab CC-BY pour les modèles 3D utilisés.
+    // Affiché en HAUT-DROITE sous le banner, à gauche des boutons HUD pour éviter conflit.
+    try {
+      const credits = document.createElement('div');
+      credits.id = 'plant-credits';
+      credits.style.cssText = 'position:fixed;top:36px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#cce6ff;font:500 9px ui-monospace,Menlo,Consolas,monospace;padding:3px 9px;border-radius:0 0 6px 6px;border:1px solid rgba(120,180,220,0.2);border-top:none;z-index:9998;pointer-events:auto;cursor:help;letter-spacing:0.4px;opacity:0.55;transition:opacity 0.2s;user-select:none;white-space:nowrap;';
+      credits.title = '3D Plant Models : Stylized Cactus by rubenve (CC-BY) · Sunflower Low Poly by turtlemode (CC-BY) · Sketchfab.com';
+      credits.textContent = '🌱 3D models : rubenve, turtlemode (Sketchfab CC-BY)';
+      credits.onmouseenter = () => credits.style.opacity = '1';
+      credits.onmouseleave = () => credits.style.opacity = '0.55';
+      document.body.appendChild(credits);
+    } catch (_) {}
 
     // ═══════════════════════════════════════════════════════════════════
     // TEST-MODE UI ADJUSTMENTS (user request 2026-04-24)
